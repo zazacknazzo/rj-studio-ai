@@ -7,6 +7,7 @@ The planning clock starts on 2026-09-12, with V6 targeted no later than 2026-10-
 | Version | Outcome | Scope | Status |
 | --- | --- | --- | --- |
 | V0 | WhatsApp infrastructure | Twilio-formatted webhook → backend → persistence → Automatic Reply | Code complete; live Sandbox acceptance pending |
+| V0.1 | Pre-V1 foundation hardening | Durable retries, provider seam, migrations, readiness, retention, and failure-path tests | Implementation in progress; real Sandbox smoke pending |
 | V1 | AI attendant | LLM, stable personality, Conversation context, Salon Knowledge, Intent detection, natural replies, hallucination protection | Next to specify; not approved |
 | V2 | CRM and memory | Customer profile, summarized history, interest, Lead Stage, objections, Lead Source, preferences, Next Best Action, initial lead scoring | Planned |
 | V3 | Commercial engine | Policy-driven Next Best Action, consultative selling, objection handling, follow-ups, cross-sell, upsell, discount policy, Human Handoff | Planned |
@@ -18,7 +19,7 @@ The planning clock starts on 2026-09-12, with V6 targeted no later than 2026-10-
 ## Sequencing rules
 
 - Do not pull V2–V7 capabilities into V1 unless they are required for a V1 acceptance criterion.
-- Before adding the LLM, approve and complete the draft `specs/V0.1.md` hardening spec covering the blockers in `ARCHITECTURE.md`.
+- Before adding the LLM, complete the approved `specs/V0.1.md`, including its real Sandbox smoke test.
 - Each version gets one durable spec under `specs/` before implementation.
 - Each version defines its critical tests; probabilistic behavior also defines evals under `evals/`.
 - Reassess the remaining 20-day scope after every completed version rather than widening work in progress.

@@ -5,7 +5,7 @@ Each version has one durable specification. Do not implement a version until its
 | Version | Status | Specification |
 | --- | --- | --- |
 | V0 | Complete (code); live acceptance pending | [WhatsApp infrastructure](V0.md) |
-| V0.1 | Draft; implementation not approved | [Pre-V1 foundation hardening](V0.1.md) |
+| V0.1 | Approved; implementation in progress | [Pre-V1 foundation hardening](V0.1.md) |
 | V1 | Not yet specified | Create only after the V1 discovery/grilling session |
 
 A spec owns detailed scope, user stories, acceptance criteria, test seams, and explicit exclusions. Product purpose stays in `../PRODUCT.md`; sequencing stays in `../ROADMAP.md`; stable trade-offs stay in `../decisions/`.

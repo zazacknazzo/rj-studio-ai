@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     app_name: str = "RJ Studio AI"
     database_path: Path = Path("data/rj_studio_ai.db")
     automatic_reply: str = "Olá! Recebemos sua mensagem e retornaremos em breve. ✨"
+    message_retention_days: int = Field(default=90, ge=1)
     twilio_auth_token: str = ""
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None

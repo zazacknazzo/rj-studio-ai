@@ -1,6 +1,24 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
-from rj_studio_ai.domain import InboundMessage, WebhookInput, WebhookResponse
+from rj_studio_ai.domain import AutomaticReply, InboundMessage
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderWebhookRequest:
+    method: str
+    url: str
+    headers: dict[str, str]
+    query_string: bytes
+    content_type: str
+    body: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderWebhookResponse:
+    body: str
+    media_type: str
+    status_code: int = 200
 
 
 class InvalidWebhookPayload(ValueError):
@@ -13,13 +31,13 @@ class InvalidWebhookSignature(ValueError):
 
 class WhatsAppProvider(ABC):
     @abstractmethod
-    def receive(self, webhook: WebhookInput) -> InboundMessage:
+    def receive(self, webhook: ProviderWebhookRequest) -> InboundMessage:
         """Authenticate and translate one provider callback."""
 
     @abstractmethod
-    def reply(self, message: InboundMessage, body: str) -> WebhookResponse:
-        """Deliver a reply and describe the provider acknowledgement."""
+    def reply(self, reply: AutomaticReply) -> ProviderWebhookResponse:
+        """Translate a canonical Automatic Reply into the provider response."""
 
     @abstractmethod
-    def acknowledge(self) -> WebhookResponse:
-        """Acknowledge a callback without sending another Message."""
+    def is_configured(self) -> bool:
+        """Return whether the provider has its minimum local configuration."""

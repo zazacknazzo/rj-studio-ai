@@ -17,14 +17,5 @@ class MessageRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class WebhookInput:
-    url: str
-    headers: dict[str, str]
-    form: dict[str, str]
-
-
-@dataclass(frozen=True, slots=True)
-class WebhookResponse:
+class AutomaticReply:
     body: str
-    media_type: str
-    status_code: int = 200
