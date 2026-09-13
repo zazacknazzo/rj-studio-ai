@@ -458,6 +458,26 @@ def test_ready_endpoint_rejects_stale_schema(tmp_path: Path) -> None:
     assert response.json()["checks"]["migrations"] == "failed"
 
 
+def test_ready_endpoint_rejects_missing_required_table(tmp_path: Path) -> None:
+    database_path = tmp_path / "conversations.db"
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            twilio_validate_signature=False,
+        )
+    )
+
+    with TestClient(app) as client:
+        with sqlite3.connect(database_path) as connection:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            connection.execute("DROP TABLE conversations")
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["checks"]["migrations"] == "failed"
+
+
 def test_ready_endpoint_rejects_inaccessible_database(tmp_path: Path) -> None:
     database_path = tmp_path / "conversations.db"
     app = create_app(

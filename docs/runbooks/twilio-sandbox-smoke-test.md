@@ -36,7 +36,8 @@ numbers, tunnel credentials, or provider identifiers into this file.
 Safe database verification:
 
 ```bash
-sqlite3 work/smoke/v0.1.db +  "SELECT direction, COUNT(*) FROM messages GROUP BY direction ORDER BY direction;"
+sqlite3 work/smoke/v0.1.db \
+  "SELECT direction, COUNT(*) FROM messages GROUP BY direction ORDER BY direction;"
 ```
 
 ## Execution record
