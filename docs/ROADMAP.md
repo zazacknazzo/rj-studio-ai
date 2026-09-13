@@ -18,7 +18,7 @@ The planning clock starts on 2026-09-12, with V6 targeted no later than 2026-10-
 ## Sequencing rules
 
 - Do not pull V2–V7 capabilities into V1 unless they are required for a V1 acceptance criterion.
-- Before adding the LLM, obtain approval for a short `specs/V0.1.md` hardening spec covering the blockers in `ARCHITECTURE.md`; that spec does not exist yet.
+- Before adding the LLM, approve and complete the draft `specs/V0.1.md` hardening spec covering the blockers in `ARCHITECTURE.md`.
 - Each version gets one durable spec under `specs/` before implementation.
 - Each version defines its critical tests; probabilistic behavior also defines evals under `evals/`.
 - Reassess the remaining 20-day scope after every completed version rather than widening work in progress.
