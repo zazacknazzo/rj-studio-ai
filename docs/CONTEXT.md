@@ -58,6 +58,14 @@ _Avoid_: Finished appointment
 Approved facts about RJ Studio, including Services, Professionals, hours, prices, policies, and care guidance.
 _Avoid_: Prompt context, knowledge base
 
+**Operational/Commercial Fact**:
+Salon Knowledge about prices, hours, policies, promotions, location, channels, or operating rules. The project owner gives final approval for publication.
+_Avoid_: Technical guidance, prompt rule
+
+**Technical Fact**:
+Salon Knowledge about hair, chemistry, treatments, eyebrows, or mega hair that requires appropriate professional validation before publication.
+_Avoid_: Model knowledge, general advice
+
 ## Commercial behavior
 
 **Next Best Action**:
