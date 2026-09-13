@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Health and webhook endpoints run through FastAPI.
-- [ ] The webhook flow uses `WhatsAppProvider`, not Twilio-specific application logic.
-- [ ] SQLite stores the Conversation and both Message directions.
-- [ ] Repeated delivery of one Twilio Message does not duplicate persisted Messages.
-- [ ] HTTP-level tests prove the behavior.
+- [x] Health and webhook endpoints run through FastAPI.
+- [x] The webhook flow uses `WhatsAppProvider`, not Twilio-specific application logic.
+- [x] SQLite stores the Conversation and both Message directions.
+- [x] Repeated delivery of one Twilio Message does not duplicate persisted Messages.
+- [x] HTTP-level tests prove the behavior.

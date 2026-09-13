@@ -4,9 +4,9 @@
 
 **Blocked by:** 01: Deliver the Sandbox Conversation flow.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Runtime configuration loads from `.env` with safe defaults for local development.
-- [ ] The adapter verifies Twilio signatures against the externally visible webhook URL.
-- [ ] Invalid signatures return a clear HTTP rejection and do not persist Messages.
-- [ ] HTTP-level tests cover enabled and disabled verification.
+- [x] Runtime configuration loads from `.env` with safe defaults for local development.
+- [x] The adapter verifies Twilio signatures against the externally visible webhook URL.
+- [x] Invalid signatures return a clear HTTP rejection and do not persist Messages.
+- [x] HTTP-level tests cover enabled and disabled verification.

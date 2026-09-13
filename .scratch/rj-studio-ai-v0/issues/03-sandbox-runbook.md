@@ -4,9 +4,9 @@
 
 **Blocked by:** 01: Deliver the Sandbox Conversation flow; 02: Secure and configure the Twilio adapter.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Dependencies and supported Python version are declared.
-- [ ] `.env.example` documents every runtime value without secrets.
-- [ ] The README explains local startup, tests, tunnel setup, and the Twilio Sandbox webhook URL.
-- [ ] The final test suite passes from a clean dependency install.
+- [x] Dependencies and supported Python version are declared.
+- [x] `.env.example` documents every runtime value without secrets.
+- [x] The README explains local startup, tests, tunnel setup, and the Twilio Sandbox webhook URL.
+- [x] The final test suite passes from a clean dependency install.
