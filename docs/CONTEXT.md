@@ -28,6 +28,14 @@ _Avoid_: Command, category
 The transfer of responsibility for a Conversation from automation to an RJ Studio team member.
 _Avoid_: Escalation, takeover
 
+**AI Attendant**:
+The automation that converses on behalf of RJ Studio within approved facts and policies. Lívia is the AI Attendant used in V1.
+_Avoid_: Bot, agent, assistant
+
+**AI Reply**:
+An outbound Message produced by the AI Attendant in response to an inbound Message.
+_Avoid_: Automatic Reply, generated output
+
 ## Salon operations
 
 **Service**:
