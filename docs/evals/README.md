@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Not created; waits for the approved V1 spec |
+| V1 | Draft spec exists; the suite is created during approved V1 implementation |
 
 Each eval case should contain:
 
