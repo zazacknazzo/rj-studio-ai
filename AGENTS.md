@@ -29,6 +29,15 @@ Do not preload the whole `docs/` tree.
 - Never commit secrets or real customer data.
 - A version requires an approved spec before implementation.
 
+## Git discipline
+
+- GitHub is the remote source of truth.
+- Never commit secrets, `.env`, real customer data, or local databases containing real data.
+- Work should be committed in small, coherent changes.
+- Non-trivial version work should occur on a feature branch.
+- Keep `main` in a known-good state.
+- Do not rewrite published history without explicit approval.
+
 ## Working loop
 
 1. Read the relevant spec, code, glossary terms, and ADRs.

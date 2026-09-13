@@ -1,5 +1,7 @@
 .DS_Store
 .env
+.env.*
+!.env.example
 .pytest_cache/
 .ruff_cache/
 .venv/
@@ -7,3 +9,15 @@ __pycache__/
 *.py[cod]
 data/
 work/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+.coverage*
+htmlcov/
+build/
+dist/
+*.egg-info/
+.cloudflared/
+ngrok.yml
