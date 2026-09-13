@@ -1,6 +1,6 @@
 # Twilio Sandbox smoke test
 
-Status: pending
+Status: passed
 
 Use this runbook to accept V0.1 against the real Twilio WhatsApp Sandbox. Use a
 fresh database and a synthetic Message. Never paste secrets, complete phone
@@ -42,12 +42,24 @@ sqlite3 work/smoke/v0.1.db \
 
 ## Execution record
 
-- Date/time and timezone: pending
-- Tested commit: pending
-- Result: pending
-- Synthetic Message sent: pending
+- Date/time and timezone: 2026-09-13 10:50:55 -03:00
+- Tested commit: `0e3071f`
+- Result: passed
+- Synthetic Message sent: `RJSTUDIO-V0.1-SMOKE-20260913-104938`
 - Expected: one HTTP 200 callback, one configured Automatic Reply, one inbound
   row, and one outbound row
-- Observed: pending
-- Redacted evidence: pending
-- Steps executed: pending
+- Observed: Twilio called `POST /webhooks/twilio` with HTTP 200; WhatsApp
+  received `RJ Studio V0.1 smoke OK`; SQLite contained one Conversation and
+  exactly two Messages, one inbound and one outbound linked to that inbound.
+- Redacted evidence: the server access log recorded
+  `POST /webhooks/twilio HTTP/1.1 200 OK`; `/health` and `/ready` returned HTTP
+  200 through the public tunnel; the database query returned
+  `conversations=1`, `inbound=1`, `outbound=1`, and zero duplicate provider
+  identifiers. No phone number, MessageSid, Auth Token, or tunnel credential
+  was retained.
+- Steps executed: activated and joined the Sandbox; migrated a fresh ignored
+  database; started the backend with signature validation enabled; started an
+  HTTPS tunnel; configured the exact `POST` webhook URL; checked liveness and
+  readiness locally and through the tunnel; sent the synthetic Message;
+  observed the reply; inspected redacted database counts and linkage; stopped
+  the backend and tunnel; removed the temporary database and local secret file.

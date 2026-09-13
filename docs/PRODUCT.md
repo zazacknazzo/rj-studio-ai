@@ -27,6 +27,6 @@ V7 is a separate product phase that may turn the proven system into a multi-busi
 
 ## Current product
 
-V0 handles Twilio-formatted Sandbox callbacks, verifies them when signature validation is enabled, persists a Conversation in SQLite, and returns a fixed Automatic Reply. Its code and automated tests are complete; operational acceptance against the real Sandbox is still pending. It contains no LLM, CRM behavior, scheduling, multimodal processing, or advertising integration.
+V0.1 handles Twilio Sandbox callbacks through a provider adapter, verifies signatures, persists one durable inbound/reply pair in SQLite, and replays that reply for retries. It adds versioned migrations, readiness, and an explicit 90-day Message purge command. Automated checks and the real Sandbox flow passed on 2026-09-13. It contains no LLM, CRM behavior, scheduling, multimodal processing, or advertising integration.
 
 Version scope and status live in `ROADMAP.md`. Detailed acceptance criteria live only in `specs/`.

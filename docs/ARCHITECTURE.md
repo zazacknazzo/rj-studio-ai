@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the V0.1 code. The real Sandbox acceptance result is tracked separately in the smoke-test runbook. Planned roadmap capabilities are not presented as implemented modules.
+This document describes the completed V0.1 code. Its passing real Sandbox acceptance result is tracked separately in the smoke-test runbook. Planned roadmap capabilities are not presented as implemented modules.
 
 ## V0.1 runtime flow
 
@@ -59,10 +59,9 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 
 See the focused records under `decisions/`, especially ADRs 0001, 0003, and 0004.
 
-## Remaining acceptance before V1
+## V0.1 acceptance
 
-- Run and record the real Twilio Sandbox smoke test with signature validation enabled.
-- Keep the V0.1 spec at `approved` until that record passes.
+The real Twilio Sandbox test passed with signature validation enabled on 2026-09-13. Twilio received one synthetic inbound Message, called the canonical webhook with HTTP 200, delivered the configured reply, and the fresh database contained exactly one linked inbound/outbound pair. See the [redacted execution record](runbooks/twilio-sandbox-smoke-test.md).
 
 ## Work that can stay inside V1 slices
 
