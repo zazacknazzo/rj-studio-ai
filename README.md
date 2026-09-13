@@ -57,3 +57,15 @@ ruff check .
 - `main.py`: aplicação FastAPI e endpoints HTTP.
 
 IA, CRM avançado, Trinks, Google Ads e Meta Cloud API permanecem fora desta V0.
+
+## Documentação do projeto
+
+- [Produto](docs/PRODUCT.md)
+- [Roadmap V0–V7](docs/ROADMAP.md)
+- [Arquitetura existente e dívidas da V0](docs/ARCHITECTURE.md)
+- [Linguagem do domínio](docs/CONTEXT.md)
+- [Decisões arquiteturais](docs/decisions/README.md)
+- [Especificações por versão](docs/specs/README.md)
+- [Evals](docs/evals/README.md)
+
+Agentes começam por `AGENTS.md` e carregam somente os documentos relevantes para a tarefa.
