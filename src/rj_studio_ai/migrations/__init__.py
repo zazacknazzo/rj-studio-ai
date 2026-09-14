@@ -33,15 +33,15 @@ class MigrationManager:
             with self._engine().connect() as connection:
                 current = MigrationContext.configure(connection).get_current_revision()
                 inspector = inspect(connection)
-                schema_matches = self._schema_matches(inspector)
+                schema_matches = self._schema_matches(connection, inspector)
             expected = ScriptDirectory.from_config(self._config).get_current_head()
         except SQLAlchemyError:
             return False
         return current == expected and schema_matches
 
     @staticmethod
-    def _schema_matches(inspector: Inspector) -> bool:
-        if not {"alembic_version", "conversations", "messages"}.issubset(
+    def _schema_matches(connection: Connection, inspector: Inspector) -> bool:
+        if not {"alembic_version", "conversations", "messages", "message_processing"}.issubset(
             inspector.get_table_names()
         ):
             return False
@@ -62,6 +62,15 @@ class MigrationManager:
                 "body",
                 "created_at",
                 "in_reply_to_message_id",
+            },
+            "message_processing": {
+                "inbound_message_id",
+                "state",
+                "owner_token",
+                "lease_expires_at",
+                "attempt_count",
+                "created_at",
+                "updated_at",
             },
         }
         for table, required in required_columns.items():
@@ -88,12 +97,50 @@ class MigrationManager:
             )
             for item in inspector.get_foreign_keys("messages")
         }
+        processing_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("message_processing")
+        }
+        processing_checks = {
+            item["name"] for item in inspector.get_check_constraints("message_processing")
+        }
+        processing_triggers = {
+            str(row[0])
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            )
+        }
         return (
             frozenset({"provider", "customer_address"}) in conversation_uniques
             and frozenset({"provider", "provider_message_id"}) in message_uniques
             and reply_indexes.get("uq_messages_in_reply_to") == (("in_reply_to_message_id",), True)
             and (("conversation_id",), "conversations", ("id",)) in message_foreign_keys
             and (("in_reply_to_message_id",), "messages", ("id",)) in message_foreign_keys
+            and (("inbound_message_id",), "messages", ("id",)) in processing_foreign_keys
+            and {
+                "ck_message_processing_state",
+                "ck_message_processing_attempt_count",
+                "ck_message_processing_claim_shape",
+                "ck_message_processing_suppressed_attempts",
+            }.issubset(processing_checks)
+            and {
+                "message_processing_requires_inbound_insert",
+                "message_processing_requires_inbound_update",
+                "completed_processing_requires_reply_insert",
+                "completed_processing_requires_reply_update",
+                "suppressed_processing_rejects_reply_insert",
+                "suppressed_processing_rejects_reply_update",
+                "suppressed_processing_rejects_existing_reply_insert",
+                "suppressed_processing_rejects_existing_reply_update",
+                "terminal_processing_state_is_immutable",
+                "completed_processing_protects_reply_delete",
+                "completed_processing_protects_reply_update",
+                "create_processing_for_inbound_message",
+            }.issubset(processing_triggers)
         )
 
     def _engine(self) -> Engine:

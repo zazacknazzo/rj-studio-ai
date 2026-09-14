@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the completed V0.1 code. Its passing real Sandbox acceptance result is tracked separately in the smoke-test runbook. Planned roadmap capabilities are not presented as implemented modules.
+This document describes the completed V0.1 runtime plus the durable generation-claim storage added by V1 ticket 01. The webhook still returns the V0.1 fixed Automatic Reply; no LLM path is implemented yet. The passing real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## V0.1 runtime flow
 
@@ -27,7 +27,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `main.py` | Builds FastAPI, wires dependencies, owns explicit startup, and exposes liveness, readiness, and webhook routes | HTTP seam through `create_app()` |
 | `application.py` | Selects or retrieves one durable Automatic Reply for a canonical inbound Message | `MessageResponder.handle()` |
 | `domain.py` | Carries canonical inbound Message, Automatic Reply, and history values | Dataclasses |
-| `persistence.py` | Provides transactional idempotency, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
+| `persistence.py` | Provides transactional idempotency, durable generation claims, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
 | `migrations/` | Holds and applies ordered Alembic revisions | `MigrationManager` |
 | `maintenance.py` | Exposes explicit migrate, purge, and Conversation-deletion commands | `rj-studio-maintenance` |
 | `providers/base.py` | Defines provider behavior and provider errors | `WhatsAppProvider` |
@@ -42,6 +42,8 @@ SQLite contains:
 - `(provider, provider_message_id)` is unique, providing inbound webhook deduplication.
 - Each outbound reply points to its inbound Message through `in_reply_to_message_id`.
 - A unique index on that link prevents a second logical reply for one inbound Message.
+- `message_processing`: one durable lifecycle per inbound Message, with `processing`, `retryable`, `completed`, or terminal `suppressed` state.
+- A processing claim has a unique owner token, a 30-second lease, and no more than two attempts. Database constraints protect state shape and the relationship between terminal state and reply presence.
 - `alembic_version` records the current schema revision.
 
 There is no `tenant_id`, Customer profile, semantic memory, model trace, Appointment, or attribution data in V0.
@@ -53,6 +55,8 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - SQLite is local and directly testable with temporary databases. A generic persistence interface is deferred until a second implementation or V1 behavior creates real variation.
 - RJ Studio rules will belong in localized knowledge or policy modules when those capabilities are specified. They must not enter generic Conversation orchestration.
 - `BEGIN IMMEDIATE`, the inbound uniqueness constraint, and the unique reply link make reply preparation correct across threads and process restarts. This does not assert exactly-once WhatsApp delivery.
+- Claim acquisition and completion use separate short `BEGIN IMMEDIATE` transactions. This leaves the future LLM call outside a database transaction; only the current unexpired owner can finalize an AI Reply. After two failed or expired generation attempts, a dedicated finalization claim can acquire the same lifecycle without incrementing the attempt count, allowing a later slice to persist one deterministic safe reply without leaving the Message stranded.
+- Existing V0.1 inbound/reply pairs migrate to `completed` with zero LLM attempts. The unchanged fixed-reply flow creates the same terminal lifecycle atomically with its Automatic Reply.
 - Alembic owns schema versions. Application startup and the maintenance command invoke it explicitly; importing modules performs no database I/O.
 - `/health` checks process liveness. `/ready` checks local configuration, schema revision, schema shape, and a rollback-only write transaction.
 - Retention runs only through an operator command. No startup hook, scheduler, or webhook path deletes Messages.

@@ -1,7 +1,9 @@
 import sqlite3
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
+from uuid import uuid4
 
 from rj_studio_ai.domain import InboundMessage, MessageRecord
 from rj_studio_ai.migrations import MigrationManager
@@ -9,6 +11,24 @@ from rj_studio_ai.migrations import MigrationManager
 
 class PersistenceUnavailable(RuntimeError):
     """Raised when SQLite cannot complete a persistence operation."""
+
+
+class GenerationState(StrEnum):
+    PROCESSING = "processing"
+    RETRYABLE = "retryable"
+    COMPLETED = "completed"
+    SUPPRESSED = "suppressed"
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationClaimResult:
+    acquired: bool
+    inbound_message_id: int
+    state: GenerationState
+    attempt_count: int
+    owner_token: str | None
+    lease_expires_at: datetime | None
+    reply_body: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +44,9 @@ class ConversationDeletionResult:
 
 
 class SqliteConversationStore:
+    _generation_lease = timedelta(seconds=30)
+    _maximum_generation_attempts = 2
+
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
         self._migrations = MigrationManager(database_path)
@@ -49,6 +72,152 @@ class SqliteConversationStore:
     def get_or_create_reply(self, message: InboundMessage, reply_body: str) -> str:
         try:
             return self._get_or_create_reply(message, reply_body)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def claim_generation(
+        self,
+        message: InboundMessage,
+        *,
+        now: datetime | None = None,
+    ) -> GenerationClaimResult:
+        try:
+            return self._claim_generation(message, now)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def mark_generation_retryable(
+        self,
+        *,
+        inbound_message_id: int,
+        owner_token: str,
+        now: datetime | None = None,
+    ) -> bool:
+        if not owner_token.strip():
+            raise ValueError("Generation owner token must not be empty")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                updated = connection.execute(
+                    """
+                    UPDATE message_processing
+                    SET state = 'retryable',
+                        owner_token = NULL,
+                        lease_expires_at = NULL,
+                        updated_at = ?
+                    WHERE inbound_message_id = ?
+                      AND state = 'processing'
+                      AND owner_token = ?
+                      AND lease_expires_at > ?
+                    """,
+                    (
+                        current_time.isoformat(),
+                        inbound_message_id,
+                        owner_token,
+                        current_time.isoformat(),
+                    ),
+                ).rowcount
+            return updated == 1
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def complete_generation(
+        self,
+        *,
+        inbound_message_id: int,
+        owner_token: str,
+        reply_body: str,
+        now: datetime | None = None,
+    ) -> bool:
+        if not owner_token.strip():
+            raise ValueError("Generation owner token must not be empty")
+        try:
+            return self._complete_generation(
+                inbound_message_id=inbound_message_id,
+                owner_token=owner_token,
+                reply_body=reply_body,
+                now=now,
+            )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def claim_exhausted_finalization(
+        self,
+        *,
+        inbound_message_id: int,
+        now: datetime | None = None,
+    ) -> GenerationClaimResult:
+        """Claim only terminalization after both generation attempts are unavailable."""
+        try:
+            return self._claim_exhausted_finalization(
+                inbound_message_id=inbound_message_id,
+                now=now,
+            )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def suppress_generation(
+        self,
+        message: InboundMessage,
+        *,
+        now: datetime | None = None,
+    ) -> GenerationClaimResult:
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                inbound_message_id = self._get_or_create_inbound(
+                    connection,
+                    message,
+                    current_time.isoformat(),
+                )
+                current = self._generation_result(
+                    connection,
+                    inbound_message_id,
+                    acquired=False,
+                )
+                if current.state is GenerationState.RETRYABLE and current.attempt_count == 0:
+                    connection.execute(
+                        """
+                        UPDATE message_processing
+                        SET state = 'suppressed', updated_at = ?
+                        WHERE inbound_message_id = ?
+                        """,
+                        (current_time.isoformat(), inbound_message_id),
+                    )
+                    return self._generation_result(
+                        connection,
+                        inbound_message_id,
+                        acquired=False,
+                    )
+                return current
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def get_generation(
+        self,
+        *,
+        provider: str,
+        provider_message_id: str,
+    ) -> GenerationClaimResult | None:
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT processing.inbound_message_id
+                    FROM message_processing AS processing
+                    JOIN messages AS inbound
+                      ON inbound.id = processing.inbound_message_id
+                    WHERE inbound.provider = ?
+                      AND inbound.provider_message_id = ?
+                      AND inbound.direction = 'inbound'
+                    """,
+                    (provider, provider_message_id),
+                ).fetchone()
+                if row is None:
+                    return None
+                return self._generation_result(connection, int(row[0]), acquired=False)
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
 
@@ -119,62 +288,27 @@ class SqliteConversationStore:
         timestamp = datetime.now(UTC).isoformat()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            inbound_message_id = self._get_or_create_inbound(
+                connection,
+                message,
+                timestamp,
+            )
             existing = connection.execute(
                 """
-                SELECT inbound.id, inbound.conversation_id, outbound.body
+                SELECT inbound.conversation_id, outbound.body
                 FROM messages AS inbound
                 LEFT JOIN messages AS outbound
                   ON outbound.in_reply_to_message_id = inbound.id
-                WHERE inbound.provider = ?
-                  AND inbound.provider_message_id = ?
-                  AND inbound.direction = 'inbound'
+                 AND outbound.direction = 'outbound'
+                WHERE inbound.id = ?
                 """,
-                (message.provider, message.provider_message_id),
+                (inbound_message_id,),
             ).fetchone()
-            if existing is not None and existing[2] is not None:
-                return str(existing[2])
-
             if existing is None:
-                connection.execute(
-                    """
-                    INSERT INTO conversations (
-                        provider, customer_address, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?)
-                    ON CONFLICT(provider, customer_address)
-                    DO NOTHING
-                    """,
-                    (message.provider, message.customer_address, timestamp, timestamp),
-                )
-                conversation_id = int(
-                    connection.execute(
-                        """
-                        SELECT id FROM conversations
-                        WHERE provider = ? AND customer_address = ?
-                        """,
-                        (message.provider, message.customer_address),
-                    ).fetchone()[0]
-                )
-                inbound_message_id = int(
-                    connection.execute(
-                        """
-                        INSERT INTO messages (
-                            conversation_id, provider, provider_message_id,
-                            direction, body, created_at
-                        ) VALUES (?, ?, ?, 'inbound', ?, ?)
-                        RETURNING id
-                        """,
-                        (
-                            conversation_id,
-                            message.provider,
-                            message.provider_message_id,
-                            message.body,
-                            timestamp,
-                        ),
-                    ).fetchone()[0]
-                )
-            else:
-                inbound_message_id = int(existing[0])
-                conversation_id = int(existing[1])
+                raise sqlite3.IntegrityError("Persisted inbound Message is unavailable")
+            conversation_id = int(existing[0])
+            if existing[1] is not None:
+                return str(existing[1])
 
             connection.execute(
                 """
@@ -191,6 +325,23 @@ class SqliteConversationStore:
                     inbound_message_id,
                 ),
             )
+            processing_updated = connection.execute(
+                """
+                UPDATE message_processing
+                SET state = 'completed',
+                    owner_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = ?
+                WHERE inbound_message_id = ?
+                  AND state = 'retryable'
+                  AND attempt_count = 0
+                """,
+                (timestamp, inbound_message_id),
+            ).rowcount
+            if processing_updated != 1:
+                raise sqlite3.IntegrityError(
+                    "Automatic Reply cannot overwrite generation processing state"
+                )
             connection.execute(
                 """
                 UPDATE conversations SET updated_at = ? WHERE id = ?
@@ -198,6 +349,307 @@ class SqliteConversationStore:
                 (timestamp, conversation_id),
             )
         return reply_body
+
+    def _claim_generation(
+        self,
+        message: InboundMessage,
+        now: datetime | None,
+    ) -> GenerationClaimResult:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current_time = self._utc_time(now)
+            timestamp = current_time.isoformat()
+            lease_expires_at = current_time + self._generation_lease
+            inbound_message_id = self._get_or_create_inbound(
+                connection,
+                message,
+                timestamp,
+            )
+            current = self._generation_result(
+                connection,
+                inbound_message_id,
+                acquired=False,
+            )
+            if current.state in {GenerationState.COMPLETED, GenerationState.SUPPRESSED}:
+                return current
+            if current.state is GenerationState.PROCESSING:
+                if current.lease_expires_at is not None and current.lease_expires_at > current_time:
+                    return current
+                if current.attempt_count >= self._maximum_generation_attempts:
+                    connection.execute(
+                        """
+                        UPDATE message_processing
+                        SET state = 'retryable',
+                            owner_token = NULL,
+                            lease_expires_at = NULL,
+                            updated_at = ?
+                        WHERE inbound_message_id = ?
+                        """,
+                        (timestamp, inbound_message_id),
+                    )
+                    return self._generation_result(
+                        connection,
+                        inbound_message_id,
+                        acquired=False,
+                    )
+            if current.attempt_count >= self._maximum_generation_attempts:
+                return current
+
+            owner_token = uuid4().hex
+            connection.execute(
+                """
+                UPDATE message_processing
+                SET state = 'processing',
+                    owner_token = ?,
+                    lease_expires_at = ?,
+                    attempt_count = attempt_count + 1,
+                    updated_at = ?
+                WHERE inbound_message_id = ?
+                """,
+                (owner_token, lease_expires_at.isoformat(), timestamp, inbound_message_id),
+            )
+            return self._generation_result(
+                connection,
+                inbound_message_id,
+                acquired=True,
+                acquired_owner_token=owner_token,
+            )
+
+    def _complete_generation(
+        self,
+        *,
+        inbound_message_id: int,
+        owner_token: str,
+        reply_body: str,
+        now: datetime | None,
+    ) -> bool:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current_time = self._utc_time(now)
+            timestamp = current_time.isoformat()
+            inbound = connection.execute(
+                """
+                SELECT conversation_id, provider
+                FROM messages
+                WHERE id = ? AND direction = 'inbound'
+                """,
+                (inbound_message_id,),
+            ).fetchone()
+            if inbound is None:
+                return False
+            processing = connection.execute(
+                """
+                SELECT state, owner_token, lease_expires_at
+                FROM message_processing
+                WHERE inbound_message_id = ?
+                """,
+                (inbound_message_id,),
+            ).fetchone()
+            if (
+                processing is None
+                or processing[0] != GenerationState.PROCESSING
+                or processing[1] != owner_token
+                or processing[2] is None
+                or datetime.fromisoformat(str(processing[2])) <= current_time
+            ):
+                return False
+
+            conversation_id = int(inbound[0])
+            connection.execute(
+                """
+                INSERT INTO messages (
+                    conversation_id, provider, provider_message_id,
+                    direction, body, created_at, in_reply_to_message_id
+                ) VALUES (?, ?, NULL, 'outbound', ?, ?, ?)
+                """,
+                (conversation_id, str(inbound[1]), reply_body, timestamp, inbound_message_id),
+            )
+            updated = connection.execute(
+                """
+                UPDATE message_processing
+                SET state = 'completed',
+                    owner_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = ?
+                WHERE inbound_message_id = ?
+                  AND state = 'processing'
+                  AND owner_token = ?
+                  AND lease_expires_at > ?
+                """,
+                (timestamp, inbound_message_id, owner_token, timestamp),
+            ).rowcount
+            if updated != 1:
+                raise sqlite3.IntegrityError("Generation ownership changed during completion")
+            connection.execute(
+                "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                (timestamp, conversation_id),
+            )
+        return True
+
+    def _claim_exhausted_finalization(
+        self,
+        *,
+        inbound_message_id: int,
+        now: datetime | None,
+    ) -> GenerationClaimResult:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current_time = self._utc_time(now)
+            timestamp = current_time.isoformat()
+            current = self._generation_result(
+                connection,
+                inbound_message_id,
+                acquired=False,
+            )
+            if current.state in {GenerationState.COMPLETED, GenerationState.SUPPRESSED}:
+                return current
+            if current.attempt_count < self._maximum_generation_attempts:
+                return current
+            if (
+                current.state is GenerationState.PROCESSING
+                and current.lease_expires_at is not None
+                and current.lease_expires_at > current_time
+            ):
+                return current
+
+            owner_token = uuid4().hex
+            lease_expires_at = current_time + self._generation_lease
+            updated = connection.execute(
+                """
+                UPDATE message_processing
+                SET state = 'processing',
+                    owner_token = ?,
+                    lease_expires_at = ?,
+                    updated_at = ?
+                WHERE inbound_message_id = ?
+                  AND attempt_count = 2
+                  AND (
+                    (state = 'retryable' AND owner_token IS NULL AND lease_expires_at IS NULL)
+                    OR
+                    (state = 'processing' AND lease_expires_at <= ?)
+                  )
+                """,
+                (
+                    owner_token,
+                    lease_expires_at.isoformat(),
+                    timestamp,
+                    inbound_message_id,
+                    timestamp,
+                ),
+            ).rowcount
+            if updated != 1:
+                raise sqlite3.IntegrityError("Exhausted generation state changed during claim")
+            return self._generation_result(
+                connection,
+                inbound_message_id,
+                acquired=True,
+                acquired_owner_token=owner_token,
+            )
+
+    def _get_or_create_inbound(
+        self,
+        connection: sqlite3.Connection,
+        message: InboundMessage,
+        timestamp: str,
+    ) -> int:
+        existing = connection.execute(
+            """
+            SELECT id
+            FROM messages
+            WHERE provider = ?
+              AND provider_message_id = ?
+              AND direction = 'inbound'
+            """,
+            (message.provider, message.provider_message_id),
+        ).fetchone()
+        if existing is not None:
+            return int(existing[0])
+
+        connection.execute(
+            """
+            INSERT INTO conversations (
+                provider, customer_address, created_at, updated_at
+            ) VALUES (?, ?, ?, ?)
+            ON CONFLICT(provider, customer_address)
+            DO NOTHING
+            """,
+            (message.provider, message.customer_address, timestamp, timestamp),
+        )
+        conversation_id = int(
+            connection.execute(
+                """
+                SELECT id FROM conversations
+                WHERE provider = ? AND customer_address = ?
+                """,
+                (message.provider, message.customer_address),
+            ).fetchone()[0]
+        )
+        inbound_message_id = int(
+            connection.execute(
+                """
+                INSERT INTO messages (
+                    conversation_id, provider, provider_message_id,
+                    direction, body, created_at
+                ) VALUES (?, ?, ?, 'inbound', ?, ?)
+                RETURNING id
+                """,
+                (
+                    conversation_id,
+                    message.provider,
+                    message.provider_message_id,
+                    message.body,
+                    timestamp,
+                ),
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (timestamp, conversation_id),
+        )
+        return inbound_message_id
+
+    def _generation_result(
+        self,
+        connection: sqlite3.Connection,
+        inbound_message_id: int,
+        *,
+        acquired: bool,
+        acquired_owner_token: str | None = None,
+    ) -> GenerationClaimResult:
+        row = connection.execute(
+            """
+            SELECT
+                processing.state,
+                processing.attempt_count,
+                processing.lease_expires_at,
+                outbound.body
+            FROM message_processing AS processing
+            LEFT JOIN messages AS outbound
+              ON outbound.in_reply_to_message_id = processing.inbound_message_id
+             AND outbound.direction = 'outbound'
+            WHERE processing.inbound_message_id = ?
+            """,
+            (inbound_message_id,),
+        ).fetchone()
+        if row is None:
+            raise sqlite3.IntegrityError("Inbound Message has no processing lifecycle")
+        lease_expires_at = None if row[2] is None else datetime.fromisoformat(str(row[2]))
+        return GenerationClaimResult(
+            acquired=acquired,
+            inbound_message_id=inbound_message_id,
+            state=GenerationState(str(row[0])),
+            attempt_count=int(row[1]),
+            owner_token=acquired_owner_token if acquired else None,
+            lease_expires_at=lease_expires_at,
+            reply_body=None if row[3] is None else str(row[3]),
+        )
+
+    @staticmethod
+    def _utc_time(value: datetime | None) -> datetime:
+        resolved = value or datetime.now(UTC)
+        if resolved.utcoffset() is None:
+            raise ValueError("Generation time must include a timezone")
+        return resolved.astimezone(UTC)
 
     def get_history(
         self,
