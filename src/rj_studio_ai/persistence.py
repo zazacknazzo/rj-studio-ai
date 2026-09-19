@@ -29,6 +29,8 @@ class GenerationClaimResult:
     owner_token: str | None
     lease_expires_at: datetime | None
     reply_body: str | None
+    inbound_body: str
+    blocked_by_predecessor: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,9 +82,35 @@ class SqliteConversationStore:
         message: InboundMessage,
         *,
         now: datetime | None = None,
+        lock_timeout: float | None = None,
     ) -> GenerationClaimResult:
         try:
-            return self._claim_generation(message, now)
+            return self._claim_generation(message, now, lock_timeout)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def admit_generation(
+        self,
+        message: InboundMessage,
+        *,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> GenerationClaimResult:
+        """Persist an inbound Message without acquiring its generation claim."""
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                inbound_message_id = self._get_or_create_inbound(
+                    connection,
+                    message,
+                    current_time.isoformat(),
+                )
+                return self._generation_result(
+                    connection,
+                    inbound_message_id,
+                    acquired=False,
+                )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
 
@@ -92,11 +120,12 @@ class SqliteConversationStore:
         inbound_message_id: int,
         owner_token: str,
         now: datetime | None = None,
+        lock_timeout: float | None = None,
     ) -> bool:
         if not owner_token.strip():
             raise ValueError("Generation owner token must not be empty")
         try:
-            with self._connect() as connection:
+            with self._connect(lock_timeout) as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 current_time = self._utc_time(now)
                 updated = connection.execute(
@@ -129,6 +158,7 @@ class SqliteConversationStore:
         owner_token: str,
         reply_body: str,
         now: datetime | None = None,
+        lock_timeout: float | None = None,
     ) -> bool:
         if not owner_token.strip():
             raise ValueError("Generation owner token must not be empty")
@@ -138,6 +168,7 @@ class SqliteConversationStore:
                 owner_token=owner_token,
                 reply_body=reply_body,
                 now=now,
+                lock_timeout=lock_timeout,
             )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
@@ -147,12 +178,14 @@ class SqliteConversationStore:
         *,
         inbound_message_id: int,
         now: datetime | None = None,
+        lock_timeout: float | None = None,
     ) -> GenerationClaimResult:
         """Claim only terminalization after both generation attempts are unavailable."""
         try:
             return self._claim_exhausted_finalization(
                 inbound_message_id=inbound_message_id,
                 now=now,
+                lock_timeout=lock_timeout,
             )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
@@ -354,8 +387,9 @@ class SqliteConversationStore:
         self,
         message: InboundMessage,
         now: datetime | None,
+        lock_timeout: float | None,
     ) -> GenerationClaimResult:
-        with self._connect() as connection:
+        with self._connect(lock_timeout) as connection:
             connection.execute("BEGIN IMMEDIATE")
             current_time = self._utc_time(now)
             timestamp = current_time.isoformat()
@@ -392,6 +426,30 @@ class SqliteConversationStore:
                         inbound_message_id,
                         acquired=False,
                     )
+            predecessor = connection.execute(
+                """
+                SELECT predecessor.id
+                FROM messages AS current
+                JOIN messages AS predecessor
+                  ON predecessor.conversation_id = current.conversation_id
+                 AND predecessor.direction = 'inbound'
+                 AND predecessor.id < current.id
+                JOIN message_processing AS predecessor_processing
+                  ON predecessor_processing.inbound_message_id = predecessor.id
+                WHERE current.id = ?
+                  AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                ORDER BY predecessor.id
+                LIMIT 1
+                """,
+                (inbound_message_id,),
+            ).fetchone()
+            if predecessor is not None:
+                return self._generation_result(
+                    connection,
+                    inbound_message_id,
+                    acquired=False,
+                    blocked_by_predecessor=True,
+                )
             if current.attempt_count >= self._maximum_generation_attempts:
                 return current
 
@@ -422,8 +480,9 @@ class SqliteConversationStore:
         owner_token: str,
         reply_body: str,
         now: datetime | None,
+        lock_timeout: float | None,
     ) -> bool:
-        with self._connect() as connection:
+        with self._connect(lock_timeout) as connection:
             connection.execute("BEGIN IMMEDIATE")
             current_time = self._utc_time(now)
             timestamp = current_time.isoformat()
@@ -491,8 +550,9 @@ class SqliteConversationStore:
         *,
         inbound_message_id: int,
         now: datetime | None,
+        lock_timeout: float | None,
     ) -> GenerationClaimResult:
-        with self._connect() as connection:
+        with self._connect(lock_timeout) as connection:
             connection.execute("BEGIN IMMEDIATE")
             current_time = self._utc_time(now)
             timestamp = current_time.isoformat()
@@ -615,6 +675,7 @@ class SqliteConversationStore:
         *,
         acquired: bool,
         acquired_owner_token: str | None = None,
+        blocked_by_predecessor: bool = False,
     ) -> GenerationClaimResult:
         row = connection.execute(
             """
@@ -622,8 +683,11 @@ class SqliteConversationStore:
                 processing.state,
                 processing.attempt_count,
                 processing.lease_expires_at,
-                outbound.body
+                outbound.body,
+                inbound.body
             FROM message_processing AS processing
+            JOIN messages AS inbound
+              ON inbound.id = processing.inbound_message_id
             LEFT JOIN messages AS outbound
               ON outbound.in_reply_to_message_id = processing.inbound_message_id
              AND outbound.direction = 'outbound'
@@ -642,6 +706,8 @@ class SqliteConversationStore:
             owner_token=acquired_owner_token if acquired else None,
             lease_expires_at=lease_expires_at,
             reply_body=None if row[3] is None else str(row[3]),
+            inbound_body=str(row[4]),
+            blocked_by_predecessor=blocked_by_predecessor,
         )
 
     @staticmethod
@@ -671,7 +737,8 @@ class SqliteConversationStore:
             ).fetchall()
         return [MessageRecord(direction=row[0], body=row[1]) for row in rows]
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._database_path, timeout=5)
+    def _connect(self, timeout_seconds: float | None = None) -> sqlite3.Connection:
+        timeout = 5.0 if timeout_seconds is None else max(0.0, timeout_seconds)
+        connection = sqlite3.connect(self._database_path, timeout=timeout)
         connection.execute("PRAGMA foreign_keys = ON")
         return connection

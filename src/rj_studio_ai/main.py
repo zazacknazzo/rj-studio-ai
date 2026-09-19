@@ -1,12 +1,15 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from time import monotonic, sleep
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from rj_studio_ai.application import MessageResponder
+from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
+from rj_studio_ai.deadline import ExecutionDeadline
+from rj_studio_ai.generation import FixedReplyGenerator, ReplyGenerator
 from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
@@ -22,6 +25,9 @@ def create_app(
     *,
     provider: WhatsAppProvider | None = None,
     store: SqliteConversationStore | None = None,
+    generator: ReplyGenerator | None = None,
+    monotonic_clock: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
 ) -> FastAPI:
     resolved_settings = settings or Settings()
     resolved_provider = provider or TwilioProvider(
@@ -30,9 +36,12 @@ def create_app(
         public_webhook_url=resolved_settings.twilio_public_webhook_url,
     )
     resolved_store = store or SqliteConversationStore(resolved_settings.database_path)
+    resolved_generator = generator or FixedReplyGenerator(resolved_settings.automatic_reply)
     responder = MessageResponder(
         store=resolved_store,
-        automatic_reply=resolved_settings.automatic_reply,
+        generator=resolved_generator,
+        safe_failure_reply=resolved_settings.automatic_reply,
+        sleeper=sleeper,
     )
 
     @asynccontextmanager
@@ -65,6 +74,7 @@ def create_app(
     @app.post("/webhooks/twilio")
     @app.post("/webhooks/whatsapp")
     async def whatsapp_webhook(request: Request) -> Response:
+        deadline = ExecutionDeadline.start(clock=monotonic_clock)
         if not configuration_is_valid():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -81,8 +91,17 @@ def create_app(
 
         try:
             message = resolved_provider.receive(webhook)
-            reply = await run_in_threadpool(responder.handle, message)
+            reply = await run_in_threadpool(responder.handle, message, deadline=deadline)
+            if deadline.is_expired():
+                raise RetryableWebhookError("Webhook deadline expired before provider rendering")
             provider_response = resolved_provider.reply(reply)
+            response = Response(
+                content=provider_response.body,
+                media_type=provider_response.media_type,
+                status_code=provider_response.status_code,
+            )
+            if deadline.is_expired():
+                raise RetryableWebhookError("Webhook deadline expired during provider rendering")
         except InvalidWebhookSignature as error:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -98,12 +117,13 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Conversation persistence is unavailable",
             ) from error
+        except RetryableWebhookError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Webhook processing should be retried",
+            ) from error
 
-        return Response(
-            content=provider_response.body,
-            media_type=provider_response.media_type,
-            status_code=provider_response.status_code,
-        )
+        return response
 
     return app
 

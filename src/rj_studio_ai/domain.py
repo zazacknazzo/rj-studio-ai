@@ -17,5 +17,5 @@ class MessageRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class AutomaticReply:
+class AIReply:
     body: str

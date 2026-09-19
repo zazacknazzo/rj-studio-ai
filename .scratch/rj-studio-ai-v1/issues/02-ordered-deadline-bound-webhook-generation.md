@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Add durable generation claims.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Context
 
@@ -16,17 +16,17 @@ Webhook composition, application generation coordinator, narrow LLM test contrac
 
 ## Acceptance criteria
 
-- [ ] One safe non-factual inbound creates at most one AI Reply; sequential or concurrent retries replay that exact durable reply.
-- [ ] Only one generation runs per Conversation while unrelated Conversations can generate in parallel.
-- [ ] A later Message is persisted before a bounded wait; when its predecessor remains active or its waiting budget is exhausted, the webhook returns retryable non-2xx with no customer-visible AI Reply.
-- [ ] The 10-second monotonic budget begins at inbound admission and covers SQLite waits, ordering waits, fake-provider work, retries, validation, final persistence, and response rendering; every stage consumes only remaining budget and finalization retains a margin.
-- [ ] No new generation attempt starts without useful remaining budget. Timeout, malformed result, and transient failure follow the safe retry/clarification path without invented salon facts.
+- [x] One safe non-factual inbound creates at most one AI Reply; sequential or concurrent retries replay that exact durable reply.
+- [x] Only one generation runs per Conversation while unrelated Conversations can generate in parallel.
+- [x] A later Message is persisted before a bounded wait; when its predecessor remains active or its waiting budget is exhausted, the webhook returns retryable non-2xx with no customer-visible AI Reply.
+- [x] The 10-second monotonic budget begins at inbound admission and covers SQLite waits, ordering waits, fake-provider work, retries, validation, final persistence, and response rendering; every stage consumes only remaining budget and finalization retains a margin.
+- [x] No new generation attempt starts without useful remaining budget. Timeout, malformed result, and transient failure follow the safe retry/clarification path without invented salon facts.
 
 ## Required tests
 
-- [ ] FastAPI tests for normal reply, replay after restart, concurrent retry, ordered later Message, and unrelated Conversation parallelism.
-- [ ] Deterministic fake tests proving an accumulated SQLite/ordering wait prevents a late LLM call.
-- [ ] Tests for retryable ordering response, timeout, malformed result, and provider-rendering retry without duplicate persistence.
+- [x] FastAPI tests for normal reply, replay after restart, concurrent retry, ordered later Message, and unrelated Conversation parallelism.
+- [x] Deterministic fake tests proving an accumulated SQLite/ordering wait prevents a late LLM call.
+- [x] Tests for retryable ordering response, timeout, malformed result, and provider-rendering retry without duplicate persistence.
 
 ## Non-goals
 

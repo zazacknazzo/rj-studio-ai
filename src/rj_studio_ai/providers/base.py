@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from rj_studio_ai.domain import AutomaticReply, InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,8 +35,8 @@ class WhatsAppProvider(ABC):
         """Authenticate and translate one provider callback."""
 
     @abstractmethod
-    def reply(self, reply: AutomaticReply) -> ProviderWebhookResponse:
-        """Translate a canonical Automatic Reply into the provider response."""
+    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
+        """Translate a canonical AI Reply into the provider response."""
 
     @abstractmethod
     def is_configured(self) -> bool:

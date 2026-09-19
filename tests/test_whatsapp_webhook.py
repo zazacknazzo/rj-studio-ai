@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from twilio.request_validator import RequestValidator
 
 from rj_studio_ai.config import Settings
-from rj_studio_ai.domain import AutomaticReply, InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import SqliteConversationStore
 from rj_studio_ai.providers.base import (
@@ -40,7 +40,7 @@ class FailFirstReplyProvider(WhatsAppProvider):
             body="Mensagem sintética",
         )
 
-    def reply(self, reply: AutomaticReply) -> ProviderWebhookResponse:
+    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
         self.reply_attempts += 1
         if self.reply_attempts == 1:
             raise RuntimeError("synthetic rendering failure")

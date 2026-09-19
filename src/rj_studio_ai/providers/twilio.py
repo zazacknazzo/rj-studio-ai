@@ -3,7 +3,7 @@ from urllib.parse import parse_qsl
 from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 
-from rj_studio_ai.domain import AutomaticReply, InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
@@ -56,7 +56,7 @@ class TwilioProvider(WhatsAppProvider):
             body=form["Body"],
         )
 
-    def reply(self, reply: AutomaticReply) -> ProviderWebhookResponse:
+    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
         response = MessagingResponse()
         response.message(reply.body)
         return ProviderWebhookResponse(body=str(response), media_type="application/xml")
