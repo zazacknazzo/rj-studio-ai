@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,3 +19,9 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None
+    llm_provider: Literal["fixed", "anthropic"] = "fixed"
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
+    anthropic_max_output_tokens: int = Field(default=240, ge=1)
+    anthropic_input_microusd_per_million: int | None = Field(default=None, ge=0)
+    anthropic_output_microusd_per_million: int | None = Field(default=None, ge=0)

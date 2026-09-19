@@ -47,7 +47,11 @@ criam o banco.
 4. Reinicie o backend depois de editar `.env`.
 5. Entre no Sandbox pelo WhatsApp pessoal e envie uma mensagem.
 
-O backend responderá com `AUTOMATIC_REPLY` e salvará a Conversation no arquivo indicado por `DATABASE_PATH`.
+Com `LLM_PROVIDER=fixed`, o backend responderá com `AUTOMATIC_REPLY`. Para usar Claude,
+defina `LLM_PROVIDER=anthropic`, forneça `ANTHROPIC_API_KEY` e configure os dois preços
+por milhão de tokens. Os preços são deliberadamente configuração: consulte a tabela atual
+da Anthropic antes de publicar. O backend salva a Conversation no arquivo indicado por
+`DATABASE_PATH`.
 
 `/webhooks/whatsapp` continua disponível como alias compatível com a V0.
 
@@ -89,6 +93,12 @@ informam somente contagens; não imprimem endereços nem conteúdo.
 - `main.py`: composição FastAPI, ciclo de vida e endpoints HTTP.
 
 IA, CRM avançado, Trinks, Google Ads e Meta Cloud API permanecem fora desta versão.
+
+## Smoke test Anthropic manual
+
+O smoke do Claude é opt-in, não roda no CI e só deve ser executado com credencial local.
+Os passos e o registro redigido do resultado ficam em
+[`docs/runbooks/anthropic-smoke-test.md`](docs/runbooks/anthropic-smoke-test.md).
 
 ## Documentação do projeto
 

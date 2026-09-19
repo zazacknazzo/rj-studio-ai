@@ -7,8 +7,13 @@ from fastapi.testclient import TestClient
 
 from rj_studio_ai.config import Settings
 from rj_studio_ai.domain import AIReply, InboundMessage
+from rj_studio_ai.generation import GeneratedReply, GenerationMetric, TransientGenerationError
 from rj_studio_ai.main import create_app
-from rj_studio_ai.persistence import GenerationState, SqliteConversationStore
+from rj_studio_ai.persistence import (
+    GenerationMetricRecord,
+    GenerationState,
+    SqliteConversationStore,
+)
 from rj_studio_ai.providers.base import (
     ProviderWebhookRequest,
     ProviderWebhookResponse,
@@ -71,11 +76,61 @@ class RecordingGenerator:
         self.budgets: list[float] = []
         self._lock = Lock()
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> str:
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
-        return f"reply:{message.body}"
+        return GeneratedReply(reply_body=f"reply:{message.body}")
+
+    def is_configured(self) -> bool:
+        return True
+
+
+class MetricGenerator(RecordingGenerator):
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+        super().generate(message, remaining_budget=remaining_budget)
+        return GeneratedReply(
+            reply_body=f"reply:{message.body}",
+            metric=GenerationMetric(
+                provider="anthropic",
+                model="claude-sonnet-5",
+                configuration="thinking=disabled;format=json_schema;max_tokens=240",
+                latency_ms=120,
+                input_tokens=100,
+                output_tokens=25,
+                total_tokens=125,
+                estimated_cost_microusd=675,
+                outcome="success",
+                error_code=None,
+            ),
+        )
+
+
+class FailingMetricGenerator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+        del message, remaining_budget
+        self.calls += 1
+        raise TransientGenerationError(
+            "provider_timeout",
+            GenerationMetric(
+                provider="anthropic",
+                model="claude-sonnet-5",
+                configuration="thinking=disabled;format=json_schema;max_tokens=240",
+                latency_ms=1_000,
+                input_tokens=None,
+                output_tokens=None,
+                total_tokens=None,
+                estimated_cost_microusd=None,
+                outcome="failure",
+                error_code=None,
+            ),
+        )
+
+    def is_configured(self) -> bool:
+        return True
 
 
 class OrderedBlockingGenerator(RecordingGenerator):
@@ -85,7 +140,7 @@ class OrderedBlockingGenerator(RecordingGenerator):
         self.release_first = Event()
         self.second_started = Event()
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> str:
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
@@ -95,7 +150,7 @@ class OrderedBlockingGenerator(RecordingGenerator):
                 raise RuntimeError("first generation was not released")
         else:
             self.second_started.set()
-        return f"reply:{message.body}"
+        return GeneratedReply(reply_body=f"reply:{message.body}")
 
 
 class ParallelGenerator(RecordingGenerator):
@@ -103,12 +158,12 @@ class ParallelGenerator(RecordingGenerator):
         super().__init__()
         self._barrier = Barrier(2)
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> str:
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
         self._barrier.wait(timeout=1.0)
-        return f"reply:{message.body}"
+        return GeneratedReply(reply_body=f"reply:{message.body}")
 
 
 class FirstRenderConsumesDeadlineProvider(FormProvider):
@@ -343,3 +398,66 @@ def test_render_deadline_failure_retries_with_persisted_reply_without_regenerati
     assert retry.text == "reply:render"
     assert generator.calls == ["render"]
     assert provider.reply_attempts == 2
+
+
+def test_webhook_persists_privacy_safe_generation_metric(tmp_path: Path) -> None:
+    database_path = tmp_path / "metrics-webhook.db"
+    app = create_app(
+        _settings(database_path),
+        provider=FormProvider(),
+        generator=MetricGenerator(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/twilio",
+            data=_form("message-1", "customer-phone", "sensitive body"),
+        )
+
+    assert response.status_code == 200
+    store = SqliteConversationStore(database_path)
+    lifecycle = store.get_generation(provider="test-provider", provider_message_id="message-1")
+    assert lifecycle is not None
+    assert store.get_generation_metrics(inbound_message_id=lifecycle.inbound_message_id) == [
+        GenerationMetricRecord(
+            attempt_number=1,
+            provider="anthropic",
+            model="claude-sonnet-5",
+            configuration="thinking=disabled;format=json_schema;max_tokens=240",
+            latency_ms=120,
+            input_tokens=100,
+            output_tokens=25,
+            total_tokens=125,
+            estimated_cost_microusd=675,
+            outcome="success",
+            error_code=None,
+        )
+    ]
+
+
+def test_llm_failure_persists_safe_metrics_without_an_invalid_reply(tmp_path: Path) -> None:
+    database_path = tmp_path / "failed-metrics-webhook.db"
+    generator = FailingMetricGenerator()
+    app = create_app(
+        _settings(database_path),
+        provider=FormProvider(),
+        generator=generator,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/twilio",
+            data=_form("message-1", "customer-phone", "sensitive body"),
+        )
+
+    assert response.status_code == 200
+    assert response.text == "safe reply"
+    assert generator.calls == 2
+    store = SqliteConversationStore(database_path)
+    lifecycle = store.get_generation(provider="test-provider", provider_message_id="message-1")
+    assert lifecycle is not None
+    metrics = store.get_generation_metrics(inbound_message_id=lifecycle.inbound_message_id)
+    assert [(metric.attempt_number, metric.outcome, metric.error_code) for metric in metrics] == [
+        (1, "failure", "provider_timeout"),
+        (2, "failure", "provider_timeout"),
+    ]

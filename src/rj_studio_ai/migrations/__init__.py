@@ -41,9 +41,13 @@ class MigrationManager:
 
     @staticmethod
     def _schema_matches(connection: Connection, inspector: Inspector) -> bool:
-        if not {"alembic_version", "conversations", "messages", "message_processing"}.issubset(
-            inspector.get_table_names()
-        ):
+        if not {
+            "alembic_version",
+            "conversations",
+            "messages",
+            "message_processing",
+            "generation_metrics",
+        }.issubset(inspector.get_table_names()):
             return False
         required_columns = {
             "conversations": {
@@ -71,6 +75,22 @@ class MigrationManager:
                 "attempt_count",
                 "created_at",
                 "updated_at",
+            },
+            "generation_metrics": {
+                "id",
+                "inbound_message_id",
+                "attempt_number",
+                "provider",
+                "model",
+                "configuration",
+                "latency_ms",
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "estimated_cost_microusd",
+                "outcome",
+                "error_code",
+                "created_at",
             },
         }
         for table, required in required_columns.items():
@@ -108,6 +128,21 @@ class MigrationManager:
         processing_checks = {
             item["name"] for item in inspector.get_check_constraints("message_processing")
         }
+        metric_uniques = {
+            frozenset(item["column_names"])
+            for item in inspector.get_unique_constraints("generation_metrics")
+        }
+        metric_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("generation_metrics")
+        }
+        metric_checks = {
+            item["name"] for item in inspector.get_check_constraints("generation_metrics")
+        }
         processing_triggers = {
             str(row[0])
             for row in connection.exec_driver_sql(
@@ -141,6 +176,14 @@ class MigrationManager:
                 "completed_processing_protects_reply_update",
                 "create_processing_for_inbound_message",
             }.issubset(processing_triggers)
+            and frozenset({"inbound_message_id", "attempt_number"}) in metric_uniques
+            and (("inbound_message_id",), "messages", ("id",)) in metric_foreign_keys
+            and {
+                "ck_generation_metrics_attempt",
+                "ck_generation_metrics_latency",
+                "ck_generation_metrics_outcome",
+                "ck_generation_metrics_error_shape",
+            }.issubset(metric_checks)
         )
 
     def _engine(self) -> Engine:

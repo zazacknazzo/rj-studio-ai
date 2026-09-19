@@ -132,8 +132,14 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         }
         versions = connection.execute("SELECT version_num FROM alembic_version").fetchall()
 
-    assert {"alembic_version", "conversations", "messages", "message_processing"}.issubset(tables)
-    assert versions == [("0003_durable_generation_claims",)]
+    assert {
+        "alembic_version",
+        "conversations",
+        "messages",
+        "message_processing",
+        "generation_metrics",
+    }.issubset(tables)
+    assert versions == [("0004_generation_metrics",)]
     assert manager.is_current()
 
 

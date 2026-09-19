@@ -7,7 +7,7 @@ import pytest
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import InboundMessage
-from rj_studio_ai.generation import GenerationTimeout, TransientGenerationError
+from rj_studio_ai.generation import GeneratedReply, GenerationTimeout, TransientGenerationError
 from rj_studio_ai.persistence import (
     GenerationClaimResult,
     GenerationState,
@@ -37,14 +37,17 @@ class ScriptedGenerator:
         self._actions = iter(actions)
         self.budgets: list[float] = []
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> str:
+    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
         self.budgets.append(remaining_budget)
         action = next(self._actions)
         if isinstance(action, Exception):
             raise action
         if callable(action):
-            return action(remaining_budget)
-        return action
+            return GeneratedReply(reply_body=action(remaining_budget))
+        return GeneratedReply(reply_body=action)
+
+    def is_configured(self) -> bool:
+        return True
 
 
 class AdvancingStore(SqliteConversationStore):

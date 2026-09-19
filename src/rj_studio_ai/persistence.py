@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from rj_studio_ai.domain import InboundMessage, MessageRecord
+from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.migrations import MigrationManager
 
 
@@ -43,6 +44,21 @@ class PurgeResult:
 class ConversationDeletionResult:
     messages_deleted: int
     conversations_deleted: int
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationMetricRecord:
+    attempt_number: int
+    provider: str
+    model: str
+    configuration: str
+    latency_ms: int
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    estimated_cost_microusd: int | None
+    outcome: str
+    error_code: str | None
 
 
 class SqliteConversationStore:
@@ -253,6 +269,79 @@ class SqliteConversationStore:
                 return self._generation_result(connection, int(row[0]), acquired=False)
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def record_generation_metric(
+        self,
+        *,
+        inbound_message_id: int,
+        attempt_number: int,
+        metric: GenerationMetric,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> None:
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    """
+                    INSERT INTO generation_metrics (
+                        inbound_message_id, attempt_number, provider, model, configuration,
+                        latency_ms, input_tokens, output_tokens, total_tokens,
+                        estimated_cost_microusd, outcome, error_code, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        inbound_message_id,
+                        attempt_number,
+                        metric.provider,
+                        metric.model,
+                        metric.configuration,
+                        metric.latency_ms,
+                        metric.input_tokens,
+                        metric.output_tokens,
+                        metric.total_tokens,
+                        metric.estimated_cost_microusd,
+                        metric.outcome,
+                        metric.error_code,
+                        self._utc_time(now).isoformat(),
+                    ),
+                )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Generation metric persistence is unavailable") from error
+
+    def get_generation_metrics(self, *, inbound_message_id: int) -> list[GenerationMetricRecord]:
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        attempt_number, provider, model, configuration, latency_ms,
+                        input_tokens, output_tokens, total_tokens, estimated_cost_microusd,
+                        outcome, error_code
+                    FROM generation_metrics
+                    WHERE inbound_message_id = ?
+                    ORDER BY attempt_number
+                    """,
+                    (inbound_message_id,),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Generation metric persistence is unavailable") from error
+        return [
+            GenerationMetricRecord(
+                attempt_number=int(row[0]),
+                provider=str(row[1]),
+                model=str(row[2]),
+                configuration=str(row[3]),
+                latency_ms=int(row[4]),
+                input_tokens=None if row[5] is None else int(row[5]),
+                output_tokens=None if row[6] is None else int(row[6]),
+                total_tokens=None if row[7] is None else int(row[7]),
+                estimated_cost_microusd=None if row[8] is None else int(row[8]),
+                outcome=str(row[9]),
+                error_code=None if row[10] is None else str(row[10]),
+            )
+            for row in rows
+        ]
 
     def purge_messages_older_than(self, cutoff: datetime) -> PurgeResult:
         if cutoff.utcoffset() is None:

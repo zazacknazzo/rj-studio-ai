@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 02. The webhook now exercises durable generation claims, per-Conversation ordering, and one end-to-end deadline through a deterministic fixed reply generator. No external LLM provider is implemented yet. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 03. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, and a narrow Claude adapter. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -13,7 +13,8 @@ Twilio Sandbox
   → canonical InboundMessage
   → persist inbound without acquiring generation
   → acquire oldest eligible Message in its Conversation
-  → deterministic FixedReplyGenerator outside SQLite transaction
+  → FixedReplyGenerator or AnthropicReplyGenerator outside SQLite transaction
+  → persist privacy-safe provider-attempt metric
   → atomically persist one reply and terminal processing state
   → canonical AIReply
   → TwilioProvider TwiML rendering
@@ -31,8 +32,9 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `application.py` | Coordinates admission, Conversation ordering, bounded wait, deterministic generation retries, and durable completion | `MessageResponder.handle()` |
 | `deadline.py` | Holds the single monotonic webhook deadline and finalization reserve | `ExecutionDeadline` |
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
-| `generation.py` | Defines the narrow synchronous generation seam and ticket-02 deterministic implementation | `ReplyGenerator`, `FixedReplyGenerator` |
-| `persistence.py` | Provides transactional idempotency, durable generation claims, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
+| `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
+| `providers/anthropic.py` | Translates the core generation contract to the official Anthropic SDK | `AnthropicReplyGenerator` |
+| `persistence.py` | Provides transactional idempotency, durable generation claims, privacy-safe metrics, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
 | `migrations/` | Holds and applies ordered Alembic revisions | `MigrationManager` |
 | `maintenance.py` | Exposes explicit migrate, purge, and Conversation-deletion commands | `rj-studio-maintenance` |
 | `providers/base.py` | Defines provider behavior and provider errors | `WhatsAppProvider` |
@@ -48,6 +50,7 @@ SQLite contains:
 - Each outbound reply points to its inbound Message through `in_reply_to_message_id`.
 - A unique index on that link prevents a second logical reply for one inbound Message.
 - `message_processing`: one durable lifecycle per inbound Message, with `processing`, `retryable`, `completed`, or terminal `suppressed` state.
+- `generation_metrics`: one privacy-safe model-attempt record per inbound generation attempt; it contains no Message body, Customer address, provider Message identifier, key, or prompt.
 - A processing claim has a unique owner token, a 30-second lease, and no more than two attempts. Database constraints protect state shape and the relationship between terminal state and reply presence.
 - `alembic_version` records the current schema revision.
 
@@ -65,6 +68,8 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - A blocked webhook polls through separate short transactions for at most one second. If the predecessor remains non-terminal, the current inbound stays persisted and the webhook returns HTTP 503 without provider reply markup. A later provider retry can claim it after the predecessor becomes terminal.
 - The webhook creates one 10-second monotonic deadline before reading and translating the inbound request. SQLite lock timeouts, ordering polls, retry backoff, generation, finalization, provider rendering, and response preparation all consume that same budget.
 - One second of the total is reserved for final persistence and provider response rendering. New generation attempts require at least 100 milliseconds outside that reserve. These are local V1.1 operating constants, not model-specific timeout policy.
+- Claude calls receive the existing remaining work budget as their SDK timeout and run inside an asynchronous cancellation scope using that same absolute budget; cleanup is not awaited after that budget has expired. They start only with at least one second available outside the finalization reserve. SDK retries are disabled; the durable application lifecycle owns the two-attempt limit. Claude Sonnet 5 uses `thinking={"type": "disabled"}` and a minimal JSON envelope containing only `reply_text`; Intent and business decisions remain deferred.
+- Attempt metrics persist provider, returned model, non-secret configuration label, latency, available token counts, configured-price cost estimate, outcome, and safe error code. Pricing is supplied in environment configuration and is not hardcoded because provider pricing may change.
 - Existing V0.1 inbound/reply pairs migrate to `completed` with zero LLM attempts. The current deterministic fixed-reply flow creates the same terminal lifecycle atomically with its AI Reply.
 - Alembic owns schema versions. Application startup and the maintenance command invoke it explicitly; importing modules performs no database I/O.
 - `/health` checks process liveness. `/ready` checks local configuration, schema revision, schema shape, and a rollback-only write transaction.

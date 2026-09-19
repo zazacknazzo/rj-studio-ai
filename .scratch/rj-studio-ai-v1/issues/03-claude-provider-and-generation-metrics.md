@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Deliver ordered, deadline-bound webhook generation.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Context
 
@@ -16,16 +16,16 @@ LLM provider contract, Claude adapter and configuration, generation metric persi
 
 ## Acceptance criteria
 
-- [ ] Claude Sonnet 5 is selectable as the production provider with thinking explicitly disabled and structured output used where applicable.
-- [ ] Provider timeout, transient error, and malformed structured response enter the V1 safe failure path; no automatic Claude-to-Terra fallback exists.
-- [ ] Every provider attempt records model, configuration, latency, input/output tokens, estimated cost, outcome, and safe error code without full Message bodies, phone numbers, provider identifiers, secrets, or chain-of-thought.
-- [ ] The deterministic LLM fake remains the default for ordinary automated tests and can assert call count and supplied context.
+- [x] Claude Sonnet 5 is selectable as the production provider with thinking explicitly disabled and structured output used where applicable.
+- [x] Provider timeout, transient error, and malformed structured response enter the V1 safe failure path; no automatic Claude-to-Terra fallback exists.
+- [x] Every provider attempt records model, configuration, latency, input/output tokens, estimated cost, outcome, and safe error code without full Message bodies, phone numbers, provider identifiers, secrets, or chain-of-thought.
+- [x] The deterministic LLM fake remains the default for ordinary automated tests and can assert call count and supplied context.
 
 ## Required tests
 
-- [ ] Provider-contract tests for request configuration, structured-response translation, timeout, transient failure, and malformed output.
-- [ ] FastAPI and SQLite tests for metric persistence and redaction on success and failure.
-- [ ] Configuration tests prove missing required LLM settings fail safely.
+- [x] Provider-contract tests for request configuration, structured-response translation, timeout, transient failure, and malformed output.
+- [x] FastAPI and SQLite tests for metric persistence and redaction on success and failure.
+- [x] Configuration tests prove missing required LLM settings fail safely.
 
 ## Non-goals
 

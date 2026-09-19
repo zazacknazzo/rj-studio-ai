@@ -4,7 +4,12 @@ from time import sleep
 
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import AIReply, InboundMessage
-from rj_studio_ai.generation import ReplyGenerator, TransientGenerationError
+from rj_studio_ai.generation import (
+    GenerationFailure,
+    GenerationMetric,
+    ReplyGenerator,
+    TransientGenerationError,
+)
 from rj_studio_ai.persistence import (
     GenerationClaimResult,
     GenerationState,
@@ -116,18 +121,55 @@ class MessageResponder:
                 )
             raise RetryableWebhookError("No useful generation budget remains")
         try:
-            reply_body = self._generator.generate(
+            generated = self._generator.generate(
                 message,
                 remaining_budget=deadline.work_budget(),
             )
+            reply_body = generated.reply_body
             if not isinstance(reply_body, str) or not reply_body.strip():
-                raise TransientGenerationError("Generator returned an invalid reply")
+                raise TransientGenerationError("invalid_generation_result", generated.metric)
             if deadline.work_budget() <= 0.0:
-                raise TransientGenerationError("Generation consumed the finalization margin")
+                raise TransientGenerationError("generation_deadline", generated.metric)
+            self._record_metric(claim, generated.metric, deadline)
         except TransientGenerationError as error:
+            self._record_metric(claim, error.metric, deadline)
             return self._handle_generation_failure(message, claim, deadline, error)
+        except GenerationFailure as error:
+            self._record_metric(claim, error.metric, deadline)
+            self._release_for_retryable_failure(claim, deadline)
+            raise RetryableWebhookError("Generation provider is unavailable") from error
 
         return self._complete_owned_reply(claim, reply_body, deadline)
+
+    def _record_metric(
+        self,
+        claim: GenerationClaimResult,
+        metric: GenerationMetric | None,
+        deadline: ExecutionDeadline,
+    ) -> None:
+        if metric is None:
+            return
+        self._store.record_generation_metric(
+            inbound_message_id=claim.inbound_message_id,
+            attempt_number=claim.attempt_count,
+            metric=metric,
+            lock_timeout=deadline.remaining_budget(),
+        )
+
+    def _release_for_retryable_failure(
+        self,
+        claim: GenerationClaimResult,
+        deadline: ExecutionDeadline,
+    ) -> None:
+        if claim.owner_token is None:
+            raise RetryableWebhookError("Generation claim owner is unavailable")
+        released = self._store.mark_generation_retryable(
+            inbound_message_id=claim.inbound_message_id,
+            owner_token=claim.owner_token,
+            lock_timeout=deadline.remaining_budget(),
+        )
+        if not released:
+            raise RetryableWebhookError("Generation claim could not be released")
 
     def _handle_generation_failure(
         self,

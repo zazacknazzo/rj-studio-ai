@@ -8,8 +8,10 @@ from threading import Barrier
 import pytest
 
 from rj_studio_ai.domain import InboundMessage
+from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.persistence import (
     GenerationClaimResult,
+    GenerationMetricRecord,
     GenerationState,
     PersistenceUnavailable,
     SqliteConversationStore,
@@ -63,6 +65,47 @@ def test_claim_is_durable_until_lease_expiry_and_restart(tmp_path: Path) -> None
     assert after_expiry.owner_token is not None
     assert after_expiry.owner_token != first.owner_token
     assert after_expiry.attempt_count == 2
+
+
+def test_generation_metric_persists_without_message_content(tmp_path: Path) -> None:
+    store = _store(tmp_path / "metrics.db")
+    claim = store.claim_generation(_message(), now=NOW)
+
+    store.record_generation_metric(
+        inbound_message_id=claim.inbound_message_id,
+        attempt_number=claim.attempt_count,
+        metric=GenerationMetric(
+            provider="anthropic",
+            model="claude-sonnet-5",
+            configuration="thinking=disabled;format=json_schema;max_tokens=240",
+            latency_ms=420,
+            input_tokens=100,
+            output_tokens=25,
+            total_tokens=125,
+            estimated_cost_microusd=675,
+            outcome="success",
+            error_code=None,
+        ),
+        now=NOW,
+    )
+
+    metrics = store.get_generation_metrics(inbound_message_id=claim.inbound_message_id)
+
+    assert metrics == [
+        GenerationMetricRecord(
+            attempt_number=1,
+            provider="anthropic",
+            model="claude-sonnet-5",
+            configuration="thinking=disabled;format=json_schema;max_tokens=240",
+            latency_ms=420,
+            input_tokens=100,
+            output_tokens=25,
+            total_tokens=125,
+            estimated_cost_microusd=675,
+            outcome="success",
+            error_code=None,
+        )
+    ]
 
 
 def test_concurrent_claims_for_one_inbound_have_one_owner(tmp_path: Path) -> None:
