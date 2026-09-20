@@ -35,7 +35,6 @@ class LiviaPersona:
         reply_text: str,
         *,
         prior_ai_replies: tuple[str, ...] = (),
-        handoff_proposed: bool = False,
     ) -> None:
         if len(reply_text) > 800:
             raise PersonaValidationError("reply exceeds persona length limit")
@@ -56,10 +55,8 @@ class LiviaPersona:
             )
         ):
             raise PersonaValidationError("reply misrepresents Lívia's identity")
-        if (
-            handoff_proposed
-            and _is_handoff_confirmation(reply_text)
-            and any(_is_handoff_confirmation(prior_reply) for prior_reply in prior_ai_replies)
+        if _is_handoff_confirmation(reply_text) and any(
+            _is_handoff_confirmation(prior_reply) for prior_reply in prior_ai_replies
         ):
             raise PersonaValidationError("reply repeats a handoff confirmation")
         if _asks_about_identity(customer_message) and not any(

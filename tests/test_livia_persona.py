@@ -51,5 +51,4 @@ def test_persona_rejects_a_repeated_handoff_confirmation() -> None:
             "Quero falar com alguém",
             "Vou te encaminhar para uma pessoa.",
             prior_ai_replies=("Vou te encaminhar para uma pessoa.",),
-            handoff_proposed=True,
         )

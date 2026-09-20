@@ -170,7 +170,6 @@ class AnthropicReplyGenerator:
                     if context is None
                     else tuple(turn.body for turn in context.history if turn.role == "ai_attendant")
                 ),
-                handoff_proposed=decision.handoff,
             )
         except (
             StructuredDecisionValidationError,
