@@ -16,6 +16,7 @@ from rj_studio_ai.generation import (
     GenerationTimeout,
     TransientGenerationError,
 )
+from rj_studio_ai.livia_persona import LiviaPersona
 from rj_studio_ai.llm_decision import (
     MAX_OUTPUT_TOKENS,
     LLMDecision,
@@ -65,6 +66,7 @@ class AnthropicReplyGenerator:
         "Produza somente a decisão estruturada, sem raciocínio textual."
     )
     _decision_schema = decision_json_schema()
+    _persona = LiviaPersona()
 
     def __init__(
         self,
@@ -160,6 +162,7 @@ class AnthropicReplyGenerator:
 
         try:
             decision = self._decision(response, context)
+            self._persona.validate_reply(message.body, decision.reply_text)
         except (
             StructuredDecisionValidationError,
             ValueError,
@@ -297,7 +300,7 @@ class AnthropicReplyGenerator:
 
     @classmethod
     def _system_prompt_for(cls, context: "ConversationContext | None") -> str:
-        prompt = cls._system_prompt
+        prompt = f"{cls._system_prompt}\n\n{cls._persona.instructions}"
         if context is not None and context.history_may_be_incomplete:
             prompt += (
                 " O histórico anterior pode estar incompleto; não deduza o que falta "

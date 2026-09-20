@@ -219,11 +219,15 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
         "handoff_reason",
     }
     assert set(schema["required"]) == set(schema["properties"])
-    assert request["system"] == (
+    system = str(request["system"])
+    assert system.startswith(
         "Responda em português brasileiro, de forma breve. "
         "Não invente fatos do salão; peça esclarecimento quando faltar contexto. "
         "Produza somente a decisão estruturada, sem raciocínio textual."
     )
+    assert "Você é Lívia, a atendente virtual do RJ Studio." in system
+    assert "R$" not in system
+    assert "disponibilidade" not in system
     assert request["messages"] == [{"role": "user", "content": "Olá"}]
     assert request["timeout"] == 4.5
 

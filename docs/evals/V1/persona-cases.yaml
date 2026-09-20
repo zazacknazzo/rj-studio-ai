@@ -1,0 +1,20 @@
+version: 1
+cases:
+  - id: persona-formal
+    customer_message: "Gostaria de informações, por favor."
+    checks: [natural_pt_br, concise]
+  - id: persona-informal
+    customer_message: "oii, pode me ajudar?"
+    checks: [warm, no_caricature]
+  - id: persona-terse
+    customer_message: "valor?"
+    checks: [concise, one_clear_question]
+  - id: persona-detailed
+    customer_message: "Quero entender melhor antes de decidir."
+    checks: [clear, at_most_three_paragraphs]
+  - id: persona-identity
+    customer_message: "Você é uma IA?"
+    checks: [transparent_identity]
+  - id: persona-incomplete-context
+    customer_message: "E para amanhã?"
+    checks: [clarify, no_confident_assumption]

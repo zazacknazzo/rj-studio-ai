@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 07. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, and a provider-neutral structured decision. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 08. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, and a provider-neutral structured decision. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -36,6 +36,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
 | `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
 | `llm_decision.py` | Validates the provider-neutral, untrusted structured decision proposal | `LLMDecision` |
+| `livia_persona.py` | Keeps Lívia voice instructions and deterministic reply-surface limits separate from Salon Knowledge | `LiviaPersona` |
 | `conversation_context.py` | Loads, orders, minimizes, and bounds prior turns plus selected Salon Knowledge | `ConversationContextBuilder` |
 | `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
 | `salon_knowledge.py` | Validates versioned YAML and selects approved relevant facts | `SalonKnowledgeRepository` |
