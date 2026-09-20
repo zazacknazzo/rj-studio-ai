@@ -37,7 +37,13 @@ class ScriptedGenerator:
         self._actions = iter(actions)
         self.budgets: list[float] = []
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         self.budgets.append(remaining_budget)
         action = next(self._actions)
         if isinstance(action, Exception):

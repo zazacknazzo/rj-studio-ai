@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 05. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, and validated Salon Knowledge. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 06. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, and bounded Conversation Context. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -13,6 +13,7 @@ Twilio Sandbox
   → canonical InboundMessage
   → persist inbound without acquiring generation
   → acquire oldest eligible Message in its Conversation
+  → load bounded canonical Conversation Context and approved Salon Knowledge
   → FixedReplyGenerator or AnthropicReplyGenerator outside SQLite transaction
   → persist privacy-safe provider-attempt metric
   → atomically persist one reply and terminal processing state
@@ -33,6 +34,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `deadline.py` | Holds the single monotonic webhook deadline and finalization reserve | `ExecutionDeadline` |
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
 | `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
+| `conversation_context.py` | Loads, orders, minimizes, and bounds prior turns plus selected Salon Knowledge | `ConversationContextBuilder` |
 | `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
 | `salon_knowledge.py` | Validates versioned YAML and selects approved relevant facts | `SalonKnowledgeRepository` |
 | `providers/anthropic.py` | Translates the core generation contract to the official Anthropic SDK | `AnthropicReplyGenerator` |
@@ -53,6 +55,7 @@ SQLite contains:
 - A unique index on that link prevents a second logical reply for one inbound Message.
 - `message_processing`: one durable lifecycle per inbound Message, with `processing`, `retryable`, `completed`, or terminal `suppressed` state.
 - `generation_metrics`: one privacy-safe model-attempt record per inbound generation attempt; it contains no Message body, Customer address, provider Message identifier, key, or prompt.
+- `ix_messages_conversation_created` supports bounded same-Conversation context retrieval.
 - A processing claim has a unique owner token, a 30-second lease, and no more than two attempts. Database constraints protect state shape and the relationship between terminal state and reply presence.
 - `alembic_version` records the current schema revision.
 
@@ -65,6 +68,7 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - SQLite is local and directly testable with temporary databases. A generic persistence interface is deferred until a second implementation or V1 behavior creates real variation.
 - RJ Studio rules will belong in localized knowledge or policy modules when those capabilities are specified. They must not enter generic Conversation orchestration.
 - Salon Knowledge is a validated YAML source at `SALON_KNOWLEDGE_PATH`. Startup rejects invalid knowledge; only approved facts are selectable. The repository performs deterministic topic matching with a conservative compact-context budget and carries required Service policies with a selected Service. YAML remains outside the Anthropic adapter; response grounding arrives in a later ticket.
+- Conversation Context selects at most 12 prior Messages from the same Conversation and no more than 30 days before the persisted current inbound timestamp. It keeps logical Customer → AI Attendant order, removes oldest history first under a 2,000-byte upper-bound budget, and reserves current inbound plus approved knowledge within a 4,000-byte upper-bound input budget. When age, count, or budget omits history, its explicit incomplete flag instructs the provider to clarify instead of infer a missing antecedent. It contains only role and body; no provider, Customer-address, claim, metric, or timestamp metadata crosses the LLM seam.
 - `BEGIN IMMEDIATE`, the inbound uniqueness constraint, and the unique reply link make reply preparation correct across threads and process restarts. This does not assert exactly-once WhatsApp delivery.
 - Claim acquisition and completion use separate short `BEGIN IMMEDIATE` transactions. This leaves the future LLM call outside a database transaction; only the current unexpired owner can finalize an AI Reply. After two failed or expired generation attempts, a dedicated finalization claim can acquire the same lifecycle without incrementing the attempt count, allowing a later slice to persist one deterministic safe reply without leaving the Message stranded.
 - Claim acquisition checks earlier inbound Messages in the same Conversation. Any earlier non-terminal Message blocks a later claim, while claims for different Conversations hold no shared application lock. SQLite write transactions remain short and never span generation, wait, sleep, or backoff.
@@ -88,7 +92,6 @@ The real Twilio Sandbox test passed with signature validation enabled on 2026-09
 
 ## Work that can stay inside V1 slices
 
-- Limit Conversation history by an explicit token/message budget and add the needed SQLite index.
 - Introduce a narrow persistence port only when V1 needs context retrieval or a test adapter.
 - Bind the real provider timeout to `remaining_budget` and add privacy-safe attempt metrics with ticket 03.
 - Decide whether reply-delivery status callbacks are needed when V1 failure handling is specified.

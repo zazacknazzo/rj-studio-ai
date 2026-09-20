@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 from time import monotonic
 from types import SimpleNamespace
 
@@ -9,12 +10,14 @@ from fastapi.testclient import TestClient
 
 from rj_studio_ai.application import MessageResponder
 from rj_studio_ai.config import Settings
+from rj_studio_ai.conversation_context import ConversationContext, ConversationTurn
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.generation import GenerationFailure, GenerationTimeout, TransientGenerationError
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import SqliteConversationStore
 from rj_studio_ai.providers.anthropic import AnthropicReplyGenerator, LLMPriceTable
+from rj_studio_ai.salon_knowledge import SalonKnowledgeFact
 
 
 class RecordingMessages:
@@ -199,11 +202,54 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
                     },
                 }
             },
-            "system": "Responda em português brasileiro, de forma breve. Sem fatos do salão.",
+            "system": (
+                "Responda em português brasileiro, de forma breve. "
+                "Não invente fatos do salão; peça esclarecimento quando faltar contexto."
+            ),
             "messages": [{"role": "user", "content": "Olá"}],
             "timeout": 4.5,
         }
     ]
+
+
+def test_anthropic_adapter_receives_prepared_history_knowledge_and_one_current_message() -> None:
+    client = RecordingClient()
+    context = ConversationContext(
+        history=(
+            ConversationTurn(role="customer", body="Quero corte"),
+            ConversationTurn(role="ai_attendant", body="Claro, posso ajudar."),
+        ),
+        history_may_be_incomplete=True,
+        knowledge=(
+            SalonKnowledgeFact(
+                id="service-corte",
+                category="service",
+                topic="corte",
+                status="approved",
+                fact_type="operational_commercial",
+                statement="Serviço sintético de corte.",
+                source="synthetic fixture",
+                reviewed_at=date(2026, 9, 20),
+                approved_by="RJ Studio operator",
+            ),
+        ),
+    )
+
+    _generator(client).generate(_message(), context=context, remaining_budget=4.5)
+
+    request = client.messages.calls[0]
+    assert request["messages"] == [
+        {"role": "user", "content": "Quero corte"},
+        {"role": "assistant", "content": "Claro, posso ajudar."},
+        {"role": "user", "content": "Olá"},
+    ]
+    system = str(request["system"])
+    assert "histórico anterior pode estar incompleto" in system
+    assert "Approved Salon Knowledge:" in system
+    assert "service-corte" in system
+    assert "customer-1" not in system
+    assert "message-1" not in system
+    assert "studio" not in system
 
 
 def test_missing_anthropic_runtime_configuration_is_not_ready(tmp_path) -> None:

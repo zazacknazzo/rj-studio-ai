@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import anthropic
 
@@ -16,6 +16,9 @@ from rj_studio_ai.generation import (
     GenerationTimeout,
     TransientGenerationError,
 )
+
+if TYPE_CHECKING:
+    from rj_studio_ai.conversation_context import ConversationContext
 
 
 class AnthropicMessages(Protocol):
@@ -48,7 +51,10 @@ class LLMPriceTable:
 class AnthropicReplyGenerator:
     provider = "anthropic"
     _minimum_request_budget_seconds = 1.0
-    _system_prompt = "Responda em português brasileiro, de forma breve. Sem fatos do salão."
+    _system_prompt = (
+        "Responda em português brasileiro, de forma breve. "
+        "Não invente fatos do salão; peça esclarecimento quando faltar contexto."
+    )
     _reply_schema: dict[str, object] = {
         "type": "object",
         "properties": {"reply_text": {"type": "string", "minLength": 1}},
@@ -93,7 +99,13 @@ class AnthropicReplyGenerator:
             and self._pricing.is_valid()
         )
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: "ConversationContext | None" = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         if not self.is_configured():
             raise GenerationFailure("provider_configuration")
         if remaining_budget < self._minimum_request_budget_seconds:
@@ -101,7 +113,7 @@ class AnthropicReplyGenerator:
 
         started_at = self._clock()
         try:
-            response = asyncio.run(self._request(message, remaining_budget))
+            response = asyncio.run(self._request(message, context, remaining_budget))
         except TimeoutError as error:
             raise GenerationTimeout("provider_timeout", self._failure_metric(started_at)) from error
         except anthropic.APITimeoutError as error:
@@ -171,7 +183,12 @@ class AnthropicReplyGenerator:
     def _new_client(self) -> AnthropicClient:
         return anthropic.AsyncAnthropic(api_key=self._api_key, max_retries=0)
 
-    async def _request(self, message: InboundMessage, remaining_budget: float) -> object:
+    async def _request(
+        self,
+        message: InboundMessage,
+        context: "ConversationContext | None",
+        remaining_budget: float,
+    ) -> object:
         client = self._client_factory()
         loop = asyncio.get_running_loop()
         request_deadline = loop.time() + remaining_budget
@@ -182,8 +199,8 @@ class AnthropicReplyGenerator:
                     max_tokens=self._max_output_tokens,
                     thinking={"type": "disabled"},
                     output_config={"format": {"type": "json_schema", "schema": self._reply_schema}},
-                    system=self._system_prompt,
-                    messages=[{"role": "user", "content": message.body}],
+                    system=self._system_prompt_for(context),
+                    messages=self._messages_for(message, context),
                     timeout=remaining_budget,
                 )
                 return await response if inspect.isawaitable(response) else response
@@ -255,3 +272,32 @@ class AnthropicReplyGenerator:
         if not isinstance(reply_text, str) or not reply_text.strip():
             raise ValueError("Structured reply text is invalid")
         return reply_text
+
+    @classmethod
+    def _system_prompt_for(cls, context: "ConversationContext | None") -> str:
+        prompt = cls._system_prompt
+        if context is not None and context.history_may_be_incomplete:
+            prompt += (
+                " O histórico anterior pode estar incompleto; não deduza o que falta "
+                "e peça esclarecimento quando isso for relevante."
+            )
+        if context is not None and context.knowledge:
+            knowledge = "\n\n".join(fact.context_text() for fact in context.knowledge)
+            prompt += f"\n\nApproved Salon Knowledge:\n{knowledge}"
+        return prompt
+
+    @staticmethod
+    def _messages_for(
+        message: InboundMessage,
+        context: "ConversationContext | None",
+    ) -> list[dict[str, str]]:
+        history = () if context is None else context.history
+        messages = [
+            {
+                "role": "user" if turn.role == "customer" else "assistant",
+                "content": turn.body,
+            }
+            for turn in history
+        ]
+        messages.append({"role": "user", "content": message.body})
+        return messages

@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from time import monotonic, sleep
 
 from fastapi import FastAPI, HTTPException, Request, Response, status
@@ -8,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
+from rj_studio_ai.conversation_context import ConversationContextBuilder, ConversationContextLimits
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.generation import ReplyGenerator
 from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
@@ -47,6 +49,16 @@ def create_app(
         store=resolved_store,
         generator=resolved_generator,
         safe_failure_reply=resolved_settings.automatic_reply,
+        context_builder=ConversationContextBuilder(
+            store=resolved_store,
+            salon_knowledge=resolved_salon_knowledge,
+            limits=ConversationContextLimits(
+                maximum_prior_messages=resolved_settings.conversation_context_maximum_messages,
+                maximum_age=timedelta(days=resolved_settings.conversation_context_maximum_age_days),
+                history_token_budget=resolved_settings.conversation_context_history_token_budget,
+                total_input_token_budget=resolved_settings.llm_input_token_budget,
+            ),
+        ),
         sleeper=sleeper,
     )
 

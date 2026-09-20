@@ -2,6 +2,11 @@ from collections.abc import Callable
 from dataclasses import replace
 from time import sleep
 
+from rj_studio_ai.conversation_context import (
+    ConversationContext,
+    ConversationContextBuilder,
+    ConversationContextTooLarge,
+)
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.generation import (
@@ -28,6 +33,7 @@ class MessageResponder:
         store: SqliteConversationStore,
         generator: ReplyGenerator,
         safe_failure_reply: str,
+        context_builder: ConversationContextBuilder | None = None,
         sleeper: Callable[[float], None] = sleep,
         ordering_poll_seconds: float = 0.05,
         maximum_ordering_wait_seconds: float = 1.0,
@@ -39,6 +45,7 @@ class MessageResponder:
         self._store = store
         self._generator = generator
         self._safe_failure_reply = safe_failure_reply
+        self._context_builder = context_builder
         self._sleeper = sleeper
         self._ordering_poll_seconds = ordering_poll_seconds
         self._maximum_ordering_wait_seconds = maximum_ordering_wait_seconds
@@ -121,8 +128,13 @@ class MessageResponder:
                 )
             raise RetryableWebhookError("No useful generation budget remains")
         try:
+            context = self._build_context(claim, message, deadline)
+        except ConversationContextTooLarge:
+            return self._complete_owned_reply(claim, self._safe_failure_reply, deadline)
+        try:
             generated = self._generator.generate(
                 message,
+                context=context,
                 remaining_budget=deadline.work_budget(),
             )
             reply_body = generated.reply_body
@@ -140,6 +152,20 @@ class MessageResponder:
             raise RetryableWebhookError("Generation provider is unavailable") from error
 
         return self._complete_owned_reply(claim, reply_body, deadline)
+
+    def _build_context(
+        self,
+        claim: GenerationClaimResult,
+        message: InboundMessage,
+        deadline: ExecutionDeadline,
+    ) -> ConversationContext:
+        if self._context_builder is None:
+            return ConversationContext(history=(), knowledge=())
+        return self._context_builder.build(
+            inbound_message_id=claim.inbound_message_id,
+            current_body=message.body,
+            lock_timeout=deadline.work_budget(),
+        )
 
     def _record_metric(
         self,

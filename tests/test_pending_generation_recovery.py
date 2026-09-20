@@ -19,7 +19,13 @@ class RecordingGenerator:
         self._replies = iter(replies or ["Resposta recuperada"])
         self.messages: list[InboundMessage] = []
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         del remaining_budget
         self.messages.append(message)
         reply = next(self._replies)
@@ -32,7 +38,13 @@ class RecordingGenerator:
 
 
 class UnavailableGenerator:
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         del message, remaining_budget
         raise GenerationFailure("provider_unavailable")
 

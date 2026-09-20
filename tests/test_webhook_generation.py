@@ -1,17 +1,21 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 from threading import Barrier, Condition, Event, Lock
 from urllib.parse import parse_qs
 
+import pytest
 from fastapi.testclient import TestClient
 
 from rj_studio_ai.config import Settings
+from rj_studio_ai.conversation_context import ConversationContext
 from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.generation import GeneratedReply, GenerationMetric, TransientGenerationError
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import (
     GenerationMetricRecord,
     GenerationState,
+    RecentContextHistory,
     SqliteConversationStore,
 )
 from rj_studio_ai.providers.base import (
@@ -19,6 +23,7 @@ from rj_studio_ai.providers.base import (
     ProviderWebhookResponse,
     WhatsAppProvider,
 )
+from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
 
 
 class FakeClock:
@@ -76,7 +81,13 @@ class RecordingGenerator:
         self.budgets: list[float] = []
         self._lock = Lock()
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
@@ -86,9 +97,32 @@ class RecordingGenerator:
         return True
 
 
+class ContextRecordingGenerator(RecordingGenerator):
+    def __init__(self) -> None:
+        super().__init__()
+        self.contexts: list[ConversationContext] = []
+
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
+        assert isinstance(context, ConversationContext)
+        self.contexts.append(context)
+        return super().generate(message, context=context, remaining_budget=remaining_budget)
+
+
 class MetricGenerator(RecordingGenerator):
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
-        super().generate(message, remaining_budget=remaining_budget)
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
+        super().generate(message, context=context, remaining_budget=remaining_budget)
         return GeneratedReply(
             reply_body=f"reply:{message.body}",
             metric=GenerationMetric(
@@ -110,7 +144,13 @@ class FailingMetricGenerator:
     def __init__(self) -> None:
         self.calls = 0
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         del message, remaining_budget
         self.calls += 1
         raise TransientGenerationError(
@@ -140,7 +180,13 @@ class OrderedBlockingGenerator(RecordingGenerator):
         self.release_first = Event()
         self.second_started = Event()
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
@@ -158,7 +204,13 @@ class ParallelGenerator(RecordingGenerator):
         super().__init__()
         self._barrier = Barrier(2)
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: object | None = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
@@ -179,6 +231,30 @@ class FirstRenderConsumesDeadlineProvider(FormProvider):
         return super().reply(reply)
 
 
+class ContextDelayStore(SqliteConversationStore):
+    def __init__(self, database_path: Path, clock: FakeClock) -> None:
+        super().__init__(database_path)
+        self._clock = clock
+        self.context_lock_timeouts: list[float | None] = []
+
+    def load_recent_context_history(
+        self,
+        *,
+        inbound_message_id: int,
+        maximum_age: timedelta,
+        maximum_messages: int,
+        lock_timeout: float | None = None,
+    ) -> RecentContextHistory:
+        self.context_lock_timeouts.append(lock_timeout)
+        self._clock.advance(2.0)
+        return super().load_recent_context_history(
+            inbound_message_id=inbound_message_id,
+            maximum_age=maximum_age,
+            maximum_messages=maximum_messages,
+            lock_timeout=lock_timeout,
+        )
+
+
 def _settings(database_path: Path) -> Settings:
     return Settings(
         _env_file=None,
@@ -190,6 +266,122 @@ def _settings(database_path: Path) -> Settings:
 
 def _form(message_id: str, customer: str, body: str) -> dict[str, str]:
     return {"MessageSid": message_id, "From": customer, "Body": body}
+
+
+def test_webhook_uses_canonical_history_once_and_replay_does_not_rebuild_or_generate(
+    tmp_path: Path,
+) -> None:
+    generator = ContextRecordingGenerator()
+    app = create_app(
+        _settings(tmp_path / "context-webhook.db"),
+        provider=FormProvider(),
+        generator=generator,
+    )
+
+    with TestClient(app) as client:
+        first = client.post("/webhooks/twilio", data=_form("first", "customer-1", "Quero corte"))
+        second = client.post(
+            "/webhooks/twilio", data=_form("second", "customer-1", "E para amanhã?")
+        )
+        replay = client.post(
+            "/webhooks/twilio",
+            data=_form("second", "customer-1", "Corpo alterado no retry"),
+        )
+
+    assert [response.status_code for response in (first, second, replay)] == [200, 200, 200]
+    assert [response.text for response in (second, replay)] == [
+        "reply:E para amanhã?",
+        "reply:E para amanhã?",
+    ]
+    assert generator.calls == ["Quero corte", "E para amanhã?"]
+    assert [(turn.role, turn.body) for turn in generator.contexts[1].history] == [
+        ("customer", "Quero corte"),
+        ("ai_attendant", "reply:Quero corte"),
+    ]
+    assert generator.contexts[1].knowledge == ()
+
+
+def test_context_loading_consumes_the_existing_webhook_deadline(tmp_path: Path) -> None:
+    clock = FakeClock()
+    store = ContextDelayStore(tmp_path / "context-deadline.db", clock)
+    generator = RecordingGenerator()
+    app = create_app(
+        _settings(tmp_path / "context-deadline.db"),
+        provider=FormProvider(),
+        store=store,
+        generator=generator,
+        monotonic_clock=clock,
+        sleeper=clock.sleep,
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/webhooks/twilio", data=_form("message-1", "customer-1", "Oi"))
+
+    assert response.status_code == 200
+    assert store.context_lock_timeouts == [pytest.approx(9.0)]
+    assert generator.budgets == [pytest.approx(7.0)]
+
+
+def test_webhook_selects_approved_salon_knowledge_for_the_current_message(tmp_path: Path) -> None:
+    knowledge_path = tmp_path / "knowledge.yaml"
+    knowledge_path.write_text(
+        """
+version: 1
+facts:
+  - id: service-corte
+    category: service
+    topic: corte
+    status: approved
+    fact_type: operational_commercial
+    statement: Serviço sintético de corte.
+    source: synthetic fixture
+    reviewed_at: 2026-09-20
+    approved_by: RJ Studio operator
+""".lstrip(),
+        encoding="utf-8",
+    )
+    generator = ContextRecordingGenerator()
+    app = create_app(
+        _settings(tmp_path / "knowledge-webhook.db"),
+        provider=FormProvider(),
+        generator=generator,
+        salon_knowledge=SalonKnowledgeRepository(knowledge_path),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/twilio", data=_form("message-1", "customer-1", "Quero corte")
+        )
+
+    assert response.status_code == 200
+    assert [fact.id for fact in generator.contexts[0].knowledge] == ["service-corte"]
+
+
+def test_oversized_current_message_gets_the_safe_reply_without_llm_generation(
+    tmp_path: Path,
+) -> None:
+    generator = RecordingGenerator()
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=tmp_path / "oversized-current.db",
+            automatic_reply="safe reply",
+            llm_input_token_budget=500,
+            twilio_validate_signature=False,
+        ),
+        provider=FormProvider(),
+        generator=generator,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/webhooks/twilio",
+            data=_form("message-1", "customer-1", "x" * 200),
+        )
+
+    assert response.status_code == 200
+    assert response.text == "safe reply"
+    assert generator.calls == []
 
 
 def test_two_concurrent_messages_in_one_conversation_generate_in_order(

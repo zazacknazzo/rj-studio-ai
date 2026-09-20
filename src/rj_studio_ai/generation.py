@@ -1,7 +1,10 @@
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from rj_studio_ai.domain import InboundMessage
+
+if TYPE_CHECKING:
+    from rj_studio_ai.conversation_context import ConversationContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +45,13 @@ class GenerationTimeout(TransientGenerationError):
 
 
 class ReplyGenerator(Protocol):
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: "ConversationContext | None" = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
         """Generate one candidate reply within the supplied remaining budget."""
 
     def is_configured(self) -> bool:
@@ -55,8 +64,14 @@ class FixedReplyGenerator:
     def __init__(self, reply_body: str) -> None:
         self._reply_body = reply_body
 
-    def generate(self, message: InboundMessage, *, remaining_budget: float) -> GeneratedReply:
-        del message, remaining_budget
+    def generate(
+        self,
+        message: InboundMessage,
+        *,
+        context: "ConversationContext | None" = None,
+        remaining_budget: float,
+    ) -> GeneratedReply:
+        del message, context, remaining_budget
         return GeneratedReply(reply_body=self._reply_body)
 
     def is_configured(self) -> bool:
