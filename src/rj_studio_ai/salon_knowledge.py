@@ -113,6 +113,21 @@ class SalonKnowledgeFact(BaseModel):
             )
         return self
 
+    def context_text(self) -> str:
+        """Render only approved factual fields for the LLM-context seam."""
+        lines = [
+            f"id: {self.id}",
+            f"category: {self.category.value}",
+            f"topic: {self.topic}",
+            f"type: {self.fact_type.value}",
+            f"statement: {self.statement}",
+        ]
+        if self.requires_human_consultation:
+            lines.append("requires_human_consultation: true")
+        if self.mandatory_policy_ids:
+            lines.append("mandatory_policy_ids: " + ",".join(sorted(self.mandatory_policy_ids)))
+        return "\n".join(lines)
+
 
 class _SalonKnowledgeDocument(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -224,19 +239,4 @@ def _terms(value: str) -> set[str]:
 
 def _token_upper_bound(fact: SalonKnowledgeFact) -> int:
     """Use UTF-8 bytes as a conservative upper bound for compact prompt tokens."""
-    return len(_compact_context(fact).encode("utf-8"))
-
-
-def _compact_context(fact: SalonKnowledgeFact) -> str:
-    lines = [
-        f"id: {fact.id}",
-        f"category: {fact.category.value}",
-        f"topic: {fact.topic}",
-        f"type: {fact.fact_type.value}",
-        f"statement: {fact.statement}",
-    ]
-    if fact.requires_human_consultation:
-        lines.append("requires_human_consultation: true")
-    if fact.mandatory_policy_ids:
-        lines.append("mandatory_policy_ids: " + ",".join(sorted(fact.mandatory_policy_ids)))
-    return "\n".join(lines)
+    return len(fact.context_text().encode("utf-8"))
