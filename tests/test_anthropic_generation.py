@@ -628,3 +628,55 @@ def test_anthropic_adapter_rejects_output_cap_above_the_v1_contract() -> None:
             ),
             client=RecordingClient(),
         )
+
+
+def test_valid_multi_intent_decision_survives_webhook_and_replay(tmp_path) -> None:
+    database_path = tmp_path / "valid-multi-intent.db"
+    client = RecordingClient()
+    payload = json.loads(
+        _decision_json("Posso confirmar os valores com a equipe. Qual período você prefere?")
+    )
+    payload["intents"] = ["price", "appointment_interest"]
+
+    def create(**kwargs: object) -> object:
+        client.messages.calls.append(kwargs)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=json.dumps(payload))],
+            model="claude-sonnet-5",
+            usage=SimpleNamespace(input_tokens=40, output_tokens=16),
+        )
+
+    client.messages.create = create
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            automatic_reply="Resposta segura",
+            twilio_validate_signature=False,
+        ),
+        generator=_generator(client),
+    )
+    form = {
+        "MessageSid": "message-1",
+        "From": "customer",
+        "To": "studio",
+        "Body": "Quanto custa progressiva e tem horário sexta?",
+    }
+
+    with TestClient(app) as test_client:
+        first = test_client.post("/webhooks/twilio", data=form)
+        replay = test_client.post("/webhooks/twilio", data=form)
+
+    assert first.status_code == replay.status_code == 200
+    assert first.text == replay.text
+    assert "Qual período você prefere?" in first.text
+    assert "disponível" not in first.text
+    assert len(client.messages.calls) == 1
+    lifecycle = SqliteConversationStore(database_path).get_generation(
+        provider="twilio", provider_message_id="message-1"
+    )
+    assert lifecycle is not None
+    assert (
+        lifecycle.reply_body
+        == "Posso confirmar os valores com a equipe. Qual período você prefere?"
+    )

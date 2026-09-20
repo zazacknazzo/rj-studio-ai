@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Draft spec exists; the suite is created during approved V1 implementation |
+| V1 | Intent seed added in Ticket 07; execution and gate records are deferred to Ticket 12 |
 
 Each eval case should contain:
 

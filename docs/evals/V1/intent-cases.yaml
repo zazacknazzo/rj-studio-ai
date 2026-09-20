@@ -1,0 +1,46 @@
+version: 1
+cases:
+  - id: intent-greeting
+    customer_message: "Oi, tudo bem?"
+    expected_intents: [greeting]
+  - id: intent-service-information
+    customer_message: "Como funciona o corte?"
+    expected_intents: [service_information]
+  - id: intent-price
+    customer_message: "Quanto custa o corte?"
+    expected_intents: [price]
+  - id: intent-professional
+    customer_message: "Quem faz progressiva?"
+    expected_intents: [professional]
+  - id: intent-hours
+    customer_message: "Qual o horário de funcionamento?"
+    expected_intents: [hours]
+  - id: intent-location
+    customer_message: "Onde fica o salão?"
+    expected_intents: [location]
+  - id: intent-technical-guidance
+    customer_message: "Posso fazer tratamento depois de pintar?"
+    expected_intents: [technical_guidance]
+  - id: intent-appointment-interest
+    customer_message: "Tem horário na sexta?"
+    expected_intents: [appointment_interest]
+    forbidden_claims: [confirmed_availability]
+  - id: intent-appointment-change
+    customer_message: "Quero remarcar meu horário."
+    expected_intents: [appointment_change]
+  - id: intent-complaint
+    customer_message: "Fiquei insatisfeita com o atendimento."
+    expected_intents: [complaint]
+  - id: intent-promotion
+    customer_message: "Tem alguma promoção?"
+    expected_intents: [promotion_or_discount]
+  - id: intent-human-request
+    customer_message: "Quero falar com uma pessoa."
+    expected_intents: [human_request]
+  - id: intent-other
+    customer_message: "Vocês aceitam cachorro?"
+    expected_intents: [other]
+  - id: intent-price-and-appointment
+    customer_message: "Quanto custa progressiva e tem horário sexta?"
+    expected_intents: [price, appointment_interest]
+    forbidden_claims: [confirmed_availability]

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Deliver ordered, deadline-bound webhook generation; 05: Load approved Salon Knowledge; 06: Build bounded Conversation Context.
 
-**Status:** in-progress
+**Status:** done
 
 ## Context
 
@@ -16,15 +16,15 @@ LLM structured decision schema, provider translation, application validation bou
 
 ## Acceptance criteria
 
-- [ ] The decision supports the approved Intent catalog, including multiple Intents, and carries reply text, categorical uncertainty, allowed knowledge references, structured critical claims, handoff proposal, and reason.
-- [ ] Availability can be classified as appointment-related without claiming real availability.
-- [ ] Unsupported Intent, missing field, schema-invalid output, or invalid reference never becomes an AI Reply and follows the safe failure path.
-- [ ] The application treats all LLM decision fields as proposals pending trusted validation in the grounding and handoff tickets.
+- [x] The decision supports the approved Intent catalog, including multiple Intents, and carries reply text, categorical uncertainty, allowed knowledge references, structured critical claims, handoff proposal, and reason.
+- [x] Availability can be classified as appointment-related without claiming real availability.
+- [x] Unsupported Intent, missing field, schema-invalid output, or invalid reference never becomes an AI Reply and follows the safe failure path.
+- [x] The application treats all LLM decision fields as proposals pending trusted validation in the grounding and handoff tickets.
 
 ## Required tests
 
-- [ ] Provider-contract and FastAPI tests cover valid single/multiple Intent decisions, appointment-related intent, invalid schema, unknown Intent, and missing required fields.
-- [ ] Synthetic Intent eval cases cover greeting, price, professional, hours, location, technical guidance, appointment, complaint, promotion, human request, and other.
+- [x] Provider-contract and FastAPI tests cover valid single/multiple Intent decisions, appointment-related intent, invalid schema, unknown Intent, and missing required fields.
+- [x] Synthetic Intent eval cases cover greeting, price, professional, hours, location, technical guidance, appointment, complaint, promotion, human request, and other.
 
 ## Non-goals
 
