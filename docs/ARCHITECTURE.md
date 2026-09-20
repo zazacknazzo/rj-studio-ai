@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 04. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, and a narrow Claude adapter. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 05. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, and validated Salon Knowledge. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -34,6 +34,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
 | `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
 | `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
+| `salon_knowledge.py` | Validates versioned YAML and selects approved relevant facts | `SalonKnowledgeRepository` |
 | `providers/anthropic.py` | Translates the core generation contract to the official Anthropic SDK | `AnthropicReplyGenerator` |
 | `persistence.py` | Provides transactional idempotency, durable generation claims, privacy-safe metrics, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
 | `migrations/` | Holds and applies ordered Alembic revisions | `MigrationManager` |
@@ -63,6 +64,7 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - Twilio is a true external dependency, so `WhatsAppProvider` is a justified seam. Meta Cloud API must become another adapter.
 - SQLite is local and directly testable with temporary databases. A generic persistence interface is deferred until a second implementation or V1 behavior creates real variation.
 - RJ Studio rules will belong in localized knowledge or policy modules when those capabilities are specified. They must not enter generic Conversation orchestration.
+- Salon Knowledge is a validated YAML source at `SALON_KNOWLEDGE_PATH`. Startup rejects invalid knowledge; only approved facts are selectable. The repository performs deterministic topic matching with a conservative compact-context budget and carries required Service policies with a selected Service. YAML remains outside the Anthropic adapter; response grounding arrives in a later ticket.
 - `BEGIN IMMEDIATE`, the inbound uniqueness constraint, and the unique reply link make reply preparation correct across threads and process restarts. This does not assert exactly-once WhatsApp delivery.
 - Claim acquisition and completion use separate short `BEGIN IMMEDIATE` transactions. This leaves the future LLM call outside a database transaction; only the current unexpired owner can finalize an AI Reply. After two failed or expired generation attempts, a dedicated finalization claim can acquire the same lifecycle without incrementing the attempt count, allowing a later slice to persist one deterministic safe reply without leaving the Message stranded.
 - Claim acquisition checks earlier inbound Messages in the same Conversation. Any earlier non-terminal Message blocks a later claim, while claims for different Conversations hold no shared application lock. SQLite write transactions remain short and never span generation, wait, sleep, or backoff.
@@ -100,4 +102,5 @@ The real Twilio Sandbox test passed with signature validation enabled on 2026-09
 - Full observability and privacy systems before their roadmap slice.
 - Automatic or scheduled retention; the V0.1 command remains operator initiated.
 - Proactive WhatsApp delivery for a locally recovered AI Reply. The current provider boundary renders a reply only during an inbound webhook; Ticket 04 restores durable lifecycle state but adds no provider-send capability.
+- Vector search, embeddings, RAG services, CMS approval workflow, and factual-response enforcement. Ticket 05 supplies only the trusted source and selection seam.
 - Test dependency deprecation warnings on Python 3.14; they are maintenance noise, not a V1 blocker.

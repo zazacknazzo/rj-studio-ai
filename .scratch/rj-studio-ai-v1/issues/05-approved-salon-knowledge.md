@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Context
 
@@ -16,15 +16,15 @@ Versioned YAML knowledge files, validation and selection module, localized pilot
 
 ## Acceptance criteria
 
-- [ ] YAML validation requires stable ID, category/topic, publication status, fact type, approvals, review metadata, and source/reference where applicable.
-- [ ] Only approved facts are selectable; draft, absent, irrelevant, or insufficiently validated technical facts cannot be surfaced as RJ Studio facts.
-- [ ] Selection progressively returns only relevant pilot facts within the input budget, including Service-linked mandatory policies and `requires_human_consultation`.
-- [ ] Customer-provided statements cannot create or override Salon Knowledge.
+- [x] YAML validation requires stable ID, category/topic, publication status, fact type, approvals, review metadata, and source/reference where applicable.
+- [x] Only approved facts are selectable; draft, absent, irrelevant, or insufficiently validated technical facts cannot be surfaced as RJ Studio facts.
+- [x] Selection progressively returns only relevant pilot facts within the input budget, including Service-linked mandatory policies and `requires_human_consultation`.
+- [x] Customer-provided statements cannot create or override Salon Knowledge.
 
 ## Required tests
 
-- [ ] Loader/selection tests for approved versus draft, operational versus technical validation, missing metadata, irrelevant facts, and conflicting Customer claims.
-- [ ] Synthetic grounding fixtures cover known and unknown price, Professional, Service, policy, and availability questions.
+- [x] Loader/selection tests for approved versus draft, operational versus technical validation, missing metadata, irrelevant facts, and conflicting Customer claims.
+- [x] Synthetic grounding fixtures cover known and unknown price, Professional, Service, policy, and availability questions.
 
 ## Non-goals
 

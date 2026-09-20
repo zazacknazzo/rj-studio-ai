@@ -19,6 +19,7 @@ from rj_studio_ai.providers.base import (
 )
 from rj_studio_ai.providers.twilio import TwilioProvider
 from rj_studio_ai.runtime import generator_from_settings
+from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
 
 
 def create_app(
@@ -27,6 +28,7 @@ def create_app(
     provider: WhatsAppProvider | None = None,
     store: SqliteConversationStore | None = None,
     generator: ReplyGenerator | None = None,
+    salon_knowledge: SalonKnowledgeRepository | None = None,
     monotonic_clock: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
 ) -> FastAPI:
@@ -38,6 +40,9 @@ def create_app(
     )
     resolved_store = store or SqliteConversationStore(resolved_settings.database_path)
     resolved_generator = generator or generator_from_settings(resolved_settings)
+    resolved_salon_knowledge = salon_knowledge or SalonKnowledgeRepository(
+        resolved_settings.salon_knowledge_path
+    )
     responder = MessageResponder(
         store=resolved_store,
         generator=resolved_generator,
@@ -48,6 +53,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         resolved_store.initialize()
+        resolved_salon_knowledge.load()
         yield
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
@@ -57,6 +63,7 @@ def create_app(
             resolved_provider.is_configured()
             and bool(resolved_settings.automatic_reply.strip())
             and resolved_generator.is_configured()
+            and resolved_salon_knowledge.is_loaded()
         )
 
     @app.get("/health")
