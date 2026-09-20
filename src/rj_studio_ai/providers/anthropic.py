@@ -162,7 +162,16 @@ class AnthropicReplyGenerator:
 
         try:
             decision = self._decision(response, context)
-            self._persona.validate_reply(message.body, decision.reply_text)
+            self._persona.validate_reply(
+                message.body,
+                decision.reply_text,
+                prior_ai_replies=(
+                    ()
+                    if context is None
+                    else tuple(turn.body for turn in context.history if turn.role == "ai_attendant")
+                ),
+                handoff_proposed=decision.handoff,
+            )
         except (
             StructuredDecisionValidationError,
             ValueError,

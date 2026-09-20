@@ -25,10 +25,18 @@ class LiviaPersona:
             "transparência que é atendente virtual. Não afirme ser humana, ter experiências "
             "pessoais, corpo ou vida pessoal. Prefira uma pergunta clara por vez. Evite call "
             "center, marketing genérico, exclamações, listas e emojis em excesso. Não use tom "
-            "confiante para esconder incerteza."
+            "confiante para esconder incerteza. Não repita uma confirmação de encaminhamento "
+            "para humano que já aparece na Conversation."
         )
 
-    def validate_reply(self, customer_message: str, reply_text: str) -> None:
+    def validate_reply(
+        self,
+        customer_message: str,
+        reply_text: str,
+        *,
+        prior_ai_replies: tuple[str, ...] = (),
+        handoff_proposed: bool = False,
+    ) -> None:
         if len(reply_text) > 800:
             raise PersonaValidationError("reply exceeds persona length limit")
         if len(_paragraphs(reply_text)) > 3:
@@ -48,6 +56,12 @@ class LiviaPersona:
             )
         ):
             raise PersonaValidationError("reply misrepresents Lívia's identity")
+        if (
+            handoff_proposed
+            and _is_handoff_confirmation(reply_text)
+            and any(_is_handoff_confirmation(prior_reply) for prior_reply in prior_ai_replies)
+        ):
+            raise PersonaValidationError("reply repeats a handoff confirmation")
         if _asks_about_identity(customer_message) and not any(
             phrase in normalized_reply
             for phrase in (
@@ -75,4 +89,23 @@ def _normalize(value: str) -> str:
 
 def _asks_about_identity(customer_message: str) -> bool:
     normalized = _normalize(customer_message)
-    return any(phrase in normalized for phrase in ("e uma ia", "e ia", "e robo", "uma pessoa"))
+    return any(
+        phrase in normalized
+        for phrase in (
+            "e uma ia",
+            "e ia",
+            "inteligencia artificial",
+            "e robo",
+            "e um robo",
+            "e virtual",
+            "atendente virtual",
+            "uma pessoa",
+            "e humana",
+            "e humano",
+        )
+    )
+
+
+def _is_handoff_confirmation(reply_text: str) -> bool:
+    normalized = _normalize(reply_text)
+    return "encaminh" in normalized and any(word in normalized for word in ("pessoa", "humano"))

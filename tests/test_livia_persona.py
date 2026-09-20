@@ -12,7 +12,15 @@ def test_persona_is_small_and_separate_from_salon_facts() -> None:
 
 @pytest.mark.parametrize(
     "question",
-    ["Você é uma IA?", "Estou falando com uma pessoa?", "Você é robô?"],
+    [
+        "Você é uma IA?",
+        "Estou falando com uma pessoa?",
+        "Você é robô?",
+        "Você é um robô?",
+        "Você é virtual?",
+        "Você é humana?",
+        "Você é uma inteligência artificial?",
+    ],
 )
 def test_explicit_identity_question_requires_transparency(question: str) -> None:
     with pytest.raises(PersonaValidationError, match="transparency"):
@@ -35,3 +43,13 @@ def test_persona_rejects_surface_violations() -> None:
 
 def test_persona_allows_a_short_natural_reply() -> None:
     LiviaPersona().validate_reply("Oi", "Oi! Sou a Lívia, do RJ Studio 😊 Como posso ajudar?")
+
+
+def test_persona_rejects_a_repeated_handoff_confirmation() -> None:
+    with pytest.raises(PersonaValidationError, match="repeats a handoff"):
+        LiviaPersona().validate_reply(
+            "Quero falar com alguém",
+            "Vou te encaminhar para uma pessoa.",
+            prior_ai_replies=("Vou te encaminhar para uma pessoa.",),
+            handoff_proposed=True,
+        )
