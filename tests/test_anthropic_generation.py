@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import date
 from time import monotonic
 from types import SimpleNamespace
@@ -27,7 +28,7 @@ class RecordingMessages:
     def create(self, **kwargs: object) -> object:
         self.calls.append(kwargs)
         return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text='{"reply_text":"Olá! Como posso ajudar?"}')],
+            content=[SimpleNamespace(type="text", text=_decision_json())],
             model="claude-sonnet-5",
             usage=SimpleNamespace(input_tokens=120, output_tokens=15),
         )
@@ -109,7 +110,7 @@ class RetryMessages(RecordingMessages):
         if len(self.calls) == 1:
             raise anthropic.APITimeoutError(_request())
         return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text='{"reply_text":"Resposta"}')],
+            content=[SimpleNamespace(type="text", text=_decision_json("Resposta"))],
             model="claude-sonnet-5",
             usage=SimpleNamespace(input_tokens=20, output_tokens=5),
         )
@@ -141,11 +142,25 @@ def _message() -> InboundMessage:
     )
 
 
+def _decision_json(reply_text: str = "Olá! Como posso ajudar?") -> str:
+    return json.dumps(
+        {
+            "intents": ["greeting"],
+            "reply_text": reply_text,
+            "uncertainty": "low",
+            "knowledge_refs": [],
+            "critical_claims": [],
+            "handoff": False,
+            "handoff_reason": None,
+        }
+    )
+
+
 def _generator(client: object) -> AnthropicReplyGenerator:
     return AnthropicReplyGenerator(
         api_key="test-key",
         model="claude-sonnet-5",
-        max_output_tokens=240,
+        max_output_tokens=200,
         pricing=LLMPriceTable(
             input_microusd_per_million=3_000_000,
             output_microusd_per_million=15_000_000,
@@ -167,7 +182,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     generator = AnthropicReplyGenerator(
         api_key="test-key",
         model="claude-sonnet-5",
-        max_output_tokens=240,
+        max_output_tokens=200,
         pricing=LLMPriceTable(
             input_microusd_per_million=3_000_000, output_microusd_per_million=15_000_000
         ),
@@ -183,33 +198,34 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     assert result.metric.output_tokens == 15
     assert result.metric.total_tokens == 135
     assert result.metric.estimated_cost_microusd == 585
-    assert result.metric.configuration == "thinking=disabled;format=json_schema;max_tokens=240"
+    assert result.metric.configuration == "thinking=disabled;format=json_schema;max_tokens=200"
     assert result.metric.outcome == "success"
     assert result.metric.error_code is None
-    assert client.messages.calls == [
-        {
-            "model": "claude-sonnet-5",
-            "max_tokens": 240,
-            "thinking": {"type": "disabled"},
-            "output_config": {
-                "format": {
-                    "type": "json_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": {"reply_text": {"type": "string", "minLength": 1}},
-                        "required": ["reply_text"],
-                        "additionalProperties": False,
-                    },
-                }
-            },
-            "system": (
-                "Responda em português brasileiro, de forma breve. "
-                "Não invente fatos do salão; peça esclarecimento quando faltar contexto."
-            ),
-            "messages": [{"role": "user", "content": "Olá"}],
-            "timeout": 4.5,
-        }
-    ]
+    assert len(client.messages.calls) == 1
+    request = client.messages.calls[0]
+    assert request["model"] == "claude-sonnet-5"
+    assert request["max_tokens"] == 200
+    assert request["thinking"] == {"type": "disabled"}
+    schema = request["output_config"]["format"]["schema"]
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == {
+        "intents",
+        "reply_text",
+        "uncertainty",
+        "knowledge_refs",
+        "critical_claims",
+        "handoff",
+        "handoff_reason",
+    }
+    assert set(schema["required"]) == set(schema["properties"])
+    assert request["system"] == (
+        "Responda em português brasileiro, de forma breve. "
+        "Não invente fatos do salão; peça esclarecimento quando faltar contexto. "
+        "Produza somente a decisão estruturada, sem raciocínio textual."
+    )
+    assert request["messages"] == [{"role": "user", "content": "Olá"}]
+    assert request["timeout"] == 4.5
 
 
 def test_anthropic_adapter_receives_prepared_history_knowledge_and_one_current_message() -> None:
@@ -358,16 +374,80 @@ def test_anthropic_adapter_rejects_malformed_structured_output_with_available_us
     with pytest.raises(TransientGenerationError) as raised:
         _generator(client).generate(_message(), remaining_budget=4.5)
 
-    assert raised.value.error_code == "invalid_provider_response"
+    assert raised.value.error_code == "invalid_structured_decision"
     assert raised.value.metric is not None
     assert raised.value.metric.input_tokens == 40
     assert raised.value.metric.output_tokens == 4
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {
+            "intents": ["greeting"],
+            "reply_text": "Oi",
+            "uncertainty": "low",
+            "knowledge_refs": [],
+            "critical_claims": [],
+            "handoff": False,
+        },
+        {
+            "intents": ["unknown"],
+            "reply_text": "Oi",
+            "uncertainty": "low",
+            "knowledge_refs": [],
+            "critical_claims": [],
+            "handoff": False,
+            "handoff_reason": None,
+        },
+    ],
+)
+def test_anthropic_adapter_rejects_invalid_decision_schema(payload: dict[str, object]) -> None:
+    client = RecordingClient()
+    client.messages.create = lambda **_: SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=json.dumps(payload))],
+        model="claude-sonnet-5",
+        usage=SimpleNamespace(input_tokens=40, output_tokens=4),
+    )
+
+    with pytest.raises(TransientGenerationError, match="invalid_structured_decision"):
+        _generator(client).generate(_message(), remaining_budget=4.5)
+
+
+def test_anthropic_adapter_rejects_a_draft_knowledge_reference(tmp_path) -> None:
+    context = ConversationContext(
+        history=(),
+        knowledge=(
+            SalonKnowledgeFact(
+                id="draft-corte",
+                category="service",
+                topic="corte",
+                status="draft",
+                fact_type="operational_commercial",
+                statement="Rascunho sintético.",
+                source="synthetic fixture",
+                reviewed_at=date(2026, 9, 20),
+            ),
+        ),
+    )
+    payload = json.loads(_decision_json())
+    payload["knowledge_refs"] = ["draft-corte"]
+    client = RecordingClient()
+    client.messages.create = lambda **_: SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=json.dumps(payload))],
+        model="claude-sonnet-5",
+        usage=SimpleNamespace(input_tokens=40, output_tokens=4),
+    )
+
+    with pytest.raises(TransientGenerationError, match="invalid_structured_decision"):
+        _generator(client).generate(_message(), context=context, remaining_budget=4.5)
+
+
 def test_anthropic_adapter_allows_missing_optional_usage() -> None:
     client = RecordingClient()
     client.messages.create = lambda **_: SimpleNamespace(
-        content=[SimpleNamespace(type="text", text='{"reply_text":"Oi"}')],
+        content=[SimpleNamespace(type="text", text=_decision_json("Oi"))],
         model="claude-sonnet-5",
         usage=SimpleNamespace(),
     )
@@ -460,7 +540,7 @@ def test_anthropic_retry_uses_the_remaining_webhook_deadline(tmp_path) -> None:
     generator = AnthropicReplyGenerator(
         api_key="test-key",
         model="claude-sonnet-5",
-        max_output_tokens=240,
+        max_output_tokens=200,
         pricing=LLMPriceTable(
             input_microusd_per_million=3_000_000,
             output_microusd_per_million=15_000_000,
@@ -483,3 +563,68 @@ def test_anthropic_retry_uses_the_remaining_webhook_deadline(tmp_path) -> None:
 
     assert reply.body == "Resposta"
     assert [call["timeout"] for call in client.messages.calls] == [7.0, 6.9]
+
+
+def test_invalid_structured_decision_retries_safely_then_replays_safe_reply(tmp_path) -> None:
+    database_path = tmp_path / "invalid-decision.db"
+    client = RecordingClient()
+    client.messages.create = lambda **_: SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='{"intents": ["greeting"]}')],
+        model="claude-sonnet-5",
+        usage=SimpleNamespace(input_tokens=40, output_tokens=4),
+    )
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            automatic_reply="Resposta segura",
+            twilio_validate_signature=False,
+        ),
+        generator=_generator(client),
+    )
+
+    with TestClient(app) as test_client:
+        first = test_client.post(
+            "/webhooks/twilio",
+            data={"MessageSid": "message-1", "From": "customer", "To": "studio", "Body": "Oi"},
+        )
+        replay = test_client.post(
+            "/webhooks/twilio",
+            data={
+                "MessageSid": "message-1",
+                "From": "customer",
+                "To": "studio",
+                "Body": "Alterado",
+            },
+        )
+
+    assert first.text == replay.text
+    assert "<Message>Resposta segura</Message>" in first.text
+    lifecycle = SqliteConversationStore(database_path).get_generation(
+        provider="twilio", provider_message_id="message-1"
+    )
+    assert lifecycle is not None
+    assert lifecycle.reply_body == "Resposta segura"
+    assert [
+        (metric.outcome, metric.error_code)
+        for metric in SqliteConversationStore(database_path).get_generation_metrics(
+            inbound_message_id=lifecycle.inbound_message_id
+        )
+    ] == [
+        ("failure", "invalid_structured_decision"),
+        ("failure", "invalid_structured_decision"),
+    ]
+
+
+def test_anthropic_adapter_rejects_output_cap_above_the_v1_contract() -> None:
+    with pytest.raises(ValueError, match="between 1 and 200"):
+        AnthropicReplyGenerator(
+            api_key="test-key",
+            model="claude-sonnet-5",
+            max_output_tokens=201,
+            pricing=LLMPriceTable(
+                input_microusd_per_million=3_000_000,
+                output_microusd_per_million=15_000_000,
+            ),
+            client=RecordingClient(),
+        )

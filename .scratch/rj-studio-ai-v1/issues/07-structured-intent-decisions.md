@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Deliver ordered, deadline-bound webhook generation; 05: Load approved Salon Knowledge; 06: Build bounded Conversation Context.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Context
 

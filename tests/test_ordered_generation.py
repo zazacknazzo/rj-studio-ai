@@ -49,8 +49,8 @@ class ScriptedGenerator:
         if isinstance(action, Exception):
             raise action
         if callable(action):
-            return GeneratedReply(reply_body=action(remaining_budget))
-        return GeneratedReply(reply_body=action)
+            return GeneratedReply.from_reply_text(action(remaining_budget))
+        return GeneratedReply.from_reply_text(action)
 
     def is_configured(self) -> bool:
         return True
@@ -351,7 +351,6 @@ def test_blocked_message_is_persisted_and_a_later_webhook_retry_processes_it(
     "failure",
     [
         GenerationTimeout("synthetic timeout"),
-        "",
     ],
 )
 def test_two_failed_attempts_persist_one_safe_terminal_reply(

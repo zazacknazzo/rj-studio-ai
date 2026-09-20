@@ -16,6 +16,14 @@ from rj_studio_ai.generation import (
     GenerationTimeout,
     TransientGenerationError,
 )
+from rj_studio_ai.llm_decision import (
+    MAX_OUTPUT_TOKENS,
+    LLMDecision,
+    StructuredDecisionValidationError,
+    decision_json_schema,
+    validate_llm_decision,
+)
+from rj_studio_ai.salon_knowledge import SalonKnowledgeStatus
 
 if TYPE_CHECKING:
     from rj_studio_ai.conversation_context import ConversationContext
@@ -53,14 +61,10 @@ class AnthropicReplyGenerator:
     _minimum_request_budget_seconds = 1.0
     _system_prompt = (
         "Responda em português brasileiro, de forma breve. "
-        "Não invente fatos do salão; peça esclarecimento quando faltar contexto."
+        "Não invente fatos do salão; peça esclarecimento quando faltar contexto. "
+        "Produza somente a decisão estruturada, sem raciocínio textual."
     )
-    _reply_schema: dict[str, object] = {
-        "type": "object",
-        "properties": {"reply_text": {"type": "string", "minLength": 1}},
-        "required": ["reply_text"],
-        "additionalProperties": False,
-    }
+    _decision_schema = decision_json_schema()
 
     def __init__(
         self,
@@ -75,6 +79,10 @@ class AnthropicReplyGenerator:
     ) -> None:
         if client is not None and client_factory is not None:
             raise ValueError("Provide either an Anthropic client or a client factory")
+        if not 1 <= max_output_tokens <= MAX_OUTPUT_TOKENS:
+            raise ValueError(
+                f"Anthropic output token limit must be between 1 and {MAX_OUTPUT_TOKENS}"
+            )
         self._api_key = api_key
         self._model = model
         self._max_output_tokens = max_output_tokens
@@ -151,15 +159,20 @@ class AnthropicReplyGenerator:
             ) from error
 
         try:
-            reply_body = self._reply_text(response)
-        except (ValueError, TypeError, json.JSONDecodeError) as error:
+            decision = self._decision(response, context)
+        except (
+            StructuredDecisionValidationError,
+            ValueError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as error:
             raise TransientGenerationError(
-                "invalid_provider_response", self._failure_metric(started_at, response)
+                "invalid_structured_decision", self._failure_metric(started_at, response)
             ) from error
 
         input_tokens, output_tokens = self._usage_tokens(response)
         return GeneratedReply(
-            reply_body=reply_body,
+            decision=decision,
             metric=GenerationMetric(
                 provider=self.provider,
                 model=str(getattr(response, "model", self._model)),
@@ -198,7 +211,9 @@ class AnthropicReplyGenerator:
                     model=self._model,
                     max_tokens=self._max_output_tokens,
                     thinking={"type": "disabled"},
-                    output_config={"format": {"type": "json_schema", "schema": self._reply_schema}},
+                    output_config={
+                        "format": {"type": "json_schema", "schema": self._decision_schema}
+                    },
                     system=self._system_prompt_for(context),
                     messages=self._messages_for(message, context),
                     timeout=remaining_budget,
@@ -256,7 +271,10 @@ class AnthropicReplyGenerator:
         )
 
     @staticmethod
-    def _reply_text(response: object) -> str:
+    def _decision(
+        response: object,
+        context: "ConversationContext | None",
+    ) -> LLMDecision:
         content = getattr(response, "content", None)
         if not isinstance(content, list) or len(content) != 1:
             raise ValueError("Expected one structured text content block")
@@ -266,12 +284,16 @@ class AnthropicReplyGenerator:
         ):
             raise ValueError("Expected structured text content block")
         payload = json.loads(block.text)
-        if not isinstance(payload, dict) or set(payload) != {"reply_text"}:
-            raise ValueError("Structured reply has unexpected fields")
-        reply_text = payload["reply_text"]
-        if not isinstance(reply_text, str) or not reply_text.strip():
-            raise ValueError("Structured reply text is invalid")
-        return reply_text
+        allowed_knowledge_refs = (
+            set()
+            if context is None
+            else {
+                fact.id
+                for fact in context.knowledge
+                if fact.status is SalonKnowledgeStatus.APPROVED
+            }
+        )
+        return validate_llm_decision(payload, allowed_knowledge_refs=allowed_knowledge_refs)
 
     @classmethod
     def _system_prompt_for(cls, context: "ConversationContext | None") -> str:
@@ -281,8 +303,15 @@ class AnthropicReplyGenerator:
                 " O histórico anterior pode estar incompleto; não deduza o que falta "
                 "e peça esclarecimento quando isso for relevante."
             )
-        if context is not None and context.knowledge:
-            knowledge = "\n\n".join(fact.context_text() for fact in context.knowledge)
+        approved_knowledge = (
+            ()
+            if context is None
+            else tuple(
+                fact for fact in context.knowledge if fact.status is SalonKnowledgeStatus.APPROVED
+            )
+        )
+        if approved_knowledge:
+            knowledge = "\n\n".join(fact.context_text() for fact in approved_knowledge)
             prompt += f"\n\nApproved Salon Knowledge:\n{knowledge}"
         return prompt
 

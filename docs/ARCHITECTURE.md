@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 06. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, and bounded Conversation Context. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 07. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, and a provider-neutral structured decision. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -15,6 +15,7 @@ Twilio Sandbox
   → acquire oldest eligible Message in its Conversation
   → load bounded canonical Conversation Context and approved Salon Knowledge
   → FixedReplyGenerator or AnthropicReplyGenerator outside SQLite transaction
+  → validated provider-neutral LLMDecision proposal
   → persist privacy-safe provider-attempt metric
   → atomically persist one reply and terminal processing state
   → canonical AIReply
@@ -34,6 +35,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `deadline.py` | Holds the single monotonic webhook deadline and finalization reserve | `ExecutionDeadline` |
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
 | `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
+| `llm_decision.py` | Validates the provider-neutral, untrusted structured decision proposal | `LLMDecision` |
 | `conversation_context.py` | Loads, orders, minimizes, and bounds prior turns plus selected Salon Knowledge | `ConversationContextBuilder` |
 | `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
 | `salon_knowledge.py` | Validates versioned YAML and selects approved relevant facts | `SalonKnowledgeRepository` |
@@ -77,7 +79,7 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - Inbound Messages retain their recipient address so a local recovery can reconstruct the canonical input. Older rows receive an empty value during migration because the historical recipient is unavailable.
 - The webhook creates one 10-second monotonic deadline before reading and translating the inbound request. SQLite lock timeouts, ordering polls, retry backoff, generation, finalization, provider rendering, and response preparation all consume that same budget.
 - One second of the total is reserved for final persistence and provider response rendering. New generation attempts require at least 100 milliseconds outside that reserve. These are local V1.1 operating constants, not model-specific timeout policy.
-- Claude calls receive the existing remaining work budget as their SDK timeout and run inside an asynchronous cancellation scope using that same absolute budget; cleanup is not awaited after that budget has expired. They start only with at least one second available outside the finalization reserve. SDK retries are disabled; the durable application lifecycle owns the two-attempt limit. Claude Sonnet 5 uses `thinking={"type": "disabled"}` and a minimal JSON envelope containing only `reply_text`; Intent and business decisions remain deferred.
+- Claude calls receive the existing remaining work budget as their SDK timeout and run inside an asynchronous cancellation scope using that same absolute budget; cleanup is not awaited after that budget has expired. They start only with at least one second available outside the finalization reserve. SDK retries are disabled; the durable application lifecycle owns the two-attempt limit. Claude Sonnet 5 uses `thinking={"type": "disabled"}`, the provider JSON-schema mechanism, and a 200-token output limit. It converts the result to a validated `LLMDecision`; Intent, references, factual claims, uncertainty, and handoff remain untrusted proposals until later deterministic policies evaluate them.
 - Attempt metrics persist provider, returned model, non-secret configuration label, latency, available token counts, configured-price cost estimate, outcome, and safe error code. Pricing is supplied in environment configuration and is not hardcoded because provider pricing may change.
 - Existing V0.1 inbound/reply pairs migrate to `completed` with zero LLM attempts. The current deterministic fixed-reply flow creates the same terminal lifecycle atomically with its AI Reply.
 - Alembic owns schema versions. Application startup and the maintenance command invoke it explicitly; importing modules performs no database I/O.

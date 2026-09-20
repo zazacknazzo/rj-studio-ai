@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 
 from rj_studio_ai.domain import InboundMessage
+from rj_studio_ai.llm_decision import Intent, LLMDecision, UncertaintyLevel
 
 if TYPE_CHECKING:
     from rj_studio_ai.conversation_context import ConversationContext
@@ -23,8 +24,33 @@ class GenerationMetric:
 
 @dataclass(frozen=True, slots=True)
 class GeneratedReply:
-    reply_body: str
+    decision: LLMDecision
     metric: GenerationMetric | None = None
+
+    @property
+    def reply_body(self) -> str:
+        return self.decision.reply_text
+
+    @classmethod
+    def from_reply_text(
+        cls,
+        reply_text: str,
+        *,
+        metric: GenerationMetric | None = None,
+    ) -> "GeneratedReply":
+        """Construct the deterministic V0/V1 test fallback as a typed proposal."""
+        return cls(
+            decision=LLMDecision(
+                intents=(Intent.OTHER,),
+                reply_text=reply_text,
+                uncertainty=UncertaintyLevel.HIGH,
+                knowledge_refs=(),
+                critical_claims=(),
+                handoff=False,
+                handoff_reason=None,
+            ),
+            metric=metric,
+        )
 
 
 class GenerationFailure(RuntimeError):
@@ -72,7 +98,7 @@ class FixedReplyGenerator:
         remaining_budget: float,
     ) -> GeneratedReply:
         del message, context, remaining_budget
-        return GeneratedReply(reply_body=self._reply_body)
+        return GeneratedReply.from_reply_text(self._reply_body)
 
     def is_configured(self) -> bool:
         return bool(self._reply_body.strip())

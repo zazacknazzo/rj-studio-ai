@@ -31,7 +31,7 @@ class RecordingGenerator:
         reply = next(self._replies)
         if isinstance(reply, Exception):
             raise reply
-        return GeneratedReply(reply_body=reply)
+        return GeneratedReply.from_reply_text(reply)
 
     def is_configured(self) -> bool:
         return True

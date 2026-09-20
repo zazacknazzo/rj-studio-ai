@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["fixed", "anthropic"] = "fixed"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
-    anthropic_max_output_tokens: int = Field(default=240, ge=1)
+    anthropic_max_output_tokens: int = Field(default=200, ge=1, le=200)
     conversation_context_maximum_messages: int = Field(default=12, ge=1)
     conversation_context_history_token_budget: int = Field(default=2_000, ge=1)
     llm_input_token_budget: int = Field(default=4_000, ge=1)

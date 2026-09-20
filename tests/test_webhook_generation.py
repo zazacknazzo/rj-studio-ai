@@ -91,7 +91,7 @@ class RecordingGenerator:
         with self._lock:
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
-        return GeneratedReply(reply_body=f"reply:{message.body}")
+        return GeneratedReply.from_reply_text(f"reply:{message.body}")
 
     def is_configured(self) -> bool:
         return True
@@ -123,12 +123,12 @@ class MetricGenerator(RecordingGenerator):
         remaining_budget: float,
     ) -> GeneratedReply:
         super().generate(message, context=context, remaining_budget=remaining_budget)
-        return GeneratedReply(
-            reply_body=f"reply:{message.body}",
+        return GeneratedReply.from_reply_text(
+            f"reply:{message.body}",
             metric=GenerationMetric(
                 provider="anthropic",
                 model="claude-sonnet-5",
-                configuration="thinking=disabled;format=json_schema;max_tokens=240",
+                configuration="thinking=disabled;format=json_schema;max_tokens=200",
                 latency_ms=120,
                 input_tokens=100,
                 output_tokens=25,
@@ -158,7 +158,7 @@ class FailingMetricGenerator:
             GenerationMetric(
                 provider="anthropic",
                 model="claude-sonnet-5",
-                configuration="thinking=disabled;format=json_schema;max_tokens=240",
+                configuration="thinking=disabled;format=json_schema;max_tokens=200",
                 latency_ms=1_000,
                 input_tokens=None,
                 output_tokens=None,
@@ -196,7 +196,7 @@ class OrderedBlockingGenerator(RecordingGenerator):
                 raise RuntimeError("first generation was not released")
         else:
             self.second_started.set()
-        return GeneratedReply(reply_body=f"reply:{message.body}")
+        return GeneratedReply.from_reply_text(f"reply:{message.body}")
 
 
 class ParallelGenerator(RecordingGenerator):
@@ -215,7 +215,7 @@ class ParallelGenerator(RecordingGenerator):
             self.calls.append(message.body)
             self.budgets.append(remaining_budget)
         self._barrier.wait(timeout=1.0)
-        return GeneratedReply(reply_body=f"reply:{message.body}")
+        return GeneratedReply.from_reply_text(f"reply:{message.body}")
 
 
 class FirstRenderConsumesDeadlineProvider(FormProvider):
@@ -615,7 +615,7 @@ def test_webhook_persists_privacy_safe_generation_metric(tmp_path: Path) -> None
             attempt_number=1,
             provider="anthropic",
             model="claude-sonnet-5",
-            configuration="thinking=disabled;format=json_schema;max_tokens=240",
+            configuration="thinking=disabled;format=json_schema;max_tokens=200",
             latency_ms=120,
             input_tokens=100,
             output_tokens=25,

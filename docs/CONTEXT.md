@@ -24,6 +24,14 @@ _Avoid_: Event, payload
 The Customer's current purpose in a Message or Conversation, such as asking a question or seeking an Appointment.
 _Avoid_: Command, category
 
+**Critical Factual Claim**:
+A proposed customer-visible value about price, hours, a Service, a Professional, policy, or availability. It becomes trusted only after deterministic validation against approved Salon Knowledge or an integration result.
+_Avoid_: Verified fact, model fact
+
+**Uncertainty**:
+The AI Attendant's categorical proposal about whether a response has enough information. It does not replace deterministic factual or Human Handoff policy.
+_Avoid_: Confidence score
+
 **Human Handoff**:
 The transfer of responsibility for a Conversation from automation to an RJ Studio team member.
 _Avoid_: Escalation, takeover

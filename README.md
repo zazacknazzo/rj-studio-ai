@@ -110,6 +110,6 @@ Os passos e o registro redigido do resultado ficam em
 - [Especificações por versão](docs/specs/README.md)
 - [Evals](docs/evals/README.md)
 - [Salon Knowledge](docs/salon-knowledge.md)
-- [Conversation Context](docs/conversation-context.md)
+- [Conversation Context](docs/conversation-context.md) · [Structured decision](docs/structured-decision.md)
 
 Agentes começam por `AGENTS.md` e carregam somente os documentos relevantes para a tarefa.
