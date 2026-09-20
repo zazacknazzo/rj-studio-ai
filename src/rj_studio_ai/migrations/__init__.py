@@ -154,6 +154,8 @@ class MigrationManager:
             frozenset({"provider", "customer_address"}) in conversation_uniques
             and frozenset({"provider", "provider_message_id"}) in message_uniques
             and reply_indexes.get("uq_messages_in_reply_to") == (("in_reply_to_message_id",), True)
+            and reply_indexes.get("ix_messages_conversation_created")
+            == (("conversation_id", "created_at", "id"), False)
             and (("conversation_id",), "conversations", ("id",)) in message_foreign_keys
             and (("in_reply_to_message_id",), "messages", ("id",)) in message_foreign_keys
             and (("inbound_message_id",), "messages", ("id",)) in processing_foreign_keys

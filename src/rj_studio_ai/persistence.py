@@ -70,6 +70,14 @@ class GenerationMetricRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class RecentContextHistory:
+    """Bounded canonical turns plus whether older turns were omitted."""
+
+    records: tuple[MessageRecord, ...]
+    has_omitted_messages: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PendingGeneration:
     """Safe operational metadata for a non-terminal inbound Message."""
 
@@ -967,6 +975,101 @@ class SqliteConversationStore:
                 (provider, customer_address),
             ).fetchall()
         return [MessageRecord(direction=row[0], body=row[1]) for row in rows]
+
+    def load_recent_context_history(
+        self,
+        *,
+        inbound_message_id: int,
+        maximum_age: timedelta,
+        maximum_messages: int,
+        lock_timeout: float | None = None,
+    ) -> RecentContextHistory:
+        """Return bounded canonical prior turns in logical Conversation order."""
+        if maximum_age <= timedelta():
+            raise ValueError("Conversation context age must be positive")
+        if maximum_messages < 1:
+            raise ValueError("Conversation context Message limit must be positive")
+        try:
+            with self._connect(lock_timeout) as connection:
+                current = connection.execute(
+                    """
+                    SELECT conversation_id, created_at
+                    FROM messages
+                    WHERE id = ? AND direction = 'inbound'
+                    """,
+                    (inbound_message_id,),
+                ).fetchone()
+                if current is None:
+                    raise sqlite3.IntegrityError("Current inbound Message is unavailable")
+                cutoff = datetime.fromisoformat(str(current[1])) - maximum_age
+                rows = connection.execute(
+                    """
+                    SELECT candidate.direction, candidate.body, candidate.created_at
+                    FROM messages AS candidate
+                    WHERE candidate.conversation_id = ?
+                      AND candidate.created_at >= ?
+                      AND (
+                            (candidate.direction = 'inbound' AND candidate.id < ?)
+                         OR (candidate.direction = 'outbound'
+                             AND candidate.in_reply_to_message_id < ?)
+                      )
+                    ORDER BY
+                        CASE
+                            WHEN candidate.direction = 'inbound' THEN candidate.id
+                            ELSE candidate.in_reply_to_message_id
+                        END DESC,
+                        CASE candidate.direction WHEN 'outbound' THEN 1 ELSE 0 END DESC
+                    LIMIT ?
+                    """,
+                    (
+                        int(current[0]),
+                        cutoff.isoformat(),
+                        inbound_message_id,
+                        inbound_message_id,
+                        maximum_messages + 1,
+                    ),
+                ).fetchall()
+                older_message_exists = connection.execute(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM messages AS candidate
+                        WHERE candidate.conversation_id = ?
+                          AND candidate.created_at < ?
+                          AND (
+                                (candidate.direction = 'inbound' AND candidate.id < ?)
+                             OR (candidate.direction = 'outbound'
+                                 AND candidate.in_reply_to_message_id < ?)
+                          )
+                    )
+                    """,
+                    (
+                        int(current[0]),
+                        cutoff.isoformat(),
+                        inbound_message_id,
+                        inbound_message_id,
+                    ),
+                ).fetchone()
+        except (sqlite3.Error, ValueError) as error:
+            raise PersistenceUnavailable(
+                "Conversation context persistence is unavailable"
+            ) from error
+        has_omitted_messages = len(rows) > maximum_messages or bool(older_message_exists[0])
+        history: list[MessageRecord] = []
+        try:
+            for direction, body, created_at in reversed(rows[:maximum_messages]):
+                timestamp = datetime.fromisoformat(str(created_at))
+                if timestamp.utcoffset() is None:
+                    raise ValueError("Stored timestamp has no timezone")
+                history.append(MessageRecord(direction=str(direction), body=str(body)))
+        except ValueError as error:
+            raise PersistenceUnavailable(
+                "Conversation context has an invalid Message timestamp"
+            ) from error
+        return RecentContextHistory(
+            records=tuple(history),
+            has_omitted_messages=has_omitted_messages,
+        )
 
     def _connect(self, timeout_seconds: float | None = None) -> sqlite3.Connection:
         timeout = 5.0 if timeout_seconds is None else max(0.0, timeout_seconds)

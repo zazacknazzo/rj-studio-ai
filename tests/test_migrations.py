@@ -139,7 +139,10 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         "message_processing",
         "generation_metrics",
     }.issubset(tables)
-    assert versions == [("0005_recovery_recipient_address",)]
+    assert versions == [("0006_conversation_context_index",)]
+    with sqlite3.connect(database_path) as connection:
+        indexes = {row[1] for row in connection.execute("PRAGMA index_list(messages)")}
+    assert "ix_messages_conversation_created" in indexes
     assert manager.is_current()
 
 

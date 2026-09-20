@@ -24,5 +24,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_output_tokens: int = Field(default=240, ge=1)
+    conversation_context_maximum_messages: int = Field(default=12, ge=1)
+    conversation_context_history_token_budget: int = Field(default=2_000, ge=1)
+    llm_input_token_budget: int = Field(default=4_000, ge=1)
+    conversation_context_maximum_age_days: int = Field(default=30, ge=1)
     anthropic_input_microusd_per_million: int | None = Field(default=None, ge=0)
     anthropic_output_microusd_per_million: int | None = Field(default=None, ge=0)
