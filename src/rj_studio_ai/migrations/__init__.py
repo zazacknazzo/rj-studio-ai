@@ -62,6 +62,7 @@ class MigrationManager:
                 "conversation_id",
                 "provider",
                 "provider_message_id",
+                "recipient_address",
                 "direction",
                 "body",
                 "created_at",

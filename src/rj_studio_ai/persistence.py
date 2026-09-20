@@ -14,6 +14,14 @@ class PersistenceUnavailable(RuntimeError):
     """Raised when SQLite cannot complete a persistence operation."""
 
 
+class GenerationRecoveryNotAvailable(RuntimeError):
+    """Raised when an operator selects a Message that cannot be recovered."""
+
+
+class GenerationRecoveryBlocked(GenerationRecoveryNotAvailable):
+    """Raised when an earlier non-terminal Message prevents recovery."""
+
+
 class GenerationState(StrEnum):
     PROCESSING = "processing"
     RETRYABLE = "retryable"
@@ -59,6 +67,20 @@ class GenerationMetricRecord:
     estimated_cost_microusd: int | None
     outcome: str
     error_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PendingGeneration:
+    """Safe operational metadata for a non-terminal inbound Message."""
+
+    inbound_message_id: int
+    conversation_id: int
+    state: GenerationState
+    attempt_count: int
+    created_at: datetime
+    lease_expires_at: datetime | None
+    is_stale: bool
+    blocked_by_predecessor: bool
 
 
 class SqliteConversationStore:
@@ -267,6 +289,125 @@ class SqliteConversationStore:
                 if row is None:
                     return None
                 return self._generation_result(connection, int(row[0]), acquired=False)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def list_pending_generations(self, *, now: datetime | None = None) -> list[PendingGeneration]:
+        """List retryable or lease-expired work without exposing Customer content."""
+        try:
+            with self._connect() as connection:
+                current_time = self._utc_time(now)
+                rows = connection.execute(
+                    """
+                    SELECT
+                        inbound.id,
+                        inbound.conversation_id,
+                        processing.state,
+                        processing.attempt_count,
+                        inbound.created_at,
+                        processing.lease_expires_at,
+                        EXISTS (
+                            SELECT 1
+                            FROM messages AS predecessor
+                            JOIN message_processing AS predecessor_processing
+                              ON predecessor_processing.inbound_message_id = predecessor.id
+                            WHERE predecessor.conversation_id = inbound.conversation_id
+                              AND predecessor.direction = 'inbound'
+                              AND predecessor.id < inbound.id
+                              AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                        ) AS blocked_by_predecessor
+                    FROM message_processing AS processing
+                    JOIN messages AS inbound ON inbound.id = processing.inbound_message_id
+                    WHERE processing.state = 'retryable'
+                       OR (
+                            processing.state = 'processing'
+                        AND processing.lease_expires_at <= ?
+                       )
+                    ORDER BY inbound.id
+                    """,
+                    (current_time.isoformat(),),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+        return [
+            PendingGeneration(
+                inbound_message_id=int(row[0]),
+                conversation_id=int(row[1]),
+                state=GenerationState(str(row[2])),
+                attempt_count=int(row[3]),
+                created_at=datetime.fromisoformat(str(row[4])),
+                lease_expires_at=None if row[5] is None else datetime.fromisoformat(str(row[5])),
+                is_stale=GenerationState(str(row[2])) is GenerationState.PROCESSING,
+                blocked_by_predecessor=bool(row[6]),
+            )
+            for row in rows
+        ]
+
+    def load_recoverable_inbound_message(
+        self,
+        *,
+        inbound_message_id: int,
+        now: datetime | None = None,
+    ) -> InboundMessage:
+        """Return one selected eligible inbound Message without changing its lifecycle."""
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                row = connection.execute(
+                    """
+                    SELECT
+                        inbound.provider,
+                        inbound.provider_message_id,
+                        conversation.customer_address,
+                        inbound.recipient_address,
+                        inbound.body,
+                        processing.state,
+                        processing.lease_expires_at,
+                        EXISTS (
+                            SELECT 1
+                            FROM messages AS predecessor
+                            JOIN message_processing AS predecessor_processing
+                              ON predecessor_processing.inbound_message_id = predecessor.id
+                            WHERE predecessor.conversation_id = inbound.conversation_id
+                              AND predecessor.direction = 'inbound'
+                              AND predecessor.id < inbound.id
+                              AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                        ) AS blocked_by_predecessor
+                    FROM messages AS inbound
+                    JOIN conversations AS conversation ON conversation.id = inbound.conversation_id
+                    JOIN message_processing AS processing
+                      ON processing.inbound_message_id = inbound.id
+                    WHERE inbound.id = ? AND inbound.direction = 'inbound'
+                    """,
+                    (inbound_message_id,),
+                ).fetchone()
+                if row is None:
+                    raise GenerationRecoveryNotAvailable("Inbound Message is unavailable")
+                state = GenerationState(str(row[5]))
+                lease_expires_at = None if row[6] is None else datetime.fromisoformat(str(row[6]))
+                if state in {GenerationState.COMPLETED, GenerationState.SUPPRESSED}:
+                    raise GenerationRecoveryNotAvailable("Inbound Message is terminal")
+                if (
+                    state is GenerationState.PROCESSING
+                    and lease_expires_at is not None
+                    and lease_expires_at > current_time
+                ):
+                    raise GenerationRecoveryNotAvailable("Inbound Message has an active claim")
+                if bool(row[7]):
+                    raise GenerationRecoveryBlocked("Inbound Message is blocked by a predecessor")
+                provider_message_id = row[1]
+                if provider_message_id is None:
+                    raise GenerationRecoveryNotAvailable(
+                        "Inbound Message has no provider identifier"
+                    )
+                return InboundMessage(
+                    provider=str(row[0]),
+                    provider_message_id=str(provider_message_id),
+                    customer_address=str(row[2]),
+                    recipient_address=str(row[3]),
+                    body=str(row[4]),
+                )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
 
@@ -737,15 +878,16 @@ class SqliteConversationStore:
             connection.execute(
                 """
                 INSERT INTO messages (
-                    conversation_id, provider, provider_message_id,
+                    conversation_id, provider, provider_message_id, recipient_address,
                     direction, body, created_at
-                ) VALUES (?, ?, ?, 'inbound', ?, ?)
+                ) VALUES (?, ?, ?, ?, 'inbound', ?, ?)
                 RETURNING id
                 """,
                 (
                     conversation_id,
                     message.provider,
                     message.provider_message_id,
+                    message.recipient_address,
                     message.body,
                     timestamp,
                 ),

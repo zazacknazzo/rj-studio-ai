@@ -139,7 +139,7 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         "message_processing",
         "generation_metrics",
     }.issubset(tables)
-    assert versions == [("0004_generation_metrics",)]
+    assert versions == [("0005_recovery_recipient_address",)]
     assert manager.is_current()
 
 
@@ -166,7 +166,7 @@ def test_v01_database_is_upgraded_with_completed_reply_lifecycle(tmp_path: Path)
         ).fetchall()
         messages = connection.execute(
             """
-            SELECT id, direction, body, in_reply_to_message_id
+            SELECT id, direction, body, in_reply_to_message_id, recipient_address
             FROM messages ORDER BY id
             """
         ).fetchall()
@@ -180,8 +180,8 @@ def test_v01_database_is_upgraded_with_completed_reply_lifecycle(tmp_path: Path)
     assert manager.is_current()
     assert conversations == [(7, "twilio", "whatsapp:+5511000000000")]
     assert messages == [
-        (11, "inbound", "Mensagem existente", None),
-        (12, "outbound", "Resposta existente", 11),
+        (11, "inbound", "Mensagem existente", None, ""),
+        (12, "outbound", "Resposta existente", 11, ""),
     ]
     assert processing == [(11, "completed", None, None, 0)]
 
@@ -199,7 +199,7 @@ def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None
         ).fetchall()
         messages = connection.execute(
             """
-            SELECT id, direction, body, in_reply_to_message_id
+            SELECT id, direction, body, in_reply_to_message_id, recipient_address
             FROM messages ORDER BY id
             """
         ).fetchall()
@@ -207,8 +207,8 @@ def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None
     assert manager.is_current()
     assert conversation == [(7, "twilio", "whatsapp:+5511000000000")]
     assert messages == [
-        (11, "inbound", "Mensagem existente", None),
-        (12, "outbound", "Resposta existente", 11),
+        (11, "inbound", "Mensagem existente", None, ""),
+        (12, "outbound", "Resposta existente", 11, ""),
     ]
 
 

@@ -9,9 +9,8 @@ from starlette.concurrency import run_in_threadpool
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
 from rj_studio_ai.deadline import ExecutionDeadline
-from rj_studio_ai.generation import FixedReplyGenerator, ReplyGenerator
+from rj_studio_ai.generation import ReplyGenerator
 from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
-from rj_studio_ai.providers.anthropic import AnthropicReplyGenerator, LLMPriceTable
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
@@ -19,6 +18,7 @@ from rj_studio_ai.providers.base import (
     WhatsAppProvider,
 )
 from rj_studio_ai.providers.twilio import TwilioProvider
+from rj_studio_ai.runtime import generator_from_settings
 
 
 def create_app(
@@ -37,7 +37,7 @@ def create_app(
         public_webhook_url=resolved_settings.twilio_public_webhook_url,
     )
     resolved_store = store or SqliteConversationStore(resolved_settings.database_path)
-    resolved_generator = generator or _generator_from_settings(resolved_settings)
+    resolved_generator = generator or generator_from_settings(resolved_settings)
     responder = MessageResponder(
         store=resolved_store,
         generator=resolved_generator,
@@ -131,26 +131,6 @@ def create_app(
         return response
 
     return app
-
-
-def _generator_from_settings(settings: Settings) -> ReplyGenerator:
-    if settings.llm_provider == "fixed":
-        return FixedReplyGenerator(settings.automatic_reply)
-    pricing = None
-    if (
-        settings.anthropic_input_microusd_per_million is not None
-        and settings.anthropic_output_microusd_per_million is not None
-    ):
-        pricing = LLMPriceTable(
-            input_microusd_per_million=settings.anthropic_input_microusd_per_million,
-            output_microusd_per_million=settings.anthropic_output_microusd_per_million,
-        )
-    return AnthropicReplyGenerator(
-        api_key=settings.anthropic_api_key,
-        model=settings.anthropic_model,
-        max_output_tokens=settings.anthropic_max_output_tokens,
-        pricing=pricing,
-    )
 
 
 app = create_app()
