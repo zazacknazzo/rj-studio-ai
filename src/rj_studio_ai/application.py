@@ -8,6 +8,7 @@ from rj_studio_ai.conversation_context import (
     ConversationContextTooLarge,
 )
 from rj_studio_ai.deadline import ExecutionDeadline
+from rj_studio_ai.decision_policy import DecisionPolicy, DecisionPolicyViolation
 from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.generation import (
     GenerationFailure,
@@ -46,6 +47,7 @@ class MessageResponder:
         self._generator = generator
         self._safe_failure_reply = safe_failure_reply
         self._context_builder = context_builder
+        self._decision_policy = DecisionPolicy()
         self._sleeper = sleeper
         self._ordering_poll_seconds = ordering_poll_seconds
         self._maximum_ordering_wait_seconds = maximum_ordering_wait_seconds
@@ -137,7 +139,22 @@ class MessageResponder:
                 context=context,
                 remaining_budget=deadline.work_budget(),
             )
-            reply_body = generated.reply_body
+            try:
+                decision = self._decision_policy.evaluate(
+                    generated.decision,
+                    selected_knowledge=context.knowledge,
+                    customer_message=message.body,
+                )
+            except DecisionPolicyViolation as error:
+                raise TransientGenerationError(error.error_code, generated.metric) from error
+            if decision.effective_handoff:
+                error_code = (
+                    "mandatory_handoff_override"
+                    if decision.mandatory_handoff and not generated.decision.handoff
+                    else "handoff_required"
+                )
+                raise TransientGenerationError(error_code, generated.metric)
+            reply_body = decision.reply_text
             if not isinstance(reply_body, str) or not reply_body.strip():
                 raise TransientGenerationError("invalid_generation_result", generated.metric)
             if deadline.work_budget() <= 0.0:

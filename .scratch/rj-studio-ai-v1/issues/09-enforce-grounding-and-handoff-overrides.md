@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Load approved Salon Knowledge; 07: Produce validated Intent decisions.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Context
 
@@ -16,17 +16,17 @@ Trusted factual-claim validator, deterministic critical-value composition, hando
 
 ## Acceptance criteria
 
-- [ ] Critical customer-visible claims are matched to selected approved knowledge or trusted integration output before sending; conflicting or unsupported free text is safely corrected or blocked.
-- [ ] Unknown or unavailable facts yield concise clarification, redirection, or Human Handoff and never an invented salon fact or availability promise.
-- [ ] Trusted state and policy override a model’s `handoff=false`, including active handoff, `requires_human_consultation`, mandatory Service/policy rules, and approved deterministic conditions.
-- [ ] Customer Message text cannot alter trusted facts, policy, or handoff rules.
+- [x] Critical customer-visible claims are matched to selected approved knowledge or trusted integration output before sending; conflicting or unsupported free text is safely corrected or blocked.
+- [x] Unknown or unavailable facts yield concise clarification, redirection, or Human Handoff and never an invented salon fact or availability promise.
+- [x] Trusted state and policy override a model’s `handoff=false`, including active handoff, `requires_human_consultation`, mandatory Service/policy rules, and approved deterministic conditions.
+- [x] Customer Message text cannot alter trusted facts, policy, or handoff rules.
 
 ## Required tests
 
-- [ ] Test that a correct knowledge reference plus divergent textual price is corrected or blocked before the provider response.
-- [ ] Test unknown price/policy/Service/Professional/availability, false Customer salon claim, and prompt-injection attempt.
-- [ ] Test a Service requiring human consultation when the LLM proposes `handoff=false`.
-- [ ] Add synthetic grounding, uncertainty, technical-risk, and mandatory-handoff eval cases.
+- [x] Test that a correct knowledge reference plus divergent textual price is corrected or blocked before the provider response.
+- [x] Test unknown price/policy/Service/Professional/availability, false Customer salon claim, and prompt-injection attempt.
+- [x] Test a Service requiring human consultation when the LLM proposes `handoff=false`.
+- [x] Add synthetic grounding, uncertainty, technical-risk, and mandatory-handoff eval cases.
 
 ## Non-goals
 

@@ -58,8 +58,16 @@ class CriticalFactualClaim(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     fact_type: CriticalFactType
-    value: StrictStr = Field(min_length=1, max_length=800)
-    knowledge_ref: StrictStr = Field(min_length=3, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    value: StrictStr = Field(
+        min_length=1,
+        max_length=800,
+        description="Exact canonical statement proposed from the selected Salon Knowledge fact.",
+    )
+    knowledge_ref: StrictStr = Field(
+        min_length=3,
+        pattern=r"^[a-z0-9][a-z0-9-]*$",
+        description="Stable identifier of the selected approved Salon Knowledge fact.",
+    )
 
 
 class LLMDecision(BaseModel):

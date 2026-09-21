@@ -63,7 +63,13 @@ class AnthropicReplyGenerator:
     _system_prompt = (
         "Responda em português brasileiro, de forma breve. "
         "Não invente fatos do salão; peça esclarecimento quando faltar contexto. "
-        "Produza somente a decisão estruturada, sem raciocínio textual."
+        "Produza somente a decisão estruturada, sem raciocínio textual. "
+        "Todo fato crítico sobre preço, horário, profissional, serviço ou política deve "
+        "aparecer em critical_claims com uma knowledge_ref selecionada e com o texto canônico "
+        "exato do campo statement em value. Quando houver critical_claims, reply_text deve "
+        "conter somente esses textos canônicos exatos, na mesma ordem e separados por uma linha "
+        "em branco. Quando o fato não estiver disponível, esclareça ou pergunte sem inventar um "
+        "valor. Nunca afirme disponibilidade real ou confirmação de agendamento."
     )
     _decision_schema = decision_json_schema()
     _persona = LiviaPersona()

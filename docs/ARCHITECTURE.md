@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 08. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, and a provider-neutral structured decision. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document describes the runtime through V1 ticket 09. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, a provider-neutral structured decision, and deterministic grounding and handoff policy. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
 
 ## Current runtime flow
 
@@ -16,6 +16,7 @@ Twilio Sandbox
   → load bounded canonical Conversation Context and approved Salon Knowledge
   → FixedReplyGenerator or AnthropicReplyGenerator outside SQLite transaction
   → validated provider-neutral LLMDecision proposal
+  → deterministic grounding, canonical critical-fact composition and handoff policy
   → persist privacy-safe provider-attempt metric
   → atomically persist one reply and terminal processing state
   → canonical AIReply
@@ -36,6 +37,7 @@ The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass ra
 | `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
 | `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
 | `llm_decision.py` | Validates the provider-neutral, untrusted structured decision proposal | `LLMDecision` |
+| `decision_policy.py` | Matches critical claims to selected approved Salon Knowledge, composes their canonical text, rejects unsupported critical assertions, and computes effective Human Handoff | `DecisionPolicy.evaluate()` |
 | `livia_persona.py` | Keeps Lívia voice instructions and deterministic reply-surface limits separate from Salon Knowledge | `LiviaPersona` |
 | `conversation_context.py` | Loads, orders, minimizes, and bounds prior turns plus selected Salon Knowledge | `ConversationContextBuilder` |
 | `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
@@ -70,7 +72,9 @@ There is no `tenant_id`, Customer profile, semantic memory, model trace, Appoint
 - Twilio is a true external dependency, so `WhatsAppProvider` is a justified seam. Meta Cloud API must become another adapter.
 - SQLite is local and directly testable with temporary databases. A generic persistence interface is deferred until a second implementation or V1 behavior creates real variation.
 - RJ Studio rules will belong in localized knowledge or policy modules when those capabilities are specified. They must not enter generic Conversation orchestration.
-- Salon Knowledge is a validated YAML source at `SALON_KNOWLEDGE_PATH`. Startup rejects invalid knowledge; only approved facts are selectable. The repository performs deterministic topic matching with a conservative compact-context budget and carries required Service policies with a selected Service. YAML remains outside the Anthropic adapter; response grounding arrives in a later ticket.
+- Salon Knowledge is a validated YAML source at `SALON_KNOWLEDGE_PATH`. Startup rejects invalid knowledge; only approved facts are selectable. The repository performs deterministic topic matching with a conservative compact-context budget and carries required Service policies with a selected Service. YAML remains outside the Anthropic adapter.
+- An `LLMDecision` remains untrusted after schema validation. `DecisionPolicy` independently checks each Critical Factual Claim against the approved facts selected for that Message. Type, reference, and canonical statement must match. Customer-visible critical answers contain only the canonical statements, in claim order; unsupported prices, hours, Professional or Service assertions, policy claims, and availability promises are rejected before persistence. A claimed Service must also carry every selected mandatory policy.
+- Effective Human Handoff is `deterministic required handoff OR model request`. A selected Service with `requires_human_consultation` or an approved selected handoff condition cannot be weakened by `handoff=false`. Until Ticket 10 can persist and atomically activate Human Handoff, that outcome follows the existing bounded failure lifecycle and finishes with the configured safe terminal reply; it never sends a model-written takeover promise.
 - Conversation Context selects at most 12 prior Messages from the same Conversation and no more than 30 days before the persisted current inbound timestamp. It keeps logical Customer → AI Attendant order, removes oldest history first under a 2,000-byte upper-bound budget, and reserves current inbound plus approved knowledge within a 4,000-byte upper-bound input budget. When age, count, or budget omits history, its explicit incomplete flag instructs the provider to clarify instead of infer a missing antecedent. It contains only role and body; no provider, Customer-address, claim, metric, or timestamp metadata crosses the LLM seam.
 - `BEGIN IMMEDIATE`, the inbound uniqueness constraint, and the unique reply link make reply preparation correct across threads and process restarts. This does not assert exactly-once WhatsApp delivery.
 - Claim acquisition and completion use separate short `BEGIN IMMEDIATE` transactions. This leaves the future LLM call outside a database transaction; only the current unexpired owner can finalize an AI Reply. After two failed or expired generation attempts, a dedicated finalization claim can acquire the same lifecycle without incrementing the attempt count, allowing a later slice to persist one deterministic safe reply without leaving the Message stranded.
@@ -108,5 +112,5 @@ The real Twilio Sandbox test passed with signature validation enabled on 2026-09
 - Full observability and privacy systems before their roadmap slice.
 - Automatic or scheduled retention; the V0.1 command remains operator initiated.
 - Proactive WhatsApp delivery for a locally recovered AI Reply. The current provider boundary renders a reply only during an inbound webhook; Ticket 04 restores durable lifecycle state but adds no provider-send capability.
-- Vector search, embeddings, RAG services, CMS approval workflow, and factual-response enforcement. Ticket 05 supplies only the trusted source and selection seam.
+- Vector search, embeddings, RAG services, and CMS approval workflow.
 - Test dependency deprecation warnings on Python 3.14; they are maintenance noise, not a V1 blocker.

@@ -227,7 +227,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     )
     assert "Você é Lívia, a atendente virtual do RJ Studio." in system
     assert "R$" not in system
-    assert "disponibilidade" not in system
+    assert "Nunca afirme disponibilidade real" in system
     assert request["messages"] == [{"role": "user", "content": "Olá"}]
     assert request["timeout"] == 4.5
 
@@ -267,6 +267,9 @@ def test_anthropic_adapter_receives_prepared_history_knowledge_and_one_current_m
     assert "histórico anterior pode estar incompleto" in system
     assert "Approved Salon Knowledge:" in system
     assert "service-corte" in system
+    assert "critical_claims" in system
+    assert "texto canônico exato" in system
+    assert "Nunca afirme disponibilidade real" in system
     assert "customer-1" not in system
     assert "message-1" not in system
     assert "studio" not in system
