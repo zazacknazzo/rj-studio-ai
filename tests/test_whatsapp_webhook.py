@@ -8,14 +8,16 @@ from fastapi.testclient import TestClient
 from twilio.request_validator import RequestValidator
 
 from rj_studio_ai.config import Settings
-from rj_studio_ai.domain import AIReply, InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessageReceived, ProviderWebhookEventBatch
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import SqliteConversationStore
 from rj_studio_ai.providers.base import (
+    ProviderAcceptance,
     ProviderWebhookRequest,
     ProviderWebhookResponse,
     WhatsAppProvider,
 )
+from rj_studio_ai.providers.fake import DeterministicFakeOutboundSender
 
 TWILIO_FORM = {
     "MessageSid": "SM-first-message",
@@ -30,17 +32,24 @@ class FailFirstReplyProvider(WhatsAppProvider):
         self.reply_attempts = 0
         self.received_request: ProviderWebhookRequest | None = None
 
-    def receive(self, webhook: ProviderWebhookRequest) -> InboundMessage:
+    def receive(self, webhook: ProviderWebhookRequest) -> ProviderWebhookEventBatch:
         self.received_request = webhook
-        return InboundMessage(
-            provider="test-provider",
-            provider_message_id="provider-message-1",
-            customer_address="customer-1",
-            recipient_address="studio",
-            body="Mensagem sintética",
+        return ProviderWebhookEventBatch(
+            events=(
+                InboundMessageReceived(
+                    provider="test-provider",
+                    provider_message_id="provider-message-1",
+                    customer_address="customer-1",
+                    recipient_address="studio",
+                    body="Mensagem sintética",
+                ),
+            )
         )
 
-    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
+    def acknowledge(self) -> ProviderWebhookResponse:
+        return ProviderWebhookResponse(body="", media_type="text/plain")
+
+    def render_legacy_reply(self, reply: AIReply) -> ProviderWebhookResponse:
         self.reply_attempts += 1
         if self.reply_attempts == 1:
             raise RuntimeError("synthetic rendering failure")
@@ -94,6 +103,28 @@ def test_twilio_named_route_accepts_the_same_v0_callback(tmp_path: Path) -> None
 
     assert response.status_code == 200
     assert "<Message>" in response.text
+
+
+def test_current_webhook_keeps_twiml_and_does_not_call_outbound_sender(tmp_path: Path) -> None:
+    sender = DeterministicFakeOutboundSender(
+        outcomes=[ProviderAcceptance(provider_message_id="must-not-be-used")]
+    )
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=tmp_path / "conversations.db",
+            automatic_reply="Resposta síncrona",
+            twilio_validate_signature=False,
+        ),
+        outbound_sender=sender,
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/webhooks/twilio", data=TWILIO_FORM)
+
+    assert response.status_code == 200
+    assert "<Message>Resposta síncrona</Message>" in response.text
+    assert sender.calls == []
 
 
 def test_retried_twilio_message_replays_persisted_reply_after_restart(

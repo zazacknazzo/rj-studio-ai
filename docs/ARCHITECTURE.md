@@ -1,8 +1,9 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The baseline is V1 through Ticket 08 at commit `d4a104f`. ADR 0006 approves a
-messaging migration that has not been implemented. Twilio remains the current
+The runtime baseline is V1 through Ticket 08 at commit `d4a104f`; Messaging
+Migration 01 adds provider contracts without changing that runtime behavior.
+ADR 0006 approves the remaining messaging migration. Twilio remains the current
 development adapter; Meta WhatsApp Cloud API is the production target.
 
 ## Implemented runtime
@@ -28,6 +29,27 @@ The existing SQLite model contains Conversations, inbound/outbound Messages,
 one processing lifecycle per inbound, generation metrics, reply uniqueness,
 and generation owner/lease protection. It has no Outbound Delivery lifecycle,
 delivery claims, status callbacks, or automatic executor.
+
+## Implemented provider contracts
+
+Messaging Migration 01 separates the seams while keeping the synchronous path:
+
+- `InboundWebhookAdapter.receive()` authenticates and returns an immutable
+  canonical batch of `InboundMessageReceived` and/or `DeliveryStatusReceived`
+  events; Twilio currently returns one inbound event;
+- `InboundWebhookAdapter.acknowledge()` renders provider acknowledgement with no
+  customer-facing AI Reply;
+- `LegacyWebhookReplyRenderer.render_legacy_reply()` explicitly owns the
+  transitional non-empty TwiML response;
+- `OutboundMessageSender.send()` accepts a canonical `OutboundMessage`, a
+  timeout, and returns `ProviderAcceptance` with a canonical provider Message
+  ID or one of the approved provider-neutral failures;
+- `DeterministicFakeOutboundSender` records calls and consumes explicit
+  accepted, retryable, permanent, or unknown outcomes.
+
+The outbound sender is dormant in runtime composition. There is no production
+sender, persistence, retry, executor, or provider call. The FastAPI webhook
+continues to call the legacy renderer; empty acknowledgement is not active yet.
 
 ## Approved target
 
@@ -187,6 +209,8 @@ distributed workers, and horizontal scaling remain out of scope.
 | `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
 | `persistence.py` | Durable inbound, processing claims, delivery outbox/claims, ordering, status merge |
 | `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |
+| `providers/base.py` | Implemented inbound, acknowledgement, legacy renderer, and dormant outbound sender contracts |
+| `providers/fake.py` | Deterministic outbound contract fake; never selected by production configuration |
 | `recovery.py` | Manual fallback after automatic executor recovery is introduced |
 
 The migration adds only seams justified by Twilio/Meta variation and critical

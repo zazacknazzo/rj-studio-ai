@@ -11,11 +11,13 @@ from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
 from rj_studio_ai.conversation_context import ConversationContextBuilder, ConversationContextLimits
 from rj_studio_ai.deadline import ExecutionDeadline
+from rj_studio_ai.domain import InboundMessageReceived
 from rj_studio_ai.generation import ReplyGenerator
 from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
+    OutboundMessageSender,
     ProviderWebhookRequest,
     WhatsAppProvider,
 )
@@ -31,6 +33,7 @@ def create_app(
     store: SqliteConversationStore | None = None,
     generator: ReplyGenerator | None = None,
     salon_knowledge: SalonKnowledgeRepository | None = None,
+    outbound_sender: OutboundMessageSender | None = None,
     monotonic_clock: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
 ) -> FastAPI:
@@ -69,6 +72,7 @@ def create_app(
         yield
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
+    app.state.outbound_sender = outbound_sender
 
     def configuration_is_valid() -> bool:
         return (
@@ -114,11 +118,14 @@ def create_app(
         )
 
         try:
-            message = resolved_provider.receive(webhook)
-            reply = await run_in_threadpool(responder.handle, message, deadline=deadline)
+            batch = resolved_provider.receive(webhook)
+            if len(batch.events) != 1 or not isinstance(batch.events[0], InboundMessageReceived):
+                raise InvalidWebhookPayload("Unsupported provider webhook event")
+            event = batch.events[0]
+            reply = await run_in_threadpool(responder.handle, event, deadline=deadline)
             if deadline.is_expired():
                 raise RetryableWebhookError("Webhook deadline expired before provider rendering")
-            provider_response = resolved_provider.reply(reply)
+            provider_response = resolved_provider.render_legacy_reply(reply)
             response = Response(
                 content=provider_response.body,
                 media_type=provider_response.media_type,

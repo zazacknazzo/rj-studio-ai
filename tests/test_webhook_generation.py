@@ -9,7 +9,12 @@ from fastapi.testclient import TestClient
 
 from rj_studio_ai.config import Settings
 from rj_studio_ai.conversation_context import ConversationContext
-from rj_studio_ai.domain import AIReply, InboundMessage
+from rj_studio_ai.domain import (
+    AIReply,
+    InboundMessage,
+    InboundMessageReceived,
+    ProviderWebhookEventBatch,
+)
 from rj_studio_ai.generation import GeneratedReply, GenerationMetric, TransientGenerationError
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import (
@@ -49,22 +54,29 @@ class FormProvider(WhatsAppProvider):
         self._received_count = 0
         self._received = Condition()
 
-    def receive(self, webhook: ProviderWebhookRequest) -> InboundMessage:
+    def receive(self, webhook: ProviderWebhookRequest) -> ProviderWebhookEventBatch:
         if self._receive_delay is not None:
             self._receive_delay.advance(8.95)
         form = parse_qs(webhook.body.decode("utf-8"), strict_parsing=True)
         with self._received:
             self._received_count += 1
             self._received.notify_all()
-        return InboundMessage(
-            provider="test-provider",
-            provider_message_id=form["MessageSid"][0],
-            customer_address=form["From"][0],
-            recipient_address="studio",
-            body=form["Body"][0],
+        return ProviderWebhookEventBatch(
+            events=(
+                InboundMessageReceived(
+                    provider="test-provider",
+                    provider_message_id=form["MessageSid"][0],
+                    customer_address=form["From"][0],
+                    recipient_address="studio",
+                    body=form["Body"][0],
+                ),
+            )
         )
 
-    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
+    def acknowledge(self) -> ProviderWebhookResponse:
+        return ProviderWebhookResponse(body="", media_type="text/plain")
+
+    def render_legacy_reply(self, reply: AIReply) -> ProviderWebhookResponse:
         return ProviderWebhookResponse(body=reply.body, media_type="text/plain")
 
     def is_configured(self) -> bool:
@@ -224,11 +236,11 @@ class FirstRenderConsumesDeadlineProvider(FormProvider):
         self._clock = clock
         self.reply_attempts = 0
 
-    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
+    def render_legacy_reply(self, reply: AIReply) -> ProviderWebhookResponse:
         self.reply_attempts += 1
         if self.reply_attempts == 1:
             self._clock.advance(10.0)
-        return super().reply(reply)
+        return super().render_legacy_reply(reply)
 
 
 class ContextDelayStore(SqliteConversationStore):

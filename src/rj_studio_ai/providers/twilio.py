@@ -3,7 +3,7 @@ from urllib.parse import parse_qsl
 from twilio.request_validator import RequestValidator
 from twilio.twiml.messaging_response import MessagingResponse
 
-from rj_studio_ai.domain import AIReply, InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessageReceived, ProviderWebhookEventBatch
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
@@ -38,7 +38,7 @@ class TwilioProvider(WhatsAppProvider):
         self._validate_signature = validate_signature
         self._public_webhook_url = public_webhook_url
 
-    def receive(self, webhook: ProviderWebhookRequest) -> InboundMessage:
+    def receive(self, webhook: ProviderWebhookRequest) -> ProviderWebhookEventBatch:
         form = self._parse_form(webhook)
         if self._validate_signature and not self._has_valid_signature(webhook, form):
             raise InvalidWebhookSignature("Invalid Twilio webhook signature")
@@ -48,15 +48,22 @@ class TwilioProvider(WhatsAppProvider):
         if missing:
             raise InvalidWebhookPayload(f"Missing required Twilio fields: {', '.join(missing)}")
 
-        return InboundMessage(
-            provider=self.name,
-            provider_message_id=form["MessageSid"],
-            customer_address=form["From"],
-            recipient_address=form["To"],
-            body=form["Body"],
+        return ProviderWebhookEventBatch(
+            events=(
+                InboundMessageReceived(
+                    provider=self.name,
+                    provider_message_id=form["MessageSid"],
+                    customer_address=form["From"],
+                    recipient_address=form["To"],
+                    body=form["Body"],
+                ),
+            )
         )
 
-    def reply(self, reply: AIReply) -> ProviderWebhookResponse:
+    def acknowledge(self) -> ProviderWebhookResponse:
+        return ProviderWebhookResponse(body=str(MessagingResponse()), media_type="application/xml")
+
+    def render_legacy_reply(self, reply: AIReply) -> ProviderWebhookResponse:
         response = MessagingResponse()
         response.message(reply.body)
         return ProviderWebhookResponse(body=str(response), media_type="application/xml")

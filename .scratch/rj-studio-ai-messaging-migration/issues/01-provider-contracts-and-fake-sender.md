@@ -1,6 +1,6 @@
 # 01: Separate provider ingress acknowledgement from outbound submission
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Objective
 
@@ -59,3 +59,16 @@ current Twilio/TwiML behavior during this ticket.
 
 - Safe to deploy because the new outbound seam is dormant.
 - Rollback is code-only; no schema or persisted state changes exist.
+
+## Comments
+
+- Implemented canonical event batches, separate acknowledgement and legacy
+  reply rendering, `OutboundMessageSender`, `ProviderAcceptance`, approved
+  provider-neutral failures, and a deterministic fake sender.
+- Twilio still returns the same customer-visible TwiML; the outbound sender is
+  injectable but dormant and no production sender exists.
+- Verification: 182 tests passed; Ruff check and format check passed;
+  compileall, pip check, and git diff check passed.
+- Independent architecture/provider-boundary and scope/regression reviews both
+  approved after the accepted-result naming and batch-contract findings were
+  corrected.
