@@ -1,6 +1,6 @@
 # Coordinate LLM generation with durable SQLite claims
 
-Status: accepted
+Status: amended by ADR 0006
 
 V1 will keep one durable generation record per inbound Message. A short SQLite
 `BEGIN IMMEDIATE` transaction creates or acquires a claim with an owner token,
@@ -48,3 +48,12 @@ later attempt may then incur a second provider charge, although the database
 still permits only one persisted AI Reply. Removing that residual window would
 require provider-side idempotency or additional distributed infrastructure and
 is deferred until evidence justifies it.
+
+ADR 0006 keeps the owner token, lease, stale-owner protection, attempt limit,
+short transactions, and per-Conversation generation order. It replaces the
+webhook-driven reactivation and one webhook-wide deadline with durable executor
+polling and separate ingress, processing, and outbound deadlines. A completed
+generation means that the AI Reply and its Outbound Delivery are durable; it
+does not mean the provider accepted, delivered, or exposed the reply to the
+Customer. Provider Acceptance becomes the ordering boundary for later
+automated processing in that Conversation.

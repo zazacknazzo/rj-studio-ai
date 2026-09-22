@@ -2,13 +2,13 @@
 
 **What to build:** A sensitive Conversation can transition atomically to Human Handoff, receive one confirmation, suspend automation, and later be explicitly released without reviving suppressed Messages.
 
-**Blocked by:** 01: Add durable generation claims; 02: Deliver ordered, deadline-bound webhook generation; 07: Produce validated Intent decisions; 09: Enforce grounded factual replies and trusted overrides.
+**Blocked by:** 01: Add durable generation claims; 07: Produce validated Intent decisions; 09: Enforce grounded factual replies and trusted overrides; Messaging Migration 03–05.
 
 **Status:** ready-for-agent
 
 ## Context
 
-Human Handoff transfers responsibility to RJ Studio. It is durable Conversation state, not merely LLM text, and must be safe through retries, crashes, restarts, and a concurrent manual release.
+Human Handoff transfers responsibility to RJ Studio. It is durable Conversation state, not merely LLM text, and must be safe through retries, crashes, restarts, a concurrent manual release, and outbound work already pending. Before provider submission, delivery eligibility, owner, and handoff policy are revalidated. Handoff can cancel work not yet submitted; an already in-flight provider request is an explicit residual race.
 
 ## Likely components
 

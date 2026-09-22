@@ -8,7 +8,7 @@ The planning clock starts on 2026-09-12, with V6 targeted no later than 2026-10-
 | --- | --- | --- | --- |
 | V0 | WhatsApp infrastructure | Twilio-formatted webhook → backend → persistence → Automatic Reply | Complete |
 | V0.1 | Pre-V1 foundation hardening | Durable retries, provider seam, migrations, readiness, retention, and failure-path tests | Complete |
-| V1 | AI attendant | LLM, stable personality, Conversation context, Salon Knowledge, Intent detection, natural replies, hallucination protection | Draft specification; not approved |
+| V1 | AI attendant | LLM, stable personality, Conversation context, Salon Knowledge, Intent detection, natural replies, hallucination protection | Approved; Tickets 01–08 complete, messaging migration pending |
 | V2 | CRM and memory | Customer profile, summarized history, interest, Lead Stage, objections, Lead Source, preferences, Next Best Action, initial lead scoring | Planned |
 | V3 | Commercial engine | Policy-driven Next Best Action, consultative selling, objection handling, follow-ups, cross-sell, upsell, discount policy, Human Handoff | Planned |
 | V4 | Scheduling | Real availability, Professionals and Services; create, reschedule, cancel; conflict prevention | Planned |

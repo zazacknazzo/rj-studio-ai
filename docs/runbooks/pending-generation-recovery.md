@@ -1,5 +1,10 @@
 # Manual pending-Message recovery
 
+> Baseline note: these commands describe the implemented synchronous runtime
+> through Ticket 08. ADR 0006 keeps them as an operator fallback. Messaging
+> Migration 05 will make durable executor polling the normal recovery path and
+> will require a recovered AI Reply to own an Outbound Delivery.
+
 This V1 operation is explicit and local. It has no scheduler, worker, queue, or
 public administrative endpoint.
 
@@ -32,8 +37,8 @@ means no terminal AI Reply was persisted; inspect the listed state before a
 later explicit attempt.
 
 Do not edit lifecycle rows directly, recover a later Message ahead of its
-predecessor, or run this as a loop. Autonomous recovery needs a future executor
-and is intentionally outside V1.
+predecessor, or run this as a loop. Until Messaging Migration 05 is deployed,
+no autonomous executor exists.
 
 ## Verify and delivery limit
 
@@ -41,5 +46,5 @@ Run the list command again and confirm the selected Message is absent after a
 successful terminal recovery. The current WhatsApp provider replies only while
 handling an inbound webhook; this CLI does not add proactive WhatsApp delivery
 or print the AI Reply body. It safely restores the durable lifecycle and can
-unblock later Messages, but a missed customer delivery requires a future
-provider-send capability or an operator's established manual process.
+unblock later Messages, but a missed customer delivery requires the planned
+Outbound Delivery capability or an operator's established manual process.

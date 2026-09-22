@@ -27,6 +27,6 @@ V7 is a separate product phase that may turn the proven system into a multi-busi
 
 ## Current product
 
-V0.1 handles Twilio Sandbox callbacks through a provider adapter, verifies signatures, persists one durable inbound/reply pair in SQLite, and replays that reply for retries. It adds versioned migrations, readiness, and an explicit 90-day Message purge command. Automated checks and the real Sandbox flow passed on 2026-09-13. It contains no LLM, CRM behavior, scheduling, multimodal processing, or advertising integration.
+The implemented baseline through V1 Ticket 08 handles Twilio Sandbox callbacks, durable generation claims, Claude or deterministic generation, approved Salon Knowledge, bounded Conversation Context, structured Intent decisions, and Lívia persona rules. Delivery remains the synchronous TwiML path from V0.1; the approved migration to durable ingress, processing, and outbound delivery is not implemented yet. CRM behavior, scheduling, multimodal processing, and advertising integration remain absent.
 
 Version scope and status live in `ROADMAP.md`. Detailed acceptance criteria live only in `specs/`.

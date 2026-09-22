@@ -2,6 +2,11 @@
 
 Status: passed
 
+This is the immutable V0.1 synchronous-TwiML acceptance record. It does not
+accept ADR 0006. Messaging Migration 04 and 05 require a new smoke record that
+proves early acknowledgement, proactive Twilio REST delivery, durable status,
+and restart recovery without exposing secrets or real Customer content.
+
 Use this runbook to accept V0.1 against the real Twilio WhatsApp Sandbox. Use a
 fresh database and a synthetic Message. Never paste secrets, complete phone
 numbers, tunnel credentials, or provider identifiers into this file.

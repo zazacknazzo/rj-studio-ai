@@ -17,7 +17,7 @@ The continuing exchange between RJ Studio and one Customer under one channel ide
 _Avoid_: Chat, thread, session
 
 **Message**:
-One inbound or outbound communication within a Conversation.
+One inbound communication received or outbound communication prepared within a Conversation. An outbound Message alone is not evidence of delivery.
 _Avoid_: Event, payload
 
 **Intent**:
@@ -41,8 +41,20 @@ The automation that converses on behalf of RJ Studio within approved facts and p
 _Avoid_: Bot, agent, assistant
 
 **AI Reply**:
-An outbound Message produced by the AI Attendant in response to an inbound Message.
+A customer-directed response produced by the AI Attendant for an inbound Message. Persistence alone does not mean the Customer received it.
 _Avoid_: Automatic Reply, generated output
+
+**Outbound Delivery**:
+The lifecycle of submitting one AI Reply to a WhatsApp provider and observing its delivery status. It is distinct from generating or persisting the reply.
+_Avoid_: AI Reply, webhook response
+
+**Provider Acceptance**:
+The provider's acknowledgement that it accepted an Outbound Delivery and assigned a provider Message identifier. It is not evidence that the Message was sent, delivered, or read.
+_Avoid_: Delivery, Customer receipt
+
+**Unknown Delivery Outcome**:
+An Outbound Delivery whose submission may have been accepted although the system did not receive authoritative confirmation. It requires explicit reconciliation before automation continues for the Conversation.
+_Avoid_: Retryable failure, delivered Message
 
 ## Salon operations
 

@@ -1,112 +1,216 @@
 # Architecture
 
-This document describes the runtime through V1 ticket 08. The webhook uses durable generation claims, per-Conversation ordering, one end-to-end deadline, a narrow Claude adapter, validated Salon Knowledge, bounded Conversation Context, and a provider-neutral structured decision. The deterministic generator remains the normal test/local default. The passing V0.1 real Sandbox acceptance result is tracked separately in the smoke-test runbook.
+This document distinguishes the implemented baseline from the approved target.
+The baseline is V1 through Ticket 08 at commit `d4a104f`. ADR 0006 approves a
+messaging migration that has not been implemented. Twilio remains the current
+development adapter; Meta WhatsApp Cloud API is the production target.
 
-## Current runtime flow
+## Implemented runtime
 
 ```text
-Twilio Sandbox
-  → POST /webhooks/twilio
-  → start 10-second monotonic deadline
-  → provider-neutral raw HTTP request
-  → TwilioProvider authentication and translation
-  → canonical InboundMessage
-  → persist inbound without acquiring generation
-  → acquire oldest eligible Message in its Conversation
-  → load bounded canonical Conversation Context and approved Salon Knowledge
-  → FixedReplyGenerator or AnthropicReplyGenerator outside SQLite transaction
-  → validated provider-neutral LLMDecision proposal
-  → persist privacy-safe provider-attempt metric
-  → atomically persist one reply and terminal processing state
-  → canonical AIReply
-  → TwilioProvider TwiML rendering
-  → TwiML response
+Twilio webhook
+  → start one 10-second webhook deadline
+  → Twilio authentication and canonical InboundMessage
+  → persist inbound and acquire the oldest eligible generation claim
+  → bounded Conversation Context + approved Salon Knowledge
+  → deterministic or Anthropic generation outside SQLite transaction
+  → validated LLMDecision and privacy-safe metrics
+  → persist one AIReply and completed processing state
+  → render the AIReply as TwiML in the webhook response
 ```
 
-The legacy `POST /webhooks/whatsapp` route remains an alias. Both routes pass raw HTTP data to the adapter. A repeated Twilio `MessageSid` retrieves the exact AI Reply already stored and returns the same non-empty TwiML without another generation.
+The current webhook can wait for a predecessor and return retryable HTTP 503.
+Provider retry or the manual recovery command is needed to reactivate stored
+work. Manual recovery cannot proactively deliver the reply it creates. These
+behaviors remain true until the messaging migration is implemented.
 
-## Existing modules
+The existing SQLite model contains Conversations, inbound/outbound Messages,
+one processing lifecycle per inbound, generation metrics, reply uniqueness,
+and generation owner/lease protection. It has no Outbound Delivery lifecycle,
+delivery claims, status callbacks, or automatic executor.
 
-| Module | Current responsibility | Interface or seam |
-| --- | --- | --- |
-| `config.py` | Loads `.env` settings | `Settings` |
-| `main.py` | Builds FastAPI, wires dependencies, owns explicit startup, and exposes liveness, readiness, and webhook routes | HTTP seam through `create_app()` |
-| `application.py` | Coordinates admission, Conversation ordering, bounded wait, deterministic generation retries, and durable completion | `MessageResponder.handle()` |
-| `deadline.py` | Holds the single monotonic webhook deadline and finalization reserve | `ExecutionDeadline` |
-| `domain.py` | Carries canonical inbound Message, AI Reply, and history values | Dataclasses |
-| `generation.py` | Defines the narrow synchronous generation seam, result, failure, and metric values | `ReplyGenerator`, `GeneratedReply` |
-| `llm_decision.py` | Validates the provider-neutral, untrusted structured decision proposal | `LLMDecision` |
-| `livia_persona.py` | Keeps Lívia voice instructions and deterministic reply-surface limits separate from Salon Knowledge | `LiviaPersona` |
-| `conversation_context.py` | Loads, orders, minimizes, and bounds prior turns plus selected Salon Knowledge | `ConversationContextBuilder` |
-| `recovery.py` | Coordinates one explicit recovery through the existing responder | `PendingGenerationRecovery` |
-| `salon_knowledge.py` | Validates versioned YAML and selects approved relevant facts | `SalonKnowledgeRepository` |
-| `providers/anthropic.py` | Translates the core generation contract to the official Anthropic SDK | `AnthropicReplyGenerator` |
-| `persistence.py` | Provides transactional idempotency, durable generation claims, privacy-safe metrics, history, readiness writes, retention purge, and Conversation deletion | `SqliteConversationStore` |
-| `migrations/` | Holds and applies ordered Alembic revisions | `MigrationManager` |
-| `maintenance.py` | Exposes explicit migrate, purge, and Conversation-deletion commands | `rj-studio-maintenance` |
-| `providers/base.py` | Defines provider behavior and provider errors | `WhatsAppProvider` |
-| `providers/twilio.py` | Parses the raw form, validates the exact public URL and signature, translates Messages, and builds TwiML | `TwilioProvider` adapter |
+## Approved target
 
-## Current data model
+```text
+Provider webhook
+  → provider-specific authentication and parsing
+  → canonical inbound or delivery-status event
+  → persist event
+  → commit
+  → provider acknowledgement
 
-SQLite contains:
+SQLite
+  → Processing Executor
+  → claim oldest eligible inbound in a Conversation
+  → bounded context + knowledge + LLM + deterministic policy
+  → one transaction:
+       INSERT AIReply
+       INSERT OutboundDelivery(pending)
+       UPDATE message_processing(completed)
 
-- `conversations`: one row per `(provider, customer_address)` with creation and update timestamps.
-- `messages`: ordered inbound and outbound rows linked to a Conversation; inbound rows retain the recipient address needed for local recovery.
-- `(provider, provider_message_id)` is unique, providing inbound webhook deduplication.
-- Each outbound reply points to its inbound Message through `in_reply_to_message_id`.
-- A unique index on that link prevents a second logical reply for one inbound Message.
-- `message_processing`: one durable lifecycle per inbound Message, with `processing`, `retryable`, `completed`, or terminal `suppressed` state.
-- `generation_metrics`: one privacy-safe model-attempt record per inbound generation attempt; it contains no Message body, Customer address, provider Message identifier, key, or prompt.
-- `ix_messages_conversation_created` supports bounded same-Conversation context retrieval.
-- A processing claim has a unique owner token, a 30-second lease, and no more than two attempts. Database constraints protect state shape and the relationship between terminal state and reply presence.
-- `alembic_version` records the current schema revision.
+SQLite
+  → Outbound Executor
+  → claim oldest eligible delivery in a Conversation
+  → revalidate owner, delivery eligibility, and handoff policy
+  → provider REST submission
+  → persist Provider Acceptance or failure outcome
 
-There is no `tenant_id`, Customer profile, semantic memory, model trace, Appointment, or attribution data in V0.
+Provider status webhook
+  → persist monotonic sent/delivered/read/failed evidence
+```
 
-## Dependency and seam decisions
+Ingress, processing, and delivery are separate modules with separate deadlines.
+SQLite is the durable source of work. In-process wake-ups may reduce latency but
+are never required for recovery. Executors poll durable state and keep every
+SQLite transaction short. Expired processing leases are reclaimable; an expired
+outbound `sending` lease becomes `unknown` because submission may have occurred.
+No transaction spans LLM work, sleep, backoff, or an external request.
 
-- FastAPI is the composition root and the highest automated test seam.
-- Twilio is a true external dependency, so `WhatsAppProvider` is a justified seam. Meta Cloud API must become another adapter.
-- SQLite is local and directly testable with temporary databases. A generic persistence interface is deferred until a second implementation or V1 behavior creates real variation.
-- RJ Studio rules will belong in localized knowledge or policy modules when those capabilities are specified. They must not enter generic Conversation orchestration.
-- Salon Knowledge is a validated YAML source at `SALON_KNOWLEDGE_PATH`. Startup rejects invalid knowledge; only approved facts are selectable. The repository performs deterministic topic matching with a conservative compact-context budget and carries required Service policies with a selected Service. YAML remains outside the Anthropic adapter; response grounding arrives in a later ticket.
-- Conversation Context selects at most 12 prior Messages from the same Conversation and no more than 30 days before the persisted current inbound timestamp. It keeps logical Customer → AI Attendant order, removes oldest history first under a 2,000-byte upper-bound budget, and reserves current inbound plus approved knowledge within a 4,000-byte upper-bound input budget. When age, count, or budget omits history, its explicit incomplete flag instructs the provider to clarify instead of infer a missing antecedent. It contains only role and body; no provider, Customer-address, claim, metric, or timestamp metadata crosses the LLM seam.
-- `BEGIN IMMEDIATE`, the inbound uniqueness constraint, and the unique reply link make reply preparation correct across threads and process restarts. This does not assert exactly-once WhatsApp delivery.
-- Claim acquisition and completion use separate short `BEGIN IMMEDIATE` transactions. This leaves the future LLM call outside a database transaction; only the current unexpired owner can finalize an AI Reply. After two failed or expired generation attempts, a dedicated finalization claim can acquire the same lifecycle without incrementing the attempt count, allowing a later slice to persist one deterministic safe reply without leaving the Message stranded.
-- Claim acquisition checks earlier inbound Messages in the same Conversation. Any earlier non-terminal Message blocks a later claim, while claims for different Conversations hold no shared application lock. SQLite write transactions remain short and never span generation, wait, sleep, or backoff.
-- A blocked webhook polls through separate short transactions for at most one second. If the predecessor remains non-terminal, the current inbound stays persisted and the webhook returns HTTP 503 without provider reply markup. A later provider retry can claim it after the predecessor becomes terminal.
-- `rj-studio-maintenance list-pending-generations` exposes retryable and lease-expired processing work with redacted operational metadata. `recover-generation --inbound-message-id` first verifies that the selected Message is the oldest eligible one, then invokes the normal responder. It cannot preempt a valid owner, alter terminal state, or bypass Conversation ordering. It is manual only; no scheduler or recovery executor exists.
-- Inbound Messages retain their recipient address so a local recovery can reconstruct the canonical input. Older rows receive an empty value during migration because the historical recipient is unavailable.
-- The webhook creates one 10-second monotonic deadline before reading and translating the inbound request. SQLite lock timeouts, ordering polls, retry backoff, generation, finalization, provider rendering, and response preparation all consume that same budget.
-- One second of the total is reserved for final persistence and provider response rendering. New generation attempts require at least 100 milliseconds outside that reserve. These are local V1.1 operating constants, not model-specific timeout policy.
-- Claude calls receive the existing remaining work budget as their SDK timeout and run inside an asynchronous cancellation scope using that same absolute budget; cleanup is not awaited after that budget has expired. They start only with at least one second available outside the finalization reserve. SDK retries are disabled; the durable application lifecycle owns the two-attempt limit. Claude Sonnet 5 uses `thinking={"type": "disabled"}`, the provider JSON-schema mechanism, and a 200-token output limit. It converts the result to a validated `LLMDecision`; Intent, references, factual claims, uncertainty, and handoff remain untrusted proposals until later deterministic policies evaluate them.
-- Attempt metrics persist provider, returned model, non-secret configuration label, latency, available token counts, configured-price cost estimate, outcome, and safe error code. Pricing is supplied in environment configuration and is not hardcoded because provider pricing may change.
-- Existing V0.1 inbound/reply pairs migrate to `completed` with zero LLM attempts. The current deterministic fixed-reply flow creates the same terminal lifecycle atomically with its AI Reply.
-- Alembic owns schema versions. Application startup and the maintenance command invoke it explicitly; importing modules performs no database I/O.
-- `/health` checks process liveness. `/ready` checks local configuration, schema revision, schema shape, and a rollback-only write transaction.
-- Retention runs only through an operator command. No startup hook, scheduler, or webhook path deletes Messages.
+## Messaging concepts and guarantees
 
-See the focused records under `decisions/`, especially ADRs 0001, 0003, 0004, and 0005.
+- An inbound Message received is distinct from an AI Reply generated.
+- An AI Reply generated is distinct from an Outbound Delivery accepted.
+- `(provider, provider_message_id)` uniquely identifies an inbound.
+- The existing reply link permits at most one logical AI Reply per inbound.
+- A unique Outbound Delivery link permits at most one delivery intent per AI Reply.
+- Generation completion atomically persists the AI Reply, pending delivery, and completed processing state.
+- Local logical reply preparation has strong uniqueness across retries and restart.
+- External provider submission is not exactly once. Definitively retryable failures use bounded at-least-once submission.
+- A submission whose outcome is ambiguous becomes `unknown`; it is never retried automatically and blocks that Conversation pending explicit reconciliation, recovery, or Human Handoff.
 
-## V0.1 acceptance
+A failure is definitively retryable only when the provider contract proves that
+the request was not accepted. Timeout, connection loss, malformed response, or
+undocumented provider failure semantics are `unknown`, not generic retries.
 
-The real Twilio Sandbox test passed with signature validation enabled on 2026-09-13. Twilio received one synthetic inbound Message, called the canonical webhook with HTTP 200, delivered the configured reply, and the fresh database contained exactly one linked inbound/outbound pair. See the [redacted execution record](runbooks/twilio-sandbox-smoke-test.md).
+Provider Acceptance means that the provider accepted the submission and
+returned a provider Message identifier. It does not mean `sent`, `delivered`,
+or `read`. Later automated processing may cross this boundary without waiting
+for delivery/read callbacks. If an accepted delivery later becomes `failed`,
+history already used is not rewritten; future automation in that Conversation
+is blocked for policy or recovery.
 
-## Work that can stay inside V1 slices
+## Conversation ordering and context visibility
 
-- Introduce a narrow persistence port only when V1 needs context retrieval or a test adapter.
-- Bind the real provider timeout to `remaining_budget` and add privacy-safe attempt metrics with ticket 03.
-- Decide whether reply-delivery status callbacks are needed when V1 failure handling is specified.
+Generation claims remain ordered by persisted inbound ID. Different
+Conversations may run concurrently. Within one Conversation, later automated
+processing waits until the predecessor is terminal and any predecessor AI Reply
+has reached Provider Acceptance or explicit `accepted_legacy` state. It does not
+wait for `delivered` or `read`.
+
+Conversation Context includes an AI Reply as assistant speech only when its
+Outbound Delivery is `accepted`, `sent`, `delivered`, `read`, or explicitly
+`accepted_legacy`. Replies with `pending`, `sending`, `retryable`, `unknown`,
+`failed`, or `cancelled` delivery are not treated as customer-visible. An
+accepted delivery that later reports failure blocks future automation instead
+of retroactively changing context already used.
+
+## Provider seams
+
+The original `WhatsAppProvider` interface remains the implemented V0.1 seam.
+The target separates two responsibilities:
+
+- inbound adapter: authenticate, parse provider webhooks into canonical events, and create the provider acknowledgement;
+- outbound sender: submit one canonical outbound Message and return accepted, retryable, permanent, or unknown outcome.
+
+Twilio will acknowledge inbound callbacks without embedding the AI Reply and
+will submit outbound Messages through its REST API. Meta will parse inbound and
+status events, use `phone_number_id` as the durable channel identifier, submit
+through `/messages`, and persist the returned `wamid`. Provider SDK values do
+not cross the seam.
+
+## Delivery lifecycle
+
+The target lifecycle distinguishes:
+
+```text
+pending → sending → accepted → sent → delivered → read
+              ├─→ retryable → sending
+              ├─→ unknown
+              └─→ failed
+pending/retryable → cancelled
+```
+
+`accepted_legacy` explicitly marks a reply with sufficient legacy-path delivery
+evidence. The current schema cannot prove that for every historical row,
+especially a reply created by manual recovery. Unverified rows migrate to
+`unknown` with a legacy-unverified reason and block automation until explicit
+reconciliation; no historical reply becomes `pending`. Duplicate status
+callbacks are no-ops. Statuses arriving before local acceptance finalization
+are durably retained for later correlation. Out-of-order success callbacks can
+only advance evidence; they cannot downgrade delivered/read.
+
+Before every external submission, the outbound executor revalidates the owner,
+delivery eligibility, and current Human Handoff policy. A future handoff can
+cancel work not yet submitted. A request already in flight cannot be recalled;
+handoff guarantees must state that residual race explicitly.
+
+## Deadlines and recovery
+
+- Ingress deadline covers authentication, parsing, one short persistence transaction, and acknowledgement.
+- Processing retains the approved 10-second attempt-sequence budget initially, starting when an executor acquires the Message. All attempts share that budget. The 30-second generation lease remains separate.
+- Outbound submission has its own request deadline shorter than its delivery lease.
+- Product latency is measured from inbound persistence to Provider Acceptance; it is not one synchronous HTTP timeout.
+
+Automatic durable polling becomes the normal recovery mechanism for retryable
+and stale processing claims plus pending/definitively-retryable deliveries.
+Stale `sending`, unknown, and terminal outbound work requires explicit operator
+reconciliation. The maintenance command remains that fallback. A Message must
+reach a terminal or explicitly blocked state after its attempt policy; it
+cannot stay as an immortal predecessor.
+
+## SQLite deployment gate
+
+Early webhook acknowledgement is forbidden until all of these are true:
+
+- `journal_mode=WAL` is applied and verified;
+- `synchronous=FULL` is applied while durability-before-ACK is required;
+- `foreign_keys=ON` is applied to every runtime and migration connection;
+- a uniform `busy_timeout` is applied;
+- claim, due-work, and Conversation-order indexes exist;
+- the database uses persistent local storage;
+- exactly one application process owns the database;
+- readiness rejects observable pragma, schema, executor-health, or configuration mismatch.
+
+Persistent storage and single-process deployment are operational invariants;
+readiness cannot infer an infrastructure guarantee that deployment did not
+declare. SQLite remains appropriate for the pilot. Postgres, Redis, queues,
+distributed workers, and horizontal scaling remain out of scope.
+
+## Current modules retained through migration
+
+| Existing module | Target role |
+| --- | --- |
+| `main.py` | Composition root, ingress routes, lifespan-managed executors, health/readiness |
+| `application.py` | Processing coordination outside the webhook request |
+| `deadline.py` | Processing budget; ingress and outbound receive distinct deadlines |
+| `conversation_context.py` | Bounded context filtered by delivery visibility |
+| `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
+| `persistence.py` | Durable inbound, processing claims, delivery outbox/claims, ordering, status merge |
+| `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |
+| `recovery.py` | Manual fallback after automatic executor recovery is introduced |
+
+The migration adds only seams justified by Twilio/Meta variation and critical
+crash testing. It does not add a generic repository, job framework, event bus,
+or multi-tenant infrastructure.
+
+## Rollout sequence
+
+1. Separate provider inbound acknowledgement and outbound sender contracts with a deterministic fake; retain current external behavior.
+2. Enforce SQLite durability prerequisites and readiness gates.
+3. Add legacy-safe Outbound Delivery schema, transactional outbox, and provider-neutral deterministic executor seam.
+4. Add proactive Twilio REST delivery, delivery claims, and status callbacks with a safe legacy/proactive cutover.
+5. Move processing to durable polling, acknowledge after ingress commit, remove predecessor HTTP 503, and separate deadlines.
+6. Add the Meta Cloud API production adapter and channel-policy seam.
+
+ADR 0006 owns this target. ADRs 0001, 0003, and 0005 retain their original
+historical decisions and are explicitly amended where synchronous assumptions
+were replaced.
 
 ## Deliberately deferred
 
-- Multi-tenant tables, routing, configuration, and administration.
-- Replacing SQLite based only on hypothetical scale.
-- Generic integration frameworks beyond concrete provider needs.
-- Cross-provider Customer identity until the Meta or CRM slice requires it.
-- Full observability and privacy systems before their roadmap slice.
-- Automatic or scheduled retention; the V0.1 command remains operator initiated.
-- Proactive WhatsApp delivery for a locally recovered AI Reply. The current provider boundary renders a reply only during an inbound webhook; Ticket 04 restores durable lifecycle state but adds no provider-send capability.
-- Vector search, embeddings, RAG services, CMS approval workflow, and factual-response enforcement. Ticket 05 supplies only the trusted source and selection seam.
-- Test dependency deprecation warnings on Python 3.14; they are maintenance noise, not a V1 blocker.
+- Multi-tenant routing or `tenant_id` before V7.
+- Redis, broker, distributed workers, Postgres, horizontal scaling, or HA.
+- Generic agent or integration frameworks.
+- CRM, scheduling, multimodal, Google Ads, or campaign messaging.
+- Automatic retry of unknown outbound outcomes.
+- A promise of exactly-once external delivery.
