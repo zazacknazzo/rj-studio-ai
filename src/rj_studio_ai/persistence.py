@@ -7,7 +7,12 @@ from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
-from rj_studio_ai.domain import InboundMessage, MessageRecord
+from rj_studio_ai.domain import (
+    DeliveryStatus,
+    DeliveryStatusReceived,
+    InboundMessage,
+    MessageRecord,
+)
 from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.migrations import MigrationManager
 from rj_studio_ai.sqlite import (
@@ -53,6 +58,12 @@ class DeliveryState(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     ACCEPTED_LEGACY = "accepted_legacy"
+
+
+class DeliveryStatusDisposition(StrEnum):
+    APPLIED = "applied"
+    BUFFERED = "buffered"
+    IGNORED = "ignored"
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +157,27 @@ class DeliveryAttemptRecord:
     safe_error_code: str | None
     started_at: datetime
     completed_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryMetricRecord:
+    provider: str
+    state: DeliveryState
+    attempt_count: int
+    acceptance_latency_ms: int | None
+    latest_attempt_latency_ms: int | None
+    safe_error_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class BlockedDelivery:
+    delivery_id: int
+    conversation_id: int
+    provider: str
+    state: DeliveryState
+    attempt_count: int
+    safe_error_code: str
+    updated_at: datetime
 
 
 class SqliteConversationStore:
@@ -343,6 +375,50 @@ class SqliteConversationStore:
             raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
         return None if row is None else self._delivery_record(row)
 
+    def get_delivery_for_provider_inbound(
+        self,
+        *,
+        provider: str,
+        provider_message_id: str,
+        lock_timeout: float | None = None,
+    ) -> OutboundDeliveryRecord | None:
+        try:
+            with self._connect(lock_timeout) as connection:
+                row = connection.execute(
+                    f"""
+                    {self._delivery_select()}
+                    JOIN messages AS inbound ON inbound.id = outbound.in_reply_to_message_id
+                    WHERE inbound.provider = ?
+                      AND inbound.provider_message_id = ?
+                      AND inbound.direction = 'inbound'
+                    """,
+                    (provider, provider_message_id),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        return None if row is None else self._delivery_record(row)
+
+    def legacy_delivery_mode_is_safe(self) -> bool:
+        """Reject rollback while proactive work could be stranded or duplicated."""
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT NOT EXISTS(
+                        SELECT 1
+                        FROM outbound_deliveries
+                        WHERE state IN ('pending', 'sending', 'retryable')
+                           OR (
+                                state = 'unknown'
+                                AND safe_error_code != 'legacy_unverified'
+                           )
+                    )
+                    """
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Delivery mode safety is unavailable") from error
+        return bool(row[0])
+
     def get_delivery(self, delivery_id: int) -> OutboundDeliveryRecord | None:
         try:
             with self._connect() as connection:
@@ -385,6 +461,94 @@ class SqliteConversationStore:
                 safe_error_code=None if row[3] is None else str(row[3]),
                 started_at=datetime.fromisoformat(str(row[4])),
                 completed_at=None if row[5] is None else datetime.fromisoformat(str(row[5])),
+            )
+            for row in rows
+        ]
+
+    def get_delivery_metric(self, delivery_id: int) -> DeliveryMetricRecord | None:
+        """Return privacy-safe latency and outcome data for one delivery."""
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT
+                        delivery.provider,
+                        delivery.state,
+                        delivery.attempt_count,
+                        inbound.created_at,
+                        delivery.accepted_at,
+                        delivery.safe_error_code,
+                        attempt.started_at,
+                        attempt.completed_at
+                    FROM outbound_deliveries AS delivery
+                    JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+                    JOIN messages AS inbound ON inbound.id = outbound.in_reply_to_message_id
+                    LEFT JOIN delivery_attempts AS attempt
+                      ON attempt.outbound_delivery_id = delivery.id
+                     AND attempt.attempt_number = delivery.attempt_count
+                    WHERE delivery.id = ?
+                    """,
+                    (delivery_id,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery metrics are unavailable") from error
+        if row is None:
+            return None
+        inbound_at = datetime.fromisoformat(str(row[3]))
+        accepted_at = None if row[4] is None else datetime.fromisoformat(str(row[4]))
+        attempt_started = None if row[6] is None else datetime.fromisoformat(str(row[6]))
+        attempt_completed = None if row[7] is None else datetime.fromisoformat(str(row[7]))
+        return DeliveryMetricRecord(
+            provider=str(row[0]),
+            state=DeliveryState(str(row[1])),
+            attempt_count=int(row[2]),
+            acceptance_latency_ms=(
+                None
+                if accepted_at is None
+                else max(0, round((accepted_at - inbound_at).total_seconds() * 1_000))
+            ),
+            latest_attempt_latency_ms=(
+                None
+                if attempt_started is None or attempt_completed is None
+                else max(
+                    0,
+                    round((attempt_completed - attempt_started).total_seconds() * 1_000),
+                )
+            ),
+            safe_error_code=None if row[5] is None else str(row[5]),
+        )
+
+    def list_blocked_deliveries(self) -> list[BlockedDelivery]:
+        """List operational metadata for deliveries requiring human recovery."""
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        delivery.id,
+                        outbound.conversation_id,
+                        delivery.provider,
+                        delivery.state,
+                        delivery.attempt_count,
+                        delivery.safe_error_code,
+                        delivery.updated_at
+                    FROM outbound_deliveries AS delivery
+                    JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+                    WHERE delivery.state IN ('unknown', 'failed')
+                    ORDER BY delivery.updated_at, delivery.id
+                    """
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Blocked Outbound Deliveries are unavailable") from error
+        return [
+            BlockedDelivery(
+                delivery_id=int(row[0]),
+                conversation_id=int(row[1]),
+                provider=str(row[2]),
+                state=DeliveryState(str(row[3])),
+                attempt_count=int(row[4]),
+                safe_error_code=str(row[5]),
+                updated_at=datetime.fromisoformat(str(row[6])),
             )
             for row in rows
         ]
@@ -533,6 +697,7 @@ class SqliteConversationStore:
         outcome: DeliveryState,
         provider_message_id: str | None = None,
         safe_error_code: str | None = None,
+        retry_at: datetime | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -556,9 +721,20 @@ class SqliteConversationStore:
                 connection.execute("BEGIN IMMEDIATE")
                 current_time = self._utc_time(now)
                 timestamp = current_time.isoformat()
+                if outcome is DeliveryState.RETRYABLE:
+                    if retry_at is None:
+                        raise ValueError("Retryable delivery requires a retry time")
+                    retry_time = self._utc_time(retry_at)
+                    if retry_time <= current_time:
+                        raise ValueError("Delivery retry time must be in the future")
+                    next_attempt_at = retry_time.isoformat()
+                else:
+                    if retry_at is not None:
+                        raise ValueError("Only retryable delivery can have a retry time")
+                    next_attempt_at = None
                 current = connection.execute(
                     """
-                    SELECT attempt_count
+                    SELECT attempt_count, provider
                     FROM outbound_deliveries
                     WHERE id = ?
                       AND state = 'sending'
@@ -570,7 +746,7 @@ class SqliteConversationStore:
                 if current is None:
                     return False
                 attempt_number = int(current[0])
-                next_attempt_at = timestamp if outcome is DeliveryState.RETRYABLE else None
+                provider = str(current[1])
                 accepted_at = timestamp if outcome is DeliveryState.ACCEPTED else None
                 updated = connection.execute(
                     """
@@ -626,9 +802,182 @@ class SqliteConversationStore:
                 ).rowcount
                 if delivery_updated != 1:
                     raise sqlite3.IntegrityError("Outbound Delivery ownership changed")
+                if outcome is DeliveryState.ACCEPTED and provider_message_id is not None:
+                    pending_status = connection.execute(
+                        """
+                        SELECT status, safe_error_code
+                        FROM pending_delivery_statuses
+                        WHERE provider = ? AND provider_message_id = ?
+                        """,
+                        (provider, provider_message_id),
+                    ).fetchone()
+                    if pending_status is not None:
+                        self._apply_delivery_status(
+                            connection,
+                            delivery_id=delivery_id,
+                            status=DeliveryStatus(str(pending_status[0])),
+                            safe_error_code=(
+                                None if pending_status[1] is None else str(pending_status[1])
+                            ),
+                            timestamp=timestamp,
+                        )
+                        connection.execute(
+                            """
+                            DELETE FROM pending_delivery_statuses
+                            WHERE provider = ? AND provider_message_id = ?
+                            """,
+                            (provider, provider_message_id),
+                        )
             return True
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+
+    def record_delivery_status(
+        self,
+        event: DeliveryStatusReceived,
+        *,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> DeliveryStatusDisposition:
+        if not event.provider.strip() or not event.provider_message_id.strip():
+            raise ValueError("Delivery status requires provider identity")
+        if event.status is DeliveryStatus.FAILED:
+            if event.safe_error_code is None or not event.safe_error_code.strip():
+                raise ValueError("Failed delivery status requires a safe error code")
+        elif event.safe_error_code is not None:
+            raise ValueError("Successful delivery status cannot carry an error code")
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                delivery = connection.execute(
+                    """
+                    SELECT id
+                    FROM outbound_deliveries
+                    WHERE provider = ? AND provider_message_id = ?
+                    """,
+                    (event.provider, event.provider_message_id),
+                ).fetchone()
+                if delivery is not None:
+                    applied = self._apply_delivery_status(
+                        connection,
+                        delivery_id=int(delivery[0]),
+                        status=event.status,
+                        safe_error_code=event.safe_error_code,
+                        timestamp=timestamp,
+                    )
+                    return (
+                        DeliveryStatusDisposition.APPLIED
+                        if applied
+                        else DeliveryStatusDisposition.IGNORED
+                    )
+
+                existing = connection.execute(
+                    """
+                    SELECT status
+                    FROM pending_delivery_statuses
+                    WHERE provider = ? AND provider_message_id = ?
+                    """,
+                    (event.provider, event.provider_message_id),
+                ).fetchone()
+                if existing is None:
+                    connection.execute(
+                        """
+                        INSERT INTO pending_delivery_statuses (
+                            provider, provider_message_id, status, safe_error_code,
+                            received_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            event.provider,
+                            event.provider_message_id,
+                            event.status,
+                            event.safe_error_code,
+                            timestamp,
+                            timestamp,
+                        ),
+                    )
+                    return DeliveryStatusDisposition.BUFFERED
+
+                current_status = DeliveryStatus(str(existing[0]))
+                if self._delivery_status_rank(event.status) <= self._delivery_status_rank(
+                    current_status
+                ):
+                    return DeliveryStatusDisposition.IGNORED
+                connection.execute(
+                    """
+                    UPDATE pending_delivery_statuses
+                    SET status = ?, safe_error_code = ?, updated_at = ?
+                    WHERE provider = ? AND provider_message_id = ?
+                    """,
+                    (
+                        event.status,
+                        event.safe_error_code,
+                        timestamp,
+                        event.provider,
+                        event.provider_message_id,
+                    ),
+                )
+                return DeliveryStatusDisposition.BUFFERED
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Delivery status persistence is unavailable") from error
+
+    @staticmethod
+    def _delivery_status_rank(status: DeliveryStatus) -> int:
+        return {
+            DeliveryStatus.SENT: 1,
+            DeliveryStatus.DELIVERED: 2,
+            DeliveryStatus.READ: 3,
+            DeliveryStatus.FAILED: 4,
+        }[status]
+
+    @staticmethod
+    def _apply_delivery_status(
+        connection: sqlite3.Connection,
+        *,
+        delivery_id: int,
+        status: DeliveryStatus,
+        safe_error_code: str | None,
+        timestamp: str,
+    ) -> bool:
+        current = connection.execute(
+            "SELECT state FROM outbound_deliveries WHERE id = ?",
+            (delivery_id,),
+        ).fetchone()
+        if current is None:
+            raise sqlite3.IntegrityError("Outbound Delivery is unavailable")
+        current_state = DeliveryState(str(current[0]))
+        allowed = {
+            DeliveryState.ACCEPTED: {
+                DeliveryStatus.SENT,
+                DeliveryStatus.DELIVERED,
+                DeliveryStatus.READ,
+                DeliveryStatus.FAILED,
+            },
+            DeliveryState.SENT: {
+                DeliveryStatus.DELIVERED,
+                DeliveryStatus.READ,
+                DeliveryStatus.FAILED,
+            },
+            DeliveryState.DELIVERED: {DeliveryStatus.READ, DeliveryStatus.FAILED},
+            DeliveryState.READ: {DeliveryStatus.FAILED},
+        }
+        if status not in allowed.get(current_state, set()):
+            return False
+        connection.execute(
+            """
+            UPDATE outbound_deliveries
+            SET state = ?, safe_error_code = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                status,
+                safe_error_code if status is DeliveryStatus.FAILED else None,
+                timestamp,
+                delivery_id,
+            ),
+        )
+        return True
 
     def reconcile_legacy_delivery(
         self,

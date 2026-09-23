@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None
+    twilio_status_callback_url: str | None = None
+    twilio_account_sid: str = ""
+    twilio_api_key_sid: str = ""
+    twilio_api_key_secret: str = ""
+    delivery_mode: Literal["legacy", "proactive"] = "legacy"
+    outbound_request_timeout_seconds: float = Field(default=5.0, gt=0, lt=30)
+    outbound_poll_interval_seconds: float = Field(default=0.25, gt=0)
+    outbound_concurrency: int = Field(default=1, ge=1, le=4)
+    outbound_maximum_attempts: int = Field(default=3, ge=1, le=10)
+    outbound_retry_backoff_base_seconds: float = Field(default=1.0, gt=0)
+    outbound_retry_backoff_maximum_seconds: float = Field(default=30.0, gt=0)
     llm_provider: Literal["fixed", "anthropic"] = "fixed"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"

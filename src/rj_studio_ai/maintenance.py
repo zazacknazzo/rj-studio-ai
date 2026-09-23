@@ -30,6 +30,10 @@ def _parser() -> argparse.ArgumentParser:
         "list-pending-generations",
         help="List retryable or stale inbound Messages without Customer content",
     )
+    subparsers.add_parser(
+        "list-blocked-deliveries",
+        help="List unknown or failed deliveries without Customer content or address",
+    )
 
     recover = subparsers.add_parser(
         "recover-generation",
@@ -91,6 +95,22 @@ def main(
             f"result={'updated' if reconciled else 'not_eligible'}."
         )
         return 0 if reconciled else 1
+
+    if args.command == "list-blocked-deliveries":
+        blocked = store.list_blocked_deliveries()
+        if not blocked:
+            print("No blocked Outbound Deliveries.")
+            return 0
+        for delivery in blocked:
+            print(
+                f"delivery_id={delivery.delivery_id} "
+                f"conversation_id={delivery.conversation_id} "
+                f"provider={delivery.provider} state={delivery.state.value} "
+                f"attempts={delivery.attempt_count} "
+                f"reason={delivery.safe_error_code} "
+                f"updated_at={delivery.updated_at.isoformat()}"
+            )
+        return 0
 
     if args.command in {"list-pending-generations", "recover-generation"}:
         recovery = PendingGenerationRecovery(

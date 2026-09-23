@@ -61,3 +61,14 @@ timeout, appropriate queue indexes, persistent local storage, and one active
 application process. Readiness verifies the database settings it can observe;
 deployment configuration enforces persistent storage and the single-process
 constraint.
+
+Messaging Migration 04 implements the outbound half of this decision. Twilio
+Message creation is Provider Acceptance when a valid MessageSid is returned,
+regardless of whether the initial Twilio status is `queued` or `accepted`.
+Only documented HTTP 429 non-processing is automatically retryable. Only an
+allowlist of documented terminal Twilio Message errors becomes `failed`;
+undocumented 4xx, ambiguous transport, 5xx, and malformed-response outcomes
+become `unknown`. A minimal
+durable inbox closes the race in which an authenticated status callback arrives
+before local MessageSid correlation. Inbound processing and early acknowledgement
+remain deferred to Migration 05.

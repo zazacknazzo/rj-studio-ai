@@ -1,24 +1,31 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–03.
+The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–04.
 ADR 0006 approves the remaining messaging migration. Twilio remains the current
 development adapter; Meta WhatsApp Cloud API is the production target.
 
 ## Implemented runtime
 
+Delivery mode is an explicit process-level setting. `legacy` remains the safe
+default and preserves the existing synchronous TwiML path. `proactive` keeps AI
+processing synchronous for now, but separates customer delivery:
+
 ```text
-Twilio webhook
+Twilio inbound webhook
   → start one 10-second webhook deadline
   → Twilio authentication and canonical InboundMessage
   → persist inbound and acquire the oldest eligible generation claim
   → bounded Conversation Context + approved Salon Knowledge
   → deterministic or Anthropic generation outside SQLite transaction
   → validated LLMDecision and privacy-safe metrics
-  → one transaction persists AIReply, legacy-unverified OutboundDelivery,
-    and completed processing
-  → render the AIReply as TwiML in the webhook response
-  → mark the delivery accepted_legacy after successful rendering
+  → one transaction persists AIReply, pending OutboundDelivery, and completed processing
+  → return acknowledgement-only TwiML
+
+SQLite → lifespan Outbound Executor → delivery claim → Twilio Message REST API
+  → MessageSid returned → Provider Acceptance persisted
+
+Twilio status callback → signature validation → monotonic sent/delivered/read/failed
 ```
 
 The current webhook can wait for a predecessor and return retryable HTTP 503.
@@ -26,9 +33,9 @@ Provider retry or the manual recovery command is needed to reactivate stored
 work. Manual recovery cannot proactively deliver the reply it creates. These
 behaviors remain true until the remaining messaging migration phases are implemented.
 
-The SQLite model also contains one Outbound Delivery per AI Reply and minimal
-Delivery Attempt evidence. Proactive generation completion can atomically
-create a `pending` delivery. The active TwiML path instead records
+The SQLite model contains one Outbound Delivery per AI Reply and minimal
+Delivery Attempt evidence. Proactive generation completion atomically creates
+a `pending` delivery. The legacy TwiML path instead records
 `accepted_legacy` only after successful rendering; failed rendering remains
 `unknown` for a safe retry. Historical replies without evidence are also
 `unknown` and never become eligible for automatic send.
@@ -50,10 +57,11 @@ Messaging Migration 01 separates the seams while keeping the synchronous path:
 - `DeterministicFakeOutboundSender` records calls and consumes explicit
   accepted, retryable, permanent, or unknown outcomes.
 
-The outbound sender is dormant in runtime composition. A deterministic
-`OutboundDeliveryRunner.run_once()` can claim one due delivery and exercise the
-fake sender, but no loop or production sender is started. The FastAPI webhook
-continues to call the legacy renderer; empty acknowledgement is not active yet.
+`TwilioOutboundSender` maps canonical outbound content to the Twilio Message
+resource. A lifespan executor polls SQLite with configurable bounded
+concurrency and an optional in-memory wake-up. Status callbacks use the same
+Twilio signature validation boundary and retain unmatched canonical status
+evidence until MessageSid correlation becomes available.
 
 Delivery claims use a durable owner token, 30-second lease, attempt count, and
 stale-owner checks. A stale `sending` claim becomes `unknown`; it is never
@@ -217,8 +225,8 @@ distributed workers, and horizontal scaling remain out of scope.
 | `deadline.py` | Processing budget; ingress and outbound receive distinct deadlines |
 | `conversation_context.py` | Bounded context filtered by delivery visibility |
 | `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
-| `persistence.py` | Durable inbound, processing claims, implemented outbox/claims and ordering; status merge remains targeted |
-| `delivery.py` | Implemented deterministic one-attempt delivery runner; no automatic loop |
+| `persistence.py` | Durable inbound, processing claims, outbox/claims, monotonic status merge, early-status inbox, ordering, and redacted inspection |
+| `delivery.py` | Deterministic runner plus lifespan-managed durable outbound polling |
 | `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |
 | `providers/base.py` | Implemented inbound, acknowledgement, legacy renderer, and dormant outbound sender contracts |
 | `providers/fake.py` | Deterministic outbound contract fake; never selected by production configuration |
@@ -233,7 +241,7 @@ or multi-tenant infrastructure.
 1. **Implemented:** separate provider inbound acknowledgement and outbound sender contracts with a deterministic fake; retain current external behavior.
 2. **Implemented:** enforce SQLite durability prerequisites and readiness gates.
 3. **Implemented:** add legacy-safe Outbound Delivery schema, transactional outbox, and provider-neutral deterministic runner seam.
-4. Add proactive Twilio REST delivery, delivery claims, and status callbacks with a safe legacy/proactive cutover.
+4. **Implemented:** add proactive Twilio REST delivery, delivery claims, status callbacks, and safe legacy/proactive cutover.
 5. Move processing to durable polling, acknowledge after ingress commit, remove predecessor HTTP 503, and separate deadlines.
 6. Add the Meta Cloud API production adapter and channel-policy seam.
 

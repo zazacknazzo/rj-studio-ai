@@ -150,14 +150,83 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         "generation_metrics",
         "outbound_deliveries",
         "delivery_attempts",
+        "pending_delivery_statuses",
     }.issubset(tables)
-    assert versions == [("0007_durable_outbox",)]
+    assert versions == [("0008_twilio_delivery_status",)]
     with sqlite3.connect(database_path) as connection:
         indexes = {row[1] for row in connection.execute("PRAGMA index_list(messages)")}
     assert "ix_messages_conversation_created" in indexes
     assert "ix_messages_conversation_direction_id" in indexes
     assert manager.is_current()
     _assert_migration_connection_durability(manager)
+
+
+def test_twilio_status_inbox_migration_preserves_existing_outbox(tmp_path: Path) -> None:
+    database_path = tmp_path / "status-inbox-upgrade.db"
+    manager = MigrationManager(database_path)
+    original_upgrade = command.upgrade
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            command,
+            "upgrade",
+            lambda config, _: original_upgrade(config, "0007_durable_outbox"),
+        )
+        manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO conversations (
+                id, provider, customer_address, created_at, updated_at
+            ) VALUES (1, 'twilio', 'customer', '2026-09-23', '2026-09-23')
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                recipient_address, direction, body, created_at, in_reply_to_message_id
+            ) VALUES (?, 1, 'twilio', ?, 'studio', ?, ?, '2026-09-23', ?)
+            """,
+            [
+                (1, "SM-existing-inbound", "inbound", "inbound", None),
+                (2, None, "outbound", "reply", 1),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO outbound_deliveries (
+                outbound_message_id, provider, provider_channel_id, recipient_address,
+                state, attempt_count, next_attempt_at, created_at, updated_at
+            ) VALUES (
+                2, 'twilio', 'studio', 'customer', 'pending', 0,
+                '2026-09-23', '2026-09-23', '2026-09-23'
+            )
+            """
+        )
+
+    manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        delivery = connection.execute(
+            "SELECT outbound_message_id, state FROM outbound_deliveries"
+        ).fetchall()
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(pending_delivery_statuses)")
+        }
+        version = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+
+    assert delivery == [(2, "pending")]
+    assert {
+        "provider",
+        "provider_message_id",
+        "status",
+        "safe_error_code",
+        "received_at",
+        "updated_at",
+    }.issubset(columns)
+    assert version == "0008_twilio_delivery_status"
 
 
 def test_migration_connection_really_enforces_foreign_keys(

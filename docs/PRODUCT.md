@@ -27,6 +27,12 @@ V7 is a separate product phase that may turn the proven system into a multi-busi
 
 ## Current product
 
-The implemented baseline through V1 Ticket 08 handles Twilio Sandbox callbacks, durable generation claims, Claude or deterministic generation, approved Salon Knowledge, bounded Conversation Context, structured Intent decisions, and Lívia persona rules. Delivery remains the synchronous TwiML path from V0.1; the approved migration to durable ingress, processing, and outbound delivery is not implemented yet. CRM behavior, scheduling, multimodal processing, and advertising integration remain absent.
+The implemented baseline through V1 Ticket 08 and Messaging Migration 04 handles
+Twilio Sandbox callbacks, durable generation claims and outbound delivery,
+proactive Twilio REST submission, delivery-status callbacks, Claude or
+deterministic generation, approved Salon Knowledge, bounded Conversation
+Context, structured Intent decisions, and Lívia persona rules. Inbound AI
+processing remains synchronous until Messaging Migration 05. CRM behavior,
+scheduling, multimodal processing, and advertising integration remain absent.
 
 Version scope and status live in `ROADMAP.md`. Detailed acceptance criteria live only in `specs/`.

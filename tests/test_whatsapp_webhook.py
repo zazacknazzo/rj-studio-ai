@@ -1,14 +1,20 @@
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 
 import pytest
 from fastapi.testclient import TestClient
 from twilio.request_validator import RequestValidator
 
 from rj_studio_ai.config import Settings
-from rj_studio_ai.domain import AIReply, InboundMessageReceived, ProviderWebhookEventBatch
+from rj_studio_ai.domain import (
+    AIReply,
+    InboundMessage,
+    InboundMessageReceived,
+    OutboundMessage,
+    ProviderWebhookEventBatch,
+)
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.base import (
@@ -57,6 +63,22 @@ class FailFirstReplyProvider(WhatsAppProvider):
 
     def is_configured(self) -> bool:
         return True
+
+
+class SignallingFakeOutboundSender(DeterministicFakeOutboundSender):
+    def __init__(self, *, outcomes: list[ProviderAcceptance]) -> None:
+        super().__init__(outcomes=outcomes)
+        self.called = Event()
+
+    def send(
+        self,
+        message: OutboundMessage,
+        *,
+        timeout_seconds: float,
+    ) -> ProviderAcceptance:
+        result = super().send(message, timeout_seconds=timeout_seconds)
+        self.called.set()
+        return result
 
 
 def test_customer_message_is_replied_to_and_persisted(tmp_path: Path) -> None:
@@ -134,6 +156,91 @@ def test_current_webhook_keeps_twiml_and_does_not_call_outbound_sender(tmp_path:
     assert response.status_code == 200
     assert "<Message>Resposta síncrona</Message>" in response.text
     assert sender.calls == []
+
+
+def test_proactive_mode_acknowledges_without_twiml_and_sends_one_rest_message(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "proactive.db"
+    sender = SignallingFakeOutboundSender(
+        outcomes=[ProviderAcceptance(provider_message_id="PM-proactive")]
+    )
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            automatic_reply="Resposta proativa",
+            twilio_validate_signature=False,
+            delivery_mode="proactive",
+            outbound_poll_interval_seconds=0.05,
+        ),
+        outbound_sender=sender,
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/webhooks/twilio", data=TWILIO_FORM)
+        assert sender.called.wait(timeout=2.0)
+        replay = client.post("/webhooks/twilio", data=TWILIO_FORM)
+
+    assert response.status_code == replay.status_code == 200
+    assert "<Message>" not in response.text
+    assert "Resposta proativa" not in response.text
+    assert "<Message>" not in replay.text
+    assert len(sender.calls) == 1
+    assert sender.calls[0][0].sender_address == TWILIO_FORM["To"]
+    assert sender.calls[0][0].recipient_address == TWILIO_FORM["From"]
+    assert sender.calls[0][0].body == "Resposta proativa"
+    store = SqliteConversationStore(database_path)
+    generation = store.get_generation(
+        provider="twilio",
+        provider_message_id=TWILIO_FORM["MessageSid"],
+    )
+    assert generation is not None
+    delivery = store.get_delivery_for_inbound(generation.inbound_message_id)
+    assert delivery is not None
+    assert delivery.state is DeliveryState.ACCEPTED
+    assert delivery.provider_message_id == "PM-proactive"
+
+
+def test_legacy_rollback_cannot_render_a_reply_already_sent_proactively(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "mode-cutover.db"
+    sender = SignallingFakeOutboundSender(
+        outcomes=[ProviderAcceptance(provider_message_id="PM-cutover")]
+    )
+    proactive_app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            automatic_reply="Uma única resposta",
+            twilio_validate_signature=False,
+            delivery_mode="proactive",
+            outbound_poll_interval_seconds=0.05,
+        ),
+        outbound_sender=sender,
+    )
+    with TestClient(proactive_app) as client:
+        proactive = client.post("/webhooks/twilio", data=TWILIO_FORM)
+        assert sender.called.wait(timeout=2.0)
+
+    legacy_app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            automatic_reply="Uma única resposta",
+            twilio_validate_signature=False,
+            delivery_mode="legacy",
+        )
+    )
+    with TestClient(legacy_app) as client:
+        legacy_retry = client.post("/webhooks/twilio", data=TWILIO_FORM)
+
+    assert proactive.status_code == 200
+    assert "<Message>" not in proactive.text
+    assert legacy_retry.status_code == 200
+    assert "Uma única resposta" not in legacy_retry.text
+    assert len(sender.calls) == 1
 
 
 def test_retried_twilio_message_replays_persisted_reply_after_restart(
@@ -473,8 +580,91 @@ def test_ready_endpoint_reports_usable_local_instance(tmp_path: Path) -> None:
             "sqlite_synchronous": "ok",
             "sqlite_foreign_keys": "ok",
             "sqlite_busy_timeout": "ok",
+            "delivery_mode": "ok",
         },
     }
+
+
+def test_proactive_readiness_requires_live_outbound_executor(tmp_path: Path) -> None:
+    sender = SignallingFakeOutboundSender(outcomes=[])
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=tmp_path / "proactive-readiness.db",
+            twilio_validate_signature=False,
+            delivery_mode="proactive",
+        ),
+        outbound_sender=sender,
+    )
+
+    with TestClient(app) as client:
+        ready = client.get("/ready")
+        app.state.outbound_executor.stop()
+        stopped = client.get("/ready")
+
+    assert ready.status_code == 200
+    assert ready.json()["checks"]["outbound_executor"] == "ok"
+    assert stopped.status_code == 503
+    assert stopped.json()["checks"]["outbound_executor"] == "failed"
+
+
+def test_proactive_readiness_rejects_missing_twilio_rest_configuration(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=tmp_path / "missing-outbound-config.db",
+            twilio_validate_signature=False,
+            delivery_mode="proactive",
+        )
+    )
+
+    with TestClient(app) as client:
+        ready = client.get("/ready")
+        webhook = client.post("/webhooks/twilio", data=TWILIO_FORM)
+
+    assert ready.status_code == 503
+    assert ready.json()["checks"]["configuration"] == "failed"
+    assert ready.json()["checks"]["outbound_executor"] == "failed"
+    assert webhook.status_code == 503
+
+
+def test_legacy_readiness_rejects_unresolved_proactive_delivery(tmp_path: Path) -> None:
+    database_path = tmp_path / "unsafe-rollback.db"
+    store = SqliteConversationStore(database_path)
+    store.initialize()
+    claim = store.claim_generation(
+        InboundMessage(
+            provider="twilio",
+            provider_message_id="SM-unsafe-rollback",
+            customer_address="customer",
+            recipient_address="studio",
+            body="Mensagem sintética",
+        )
+    )
+    assert claim.owner_token is not None
+    assert store.complete_generation(
+        inbound_message_id=claim.inbound_message_id,
+        owner_token=claim.owner_token,
+        reply_body="Resposta pendente",
+        delivery_state=DeliveryState.PENDING,
+    )
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            twilio_validate_signature=False,
+            delivery_mode="legacy",
+        ),
+        store=store,
+    )
+
+    with TestClient(app) as client:
+        ready = client.get("/ready")
+
+    assert ready.status_code == 503
+    assert ready.json()["checks"]["delivery_mode"] == "failed"
 
 
 def test_ready_endpoint_rejects_missing_provider_configuration(tmp_path: Path) -> None:
@@ -504,6 +694,7 @@ def test_ready_endpoint_rejects_missing_provider_configuration(tmp_path: Path) -
         "sqlite_synchronous": "ok",
         "sqlite_foreign_keys": "ok",
         "sqlite_busy_timeout": "ok",
+        "delivery_mode": "ok",
     }
 
 

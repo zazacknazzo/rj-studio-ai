@@ -82,6 +82,7 @@ def test_generation_completion_atomically_creates_pending_delivery(tmp_path: Pat
     assert delivery.owner_token is None
     assert delivery.next_attempt_at == NOW + timedelta(seconds=1)
     assert delivery.inbound_message_id == claim.inbound_message_id
+    assert not store.legacy_delivery_mode_is_safe()
 
 
 def test_generation_completion_defaults_to_unverified_legacy_delivery(tmp_path: Path) -> None:
@@ -668,9 +669,49 @@ def test_retryable_delivery_can_be_claimed_again_with_incremented_attempt(tmp_pa
 
     assert first is not None
     assert first.state is DeliveryState.RETRYABLE
+    assert first.next_attempt_at == NOW + timedelta(seconds=3)
     assert second is not None
     assert second.state is DeliveryState.ACCEPTED
     assert second.attempt_count == 2
+
+
+def test_retryable_delivery_uses_bounded_exponential_backoff(tmp_path: Path) -> None:
+    store = _store(tmp_path / "bounded-retry.db")
+    _pending_completion(store)
+    sender = DeterministicFakeOutboundSender(
+        outcomes=[
+            OutboundRetryableError("rate limited"),
+            OutboundRetryableError("rate limited"),
+            OutboundRetryableError("rate limited"),
+        ]
+    )
+    runner = OutboundDeliveryRunner(
+        store=store,
+        sender=sender,
+        timeout_seconds=1.0,
+        maximum_attempts=3,
+        retry_backoff_base_seconds=1.0,
+        retry_backoff_maximum_seconds=10.0,
+    )
+
+    first = runner.run_once(now=NOW + timedelta(seconds=2))
+    assert first is not None
+    assert first.state is DeliveryState.RETRYABLE
+    assert first.next_attempt_at == NOW + timedelta(seconds=3)
+    assert runner.run_once(now=NOW + timedelta(seconds=2, milliseconds=999)) is None
+
+    second = runner.run_once(now=NOW + timedelta(seconds=3))
+    assert second is not None
+    assert second.state is DeliveryState.RETRYABLE
+    assert second.next_attempt_at == NOW + timedelta(seconds=5)
+
+    exhausted = runner.run_once(now=NOW + timedelta(seconds=5))
+    assert exhausted is not None
+    assert exhausted.state is DeliveryState.FAILED
+    assert exhausted.safe_error_code == "provider_retry_exhausted"
+    assert exhausted.next_attempt_at is None
+    assert runner.run_once(now=NOW + timedelta(days=1)) is None
+    assert len(sender.calls) == 3
 
 
 def test_acceptance_then_local_failure_becomes_unknown_after_lease_expiry(

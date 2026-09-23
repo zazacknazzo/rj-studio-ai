@@ -86,6 +86,7 @@ class MigrationManager:
             "generation_metrics",
             "outbound_deliveries",
             "delivery_attempts",
+            "pending_delivery_statuses",
         }.issubset(inspector.get_table_names()):
             return False
         required_columns = {
@@ -159,6 +160,15 @@ class MigrationManager:
                 "safe_error_code",
                 "started_at",
                 "completed_at",
+            },
+            "pending_delivery_statuses": {
+                "id",
+                "provider",
+                "provider_message_id",
+                "status",
+                "safe_error_code",
+                "received_at",
+                "updated_at",
             },
         }
         for table, required in required_columns.items():
@@ -245,6 +255,13 @@ class MigrationManager:
         attempt_checks = {
             item["name"] for item in inspector.get_check_constraints("delivery_attempts")
         }
+        pending_status_uniques = {
+            frozenset(item["column_names"])
+            for item in inspector.get_unique_constraints("pending_delivery_statuses")
+        }
+        pending_status_checks = {
+            item["name"] for item in inspector.get_check_constraints("pending_delivery_statuses")
+        }
         processing_triggers = {
             str(row[0])
             for row in connection.exec_driver_sql(
@@ -316,6 +333,11 @@ class MigrationManager:
                 "ck_delivery_attempts_completion_shape",
                 "ck_delivery_attempts_evidence_shape",
             }.issubset(attempt_checks)
+            and frozenset({"provider", "provider_message_id"}) in pending_status_uniques
+            and {
+                "ck_pending_delivery_status_state",
+                "ck_pending_delivery_status_error_shape",
+            }.issubset(pending_status_checks)
             and {
                 "outbound_delivery_requires_ai_reply_insert",
                 "outbound_delivery_requires_ai_reply_update",

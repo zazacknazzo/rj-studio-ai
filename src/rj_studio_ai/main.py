@@ -11,7 +11,8 @@ from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
 from rj_studio_ai.conversation_context import ConversationContextBuilder, ConversationContextLimits
 from rj_studio_ai.deadline import ExecutionDeadline
-from rj_studio_ai.domain import InboundMessageReceived
+from rj_studio_ai.delivery import OutboundDeliveryExecutor
+from rj_studio_ai.domain import DeliveryStatusReceived, InboundMessageReceived
 from rj_studio_ai.generation import ReplyGenerator
 from rj_studio_ai.persistence import (
     DeliveryState,
@@ -25,7 +26,7 @@ from rj_studio_ai.providers.base import (
     ProviderWebhookRequest,
     WhatsAppProvider,
 )
-from rj_studio_ai.providers.twilio import TwilioProvider
+from rj_studio_ai.providers.twilio import TwilioOutboundSender, TwilioProvider
 from rj_studio_ai.runtime import generator_from_settings
 from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
 
@@ -46,6 +47,7 @@ def create_app(
         auth_token=resolved_settings.twilio_auth_token,
         validate_signature=resolved_settings.twilio_validate_signature,
         public_webhook_url=resolved_settings.twilio_public_webhook_url,
+        public_status_callback_url=resolved_settings.twilio_status_callback_url,
     )
     resolved_store = store or SqliteConversationStore(
         resolved_settings.database_path,
@@ -55,6 +57,27 @@ def create_app(
     resolved_salon_knowledge = salon_knowledge or SalonKnowledgeRepository(
         resolved_settings.salon_knowledge_path
     )
+    resolved_outbound_sender = outbound_sender
+    outbound_executor: OutboundDeliveryExecutor | None = None
+    if resolved_settings.delivery_mode == "proactive":
+        resolved_outbound_sender = resolved_outbound_sender or TwilioOutboundSender(
+            account_sid=resolved_settings.twilio_account_sid,
+            api_key_sid=resolved_settings.twilio_api_key_sid,
+            api_key_secret=resolved_settings.twilio_api_key_secret,
+            status_callback_url=resolved_settings.twilio_status_callback_url or "",
+        )
+        outbound_executor = OutboundDeliveryExecutor(
+            store=resolved_store,
+            sender=resolved_outbound_sender,
+            request_timeout_seconds=resolved_settings.outbound_request_timeout_seconds,
+            poll_interval_seconds=resolved_settings.outbound_poll_interval_seconds,
+            concurrency=resolved_settings.outbound_concurrency,
+            maximum_attempts=resolved_settings.outbound_maximum_attempts,
+            retry_backoff_base_seconds=(resolved_settings.outbound_retry_backoff_base_seconds),
+            retry_backoff_maximum_seconds=(
+                resolved_settings.outbound_retry_backoff_maximum_seconds
+            ),
+        )
     responder = MessageResponder(
         store=resolved_store,
         generator=resolved_generator,
@@ -70,17 +93,37 @@ def create_app(
             ),
         ),
         sleeper=sleeper,
-        completion_delivery_state=DeliveryState.UNKNOWN,
+        completion_delivery_state=(
+            DeliveryState.PENDING
+            if resolved_settings.delivery_mode == "proactive"
+            else DeliveryState.UNKNOWN
+        ),
     )
+
+    def outbound_configuration_is_valid() -> bool:
+        if resolved_settings.delivery_mode == "legacy":
+            return True
+        if resolved_outbound_sender is None:
+            return False
+        if isinstance(resolved_outbound_sender, TwilioOutboundSender):
+            return resolved_outbound_sender.is_configured()
+        return True
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         resolved_store.initialize()
         resolved_salon_knowledge.load()
-        yield
+        if outbound_executor is not None and configuration_is_valid():
+            outbound_executor.start()
+        try:
+            yield
+        finally:
+            if outbound_executor is not None:
+                outbound_executor.stop()
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
-    app.state.outbound_sender = outbound_sender
+    app.state.outbound_sender = resolved_outbound_sender
+    app.state.outbound_executor = outbound_executor
 
     def configuration_is_valid() -> bool:
         return (
@@ -88,6 +131,7 @@ def create_app(
             and bool(resolved_settings.automatic_reply.strip())
             and resolved_generator.is_configured()
             and resolved_salon_knowledge.is_loaded()
+            and outbound_configuration_is_valid()
         )
 
     @app.get("/health")
@@ -96,6 +140,13 @@ def create_app(
 
     @app.get("/ready")
     def readiness() -> JSONResponse:
+        try:
+            delivery_mode_safe = (
+                resolved_settings.delivery_mode == "proactive"
+                or resolved_store.legacy_delivery_mode_is_safe()
+            )
+        except PersistenceUnavailable:
+            delivery_mode_safe = False
         checks = {
             "configuration": ("ok" if configuration_is_valid() else "failed"),
             "sqlite_single_process": (
@@ -105,6 +156,11 @@ def create_app(
             "migrations": ("ok" if resolved_store.migrations_are_current() else "failed"),
             **resolved_store.sqlite_durability_checks(),
         }
+        checks["delivery_mode"] = "ok" if delivery_mode_safe else "failed"
+        if resolved_settings.delivery_mode == "proactive":
+            checks["outbound_executor"] = (
+                "ok" if outbound_executor is not None and outbound_executor.is_alive() else "failed"
+            )
         is_ready = all(result == "ok" for result in checks.values())
         return JSONResponse(
             status_code=(status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE),
@@ -135,9 +191,37 @@ def create_app(
                 raise InvalidWebhookPayload("Unsupported provider webhook event")
             event = batch.events[0]
             reply = await run_in_threadpool(responder.handle, event, deadline=deadline)
-            if deadline.is_expired():
-                raise RetryableWebhookError("Webhook deadline expired before provider rendering")
-            provider_response = resolved_provider.render_legacy_reply(reply)
+            legacy_customer_reply = False
+            if resolved_settings.delivery_mode == "proactive":
+                if deadline.is_expired():
+                    raise RetryableWebhookError(
+                        "Webhook deadline expired before provider acknowledgement"
+                    )
+                provider_response = resolved_provider.acknowledge()
+                if outbound_executor is None:
+                    raise RetryableWebhookError("Outbound Delivery Executor is unavailable")
+                outbound_executor.wake()
+            else:
+                if deadline.is_expired():
+                    raise RetryableWebhookError(
+                        "Webhook deadline expired before provider rendering"
+                    )
+                delivery = resolved_store.get_delivery_for_provider_inbound(
+                    provider=event.provider,
+                    provider_message_id=event.provider_message_id,
+                    lock_timeout=deadline.remaining_budget(),
+                )
+                if delivery is None:
+                    raise RetryableWebhookError("Outbound Delivery is unavailable")
+                legacy_customer_reply = delivery.state is DeliveryState.ACCEPTED_LEGACY or (
+                    delivery.state is DeliveryState.UNKNOWN
+                    and delivery.safe_error_code == "legacy_unverified"
+                )
+                provider_response = (
+                    resolved_provider.render_legacy_reply(reply)
+                    if legacy_customer_reply
+                    else resolved_provider.acknowledge()
+                )
             response = Response(
                 content=provider_response.body,
                 media_type=provider_response.media_type,
@@ -145,7 +229,7 @@ def create_app(
             )
             if deadline.is_expired():
                 raise RetryableWebhookError("Webhook deadline expired during provider rendering")
-            if (
+            if legacy_customer_reply and (
                 200 <= provider_response.status_code < 300
                 and not resolved_store.confirm_legacy_delivery(
                     provider=event.provider,
@@ -176,6 +260,44 @@ def create_app(
             ) from error
 
         return response
+
+    @app.post("/webhooks/twilio/status")
+    async def twilio_status_callback(request: Request) -> Response:
+        webhook = ProviderWebhookRequest(
+            method=request.method,
+            url=str(request.url),
+            headers=dict(request.headers),
+            query_string=request.scope.get("query_string", b""),
+            content_type=request.headers.get("content-type", ""),
+            body=await request.body(),
+        )
+        try:
+            batch = resolved_provider.receive(webhook)
+            if any(not isinstance(event, DeliveryStatusReceived) for event in batch.events):
+                raise InvalidWebhookPayload("Unsupported provider status event")
+            for event in batch.events:
+                resolved_store.record_delivery_status(event)
+            acknowledgement = resolved_provider.acknowledge()
+        except InvalidWebhookSignature as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(error),
+            ) from error
+        except InvalidWebhookPayload as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        except PersistenceUnavailable as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Delivery status persistence is unavailable",
+            ) from error
+        return Response(
+            content=acknowledgement.body,
+            media_type=acknowledgement.media_type,
+            status_code=acknowledgement.status_code,
+        )
 
     return app
 

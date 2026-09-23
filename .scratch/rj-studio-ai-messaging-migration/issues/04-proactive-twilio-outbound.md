@@ -1,6 +1,6 @@
 # 04: Deliver proactively through Twilio REST
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Objective
 

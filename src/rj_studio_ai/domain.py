@@ -31,6 +31,7 @@ class DeliveryStatusReceived:
     provider: str
     provider_message_id: str
     status: DeliveryStatus
+    safe_error_code: str | None = None
 
 
 ProviderWebhookEvent: TypeAlias = InboundMessageReceived | DeliveryStatusReceived
@@ -47,6 +48,7 @@ class ProviderWebhookEventBatch:
 class OutboundMessage:
     """Provider-neutral customer-directed content awaiting submission."""
 
+    sender_address: str
     recipient_address: str
     body: str
 
