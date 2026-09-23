@@ -56,7 +56,10 @@ def main(
     args = _parser().parse_args(argv)
     settings = Settings()
     database_path = args.database_path or settings.database_path
-    store = SqliteConversationStore(database_path)
+    store = SqliteConversationStore(
+        database_path,
+        busy_timeout_seconds=settings.sqlite_busy_timeout_seconds,
+    )
     store.initialize()
 
     if args.command == "migrate":

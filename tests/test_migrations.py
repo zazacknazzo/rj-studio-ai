@@ -1,7 +1,9 @@
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
+from alembic import command
 from sqlalchemy.exc import SQLAlchemyError
 
 from rj_studio_ai.migrations import MigrationManager
@@ -118,6 +120,14 @@ def _create_v01_database(database_path: Path) -> None:
         connection.executescript(V01_SCHEMA_WITH_DATA)
 
 
+def _assert_migration_connection_durability(manager: MigrationManager) -> None:
+    state = manager.connection_durability_state()
+    assert state.journal_mode == "wal"
+    assert state.synchronous == 2
+    assert state.foreign_keys == 1
+    assert state.busy_timeout_ms == 5_000
+
+
 def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) -> None:
     database_path = tmp_path / "fresh.db"
     manager = MigrationManager(database_path)
@@ -144,6 +154,36 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         indexes = {row[1] for row in connection.execute("PRAGMA index_list(messages)")}
     assert "ix_messages_conversation_created" in indexes
     assert manager.is_current()
+    _assert_migration_connection_durability(manager)
+
+
+def test_migration_connection_really_enforces_foreign_keys(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "migration-foreign-keys.db"
+    manager = MigrationManager(database_path)
+    manager.upgrade()
+    original_upgrade = command.upgrade
+
+    def inspect_migration_connection(config: Any, revision: str) -> None:
+        sqlalchemy_connection = config.attributes["connection"]
+        raw_connection = sqlalchemy_connection.connection.driver_connection
+        assert raw_connection.execute("PRAGMA foreign_keys").fetchone() == (1,)
+        with pytest.raises(sqlite3.IntegrityError):
+            raw_connection.execute(
+                """
+                INSERT INTO messages (
+                    conversation_id, provider, provider_message_id,
+                    direction, body, created_at
+                ) VALUES (999999, 'twilio', 'SM-orphan', 'inbound', 'body', '2026-09-22')
+                """
+            )
+        original_upgrade(config, revision)
+
+    monkeypatch.setattr(command, "upgrade", inspect_migration_connection)
+
+    manager.upgrade()
 
 
 def test_current_schema_requires_generation_lifecycle_triggers(tmp_path: Path) -> None:
@@ -187,6 +227,7 @@ def test_v01_database_is_upgraded_with_completed_reply_lifecycle(tmp_path: Path)
         (12, "outbound", "Resposta existente", 11, ""),
     ]
     assert processing == [(11, "completed", None, None, 0)]
+    _assert_migration_connection_durability(manager)
 
 
 def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None:
@@ -213,6 +254,7 @@ def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None
         (11, "inbound", "Mensagem existente", None, ""),
         (12, "outbound", "Resposta existente", 11, ""),
     ]
+    _assert_migration_connection_durability(manager)
 
 
 def test_failed_legacy_schema_migration_is_not_marked_current(tmp_path: Path) -> None:

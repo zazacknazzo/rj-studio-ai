@@ -1,6 +1,6 @@
 # 02: Enforce the SQLite durability gate
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Objective
 

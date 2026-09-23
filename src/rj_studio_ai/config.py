@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     app_name: str = "RJ Studio AI"
     database_path: Path = Path("data/rj_studio_ai.db")
+    sqlite_busy_timeout_seconds: float = Field(default=5.0, gt=0)
+    app_process_count: int = Field(default=1, ge=1)
     salon_knowledge_path: Path = Path("knowledge/rj_studio.yaml")
     automatic_reply: str = "Olá! Recebemos sua mensagem e retornaremos em breve. ✨"
     message_retention_days: int = Field(default=90, ge=1)

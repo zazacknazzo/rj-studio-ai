@@ -1,4 +1,6 @@
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -8,6 +10,16 @@ from uuid import uuid4
 from rj_studio_ai.domain import InboundMessage, MessageRecord
 from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.migrations import MigrationManager
+from rj_studio_ai.sqlite import (
+    DEFAULT_BUSY_TIMEOUT_SECONDS,
+    SqliteDurabilityError,
+    SqliteDurabilityState,
+    apply_sqlite_connection_pragmas,
+    busy_timeout_milliseconds,
+    configure_sqlite_connection,
+    inspect_sqlite_connection,
+    require_file_backed_database,
+)
 
 
 class PersistenceUnavailable(RuntimeError):
@@ -95,15 +107,62 @@ class SqliteConversationStore:
     _generation_lease = timedelta(seconds=30)
     _maximum_generation_attempts = 2
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        busy_timeout_seconds: float = DEFAULT_BUSY_TIMEOUT_SECONDS,
+    ) -> None:
         self._database_path = database_path
-        self._migrations = MigrationManager(database_path)
+        self._busy_timeout_seconds = busy_timeout_seconds
+        self._migrations = MigrationManager(
+            database_path,
+            busy_timeout_seconds=busy_timeout_seconds,
+        )
 
     def initialize(self) -> None:
         self._migrations.upgrade()
 
     def migrations_are_current(self) -> bool:
         return self._migrations.is_current()
+
+    def sqlite_durability_checks(self) -> dict[str, str]:
+        checks = {
+            "sqlite_storage": "failed",
+            "sqlite_journal_mode": "failed",
+            "sqlite_synchronous": "failed",
+            "sqlite_foreign_keys": "failed",
+            "sqlite_busy_timeout": "failed",
+        }
+        try:
+            require_file_backed_database(self._database_path)
+            if not self._database_path.is_file():
+                return checks
+            checks["sqlite_storage"] = "ok"
+            with closing(
+                sqlite3.connect(
+                    self._database_path,
+                    timeout=self._busy_timeout_seconds,
+                )
+            ) as connection:
+                apply_sqlite_connection_pragmas(
+                    connection,
+                    busy_timeout_seconds=self._busy_timeout_seconds,
+                    set_journal_mode=False,
+                )
+                state = inspect_sqlite_connection(connection)
+            checks.update(
+                state.readiness_checks(
+                    expected_busy_timeout_ms=busy_timeout_milliseconds(self._busy_timeout_seconds)
+                )
+            )
+        except (sqlite3.Error, SqliteDurabilityError):
+            return checks
+        return checks
+
+    def connection_durability_state(self) -> SqliteDurabilityState:
+        with self._connect() as connection:
+            return inspect_sqlite_connection(connection)
 
     def is_writable(self) -> bool:
         if not self._database_path.is_file():
@@ -113,7 +172,7 @@ class SqliteConversationStore:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute("UPDATE alembic_version SET version_num = version_num")
                 connection.rollback()
-        except sqlite3.Error:
+        except (sqlite3.Error, SqliteDurabilityError):
             return False
         return True
 
@@ -1071,8 +1130,29 @@ class SqliteConversationStore:
             has_omitted_messages=has_omitted_messages,
         )
 
-    def _connect(self, timeout_seconds: float | None = None) -> sqlite3.Connection:
-        timeout = 5.0 if timeout_seconds is None else max(0.0, timeout_seconds)
+    @contextmanager
+    def _connect(
+        self,
+        timeout_seconds: float | None = None,
+    ) -> Iterator[sqlite3.Connection]:
+        require_file_backed_database(self._database_path)
+        timeout = (
+            self._busy_timeout_seconds
+            if timeout_seconds is None
+            else min(self._busy_timeout_seconds, max(0.0, timeout_seconds))
+        )
         connection = sqlite3.connect(self._database_path, timeout=timeout)
-        connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        try:
+            configure_sqlite_connection(
+                connection,
+                busy_timeout_seconds=timeout,
+                set_journal_mode=False,
+            )
+        except Exception:
+            connection.close()
+            raise
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()

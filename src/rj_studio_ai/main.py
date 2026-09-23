@@ -43,7 +43,10 @@ def create_app(
         validate_signature=resolved_settings.twilio_validate_signature,
         public_webhook_url=resolved_settings.twilio_public_webhook_url,
     )
-    resolved_store = store or SqliteConversationStore(resolved_settings.database_path)
+    resolved_store = store or SqliteConversationStore(
+        resolved_settings.database_path,
+        busy_timeout_seconds=resolved_settings.sqlite_busy_timeout_seconds,
+    )
     resolved_generator = generator or generator_from_settings(resolved_settings)
     resolved_salon_knowledge = salon_knowledge or SalonKnowledgeRepository(
         resolved_settings.salon_knowledge_path
@@ -90,8 +93,12 @@ def create_app(
     def readiness() -> JSONResponse:
         checks = {
             "configuration": ("ok" if configuration_is_valid() else "failed"),
+            "sqlite_single_process": (
+                "ok" if resolved_settings.app_process_count == 1 else "failed"
+            ),
             "database": "ok" if resolved_store.is_writable() else "failed",
             "migrations": ("ok" if resolved_store.migrations_are_current() else "failed"),
+            **resolved_store.sqlite_durability_checks(),
         }
         is_ready = all(result == "ok" for result in checks.values())
         return JSONResponse(

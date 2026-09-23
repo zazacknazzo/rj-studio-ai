@@ -440,8 +440,14 @@ def test_ready_endpoint_reports_usable_local_instance(tmp_path: Path) -> None:
         "status": "ready",
         "checks": {
             "configuration": "ok",
+            "sqlite_single_process": "ok",
             "database": "ok",
             "migrations": "ok",
+            "sqlite_storage": "ok",
+            "sqlite_journal_mode": "ok",
+            "sqlite_synchronous": "ok",
+            "sqlite_foreign_keys": "ok",
+            "sqlite_busy_timeout": "ok",
         },
     }
 
@@ -465,8 +471,14 @@ def test_ready_endpoint_rejects_missing_provider_configuration(tmp_path: Path) -
     assert ready_response.status_code == 503
     assert ready_response.json()["checks"] == {
         "configuration": "failed",
+        "sqlite_single_process": "ok",
         "database": "ok",
         "migrations": "ok",
+        "sqlite_storage": "ok",
+        "sqlite_journal_mode": "ok",
+        "sqlite_synchronous": "ok",
+        "sqlite_foreign_keys": "ok",
+        "sqlite_busy_timeout": "ok",
     }
 
 

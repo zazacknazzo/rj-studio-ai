@@ -29,7 +29,7 @@ uvicorn rj_studio_ai.main:app --reload --port 8000
 ```
 
 `/health` confirma que o processo está vivo. `/ready` confirma configuração,
-migrations e escrita no banco:
+migrations, escrita e os requisitos de durabilidade do SQLite:
 
 ```bash
 curl http://localhost:8000/health
@@ -38,6 +38,22 @@ curl http://localhost:8000/ready
 
 O startup também aplica migrations pendentes. Imports e criação de `app` não
 criam o banco.
+
+## Deploy com SQLite
+
+O deploy atual usa um único processo da aplicação e um arquivo SQLite em volume
+local persistente. Configure `DATABASE_PATH` para esse volume e mantenha
+`APP_PROCESS_COUNT=1`; o mesmo valor deve ser usado no supervisor e no número de
+workers do Uvicorn. `:memory:` é rejeitado. A aplicação não tenta inferir se o
+filesystem do host é efêmero: confirmar o volume persistente faz parte do deploy.
+
+Todas as conexões usam WAL, `synchronous=FULL`, foreign keys e um busy timeout
+uniforme. `SQLITE_BUSY_TIMEOUT_SECONDS` configura tanto o timeout da conexão
+quanto `PRAGMA busy_timeout`. Operações limitadas pelo deadline podem reduzir os
+dois valores para o tempo restante, sem aumentá-los além do valor configurado.
+
+Antes de disponibilizar a instância, confirme que `/ready` retorna `ready`. Não
+altere o journal mode enquanto o processo estiver ativo.
 
 ## Conectar ao Twilio Sandbox
 

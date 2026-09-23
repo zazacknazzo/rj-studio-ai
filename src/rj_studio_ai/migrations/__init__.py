@@ -1,4 +1,5 @@
 import sqlite3
+from functools import partial
 from pathlib import Path
 
 from alembic import command
@@ -11,33 +12,69 @@ from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import SQLAlchemyError
 
+from rj_studio_ai.sqlite import (
+    DEFAULT_BUSY_TIMEOUT_SECONDS,
+    SqliteDurabilityError,
+    SqliteDurabilityState,
+    configure_sqlite_connection,
+    inspect_sqlite_connection,
+    require_file_backed_database,
+)
+
 
 class MigrationManager:
     """Apply and inspect this package's Alembic migrations."""
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        busy_timeout_seconds: float = DEFAULT_BUSY_TIMEOUT_SECONDS,
+    ) -> None:
         self._database_path = database_path
+        self._busy_timeout_seconds = busy_timeout_seconds
         self._config = Config()
         self._config.set_main_option("script_location", str(Path(__file__).parent))
 
     def upgrade(self) -> None:
+        require_file_backed_database(self._database_path)
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._engine().connect() as connection:
-            self._config.attributes["connection"] = connection
-            command.upgrade(self._config, "head")
+        engine = self._engine(set_journal_mode=True)
+        try:
+            with engine.connect() as connection:
+                self._config.attributes["connection"] = connection
+                command.upgrade(self._config, "head")
+        finally:
+            self._config.attributes.pop("connection", None)
+            engine.dispose()
 
     def is_current(self) -> bool:
         if not self._database_path.is_file():
             return False
+        engine = self._engine(set_journal_mode=False)
         try:
-            with self._engine().connect() as connection:
+            with engine.connect() as connection:
                 current = MigrationContext.configure(connection).get_current_revision()
                 inspector = inspect(connection)
                 schema_matches = self._schema_matches(connection, inspector)
             expected = ScriptDirectory.from_config(self._config).get_current_head()
-        except SQLAlchemyError:
+        except (SQLAlchemyError, SqliteDurabilityError):
             return False
+        finally:
+            engine.dispose()
         return current == expected and schema_matches
+
+    def connection_durability_state(self) -> SqliteDurabilityState:
+        require_file_backed_database(self._database_path)
+        engine = self._engine(set_journal_mode=False)
+        try:
+            with engine.connect() as connection:
+                raw_connection = connection.connection.driver_connection
+                if not isinstance(raw_connection, sqlite3.Connection):
+                    raise SqliteDurabilityError("Migration connection is not SQLite")
+                return inspect_sqlite_connection(raw_connection)
+        finally:
+            engine.dispose()
 
     @staticmethod
     def _schema_matches(connection: Connection, inspector: Inspector) -> bool:
@@ -189,20 +226,39 @@ class MigrationManager:
             }.issubset(metric_checks)
         )
 
-    def _engine(self) -> Engine:
+    def _engine(self, *, set_journal_mode: bool) -> Engine:
         url = URL.create("sqlite+pysqlite", database=str(self._database_path.absolute()))
-        engine = create_engine(url)
-        event.listen(engine, "connect", _disable_legacy_transaction_control)
+        engine = create_engine(
+            url,
+            connect_args={"timeout": self._busy_timeout_seconds},
+        )
+        event.listen(
+            engine,
+            "connect",
+            partial(
+                _configure_migration_connection,
+                busy_timeout_seconds=self._busy_timeout_seconds,
+                set_journal_mode=set_journal_mode,
+            ),
+        )
         event.listen(engine, "begin", _begin_transaction)
         return engine
 
 
-def _disable_legacy_transaction_control(
+def _configure_migration_connection(
     connection: DBAPIConnection,
     _: object,
+    *,
+    busy_timeout_seconds: float,
+    set_journal_mode: bool,
 ) -> None:
     if isinstance(connection, sqlite3.Connection):
         connection.isolation_level = None
+        configure_sqlite_connection(
+            connection,
+            busy_timeout_seconds=busy_timeout_seconds,
+            set_journal_mode=set_journal_mode,
+        )
 
 
 def _begin_transaction(connection: Connection) -> None:
