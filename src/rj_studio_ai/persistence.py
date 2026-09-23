@@ -1994,6 +1994,35 @@ class SqliteConversationStore:
                     OR
                     (state = 'processing' AND lease_expires_at <= ?)
                   )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM messages AS current_message
+                      JOIN messages AS predecessor
+                        ON predecessor.conversation_id = current_message.conversation_id
+                       AND predecessor.direction = 'inbound'
+                       AND predecessor.id < current_message.id
+                      JOIN message_processing AS predecessor_processing
+                        ON predecessor_processing.inbound_message_id = predecessor.id
+                      LEFT JOIN messages AS predecessor_reply
+                        ON predecessor_reply.in_reply_to_message_id = predecessor.id
+                       AND predecessor_reply.direction = 'outbound'
+                      LEFT JOIN outbound_deliveries AS predecessor_delivery
+                        ON predecessor_delivery.outbound_message_id = predecessor_reply.id
+                      WHERE current_message.id = message_processing.inbound_message_id
+                        AND (
+                            predecessor_processing.state NOT IN ('completed', 'suppressed')
+                            OR (
+                                predecessor_processing.state = 'completed'
+                                AND (
+                                    predecessor_delivery.id IS NULL
+                                    OR predecessor_delivery.state NOT IN (
+                                        'accepted', 'sent', 'delivered', 'read',
+                                        'accepted_legacy', 'cancelled'
+                                    )
+                                )
+                            )
+                        )
+                  )
                 """,
                 (
                     owner_token,
@@ -2004,7 +2033,12 @@ class SqliteConversationStore:
                 ),
             ).rowcount
             if updated != 1:
-                raise sqlite3.IntegrityError("Exhausted generation state changed during claim")
+                return self._generation_result(
+                    connection,
+                    inbound_message_id,
+                    acquired=False,
+                    blocked_by_predecessor=True,
+                )
             return self._generation_result(
                 connection,
                 inbound_message_id,

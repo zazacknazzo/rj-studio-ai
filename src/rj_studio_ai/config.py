@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     outbound_maximum_attempts: int = Field(default=3, ge=1, le=10)
     outbound_retry_backoff_base_seconds: float = Field(default=1.0, gt=0)
     outbound_retry_backoff_maximum_seconds: float = Field(default=30.0, gt=0)
+    processing_poll_interval_seconds: float = Field(default=0.25, gt=0)
+    processing_concurrency: int = Field(default=2, ge=1, le=4)
     llm_provider: Literal["fixed", "anthropic"] = "fixed"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"

@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import replace
-from time import sleep
+from time import monotonic, sleep
 
 from rj_studio_ai.conversation_context import (
     ConversationContext,
@@ -106,16 +106,39 @@ class MessageResponder:
             if lifecycle.acquired:
                 return self._generate_and_complete(canonical_message, lifecycle, deadline)
 
-            if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
-                continue
-
             if lifecycle.blocked_by_predecessor or lifecycle.state is GenerationState.PROCESSING:
                 if ordering_wait_started_with is None:
                     ordering_wait_started_with = deadline.remaining_budget()
                 self._wait_once(deadline, ordering_wait_started_with)
                 continue
 
+            if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
+                continue
+
             raise RetryableWebhookError("Generation claim is not currently available")
+
+    def process_persisted(
+        self,
+        message: InboundMessage,
+        *,
+        monotonic_clock: Callable[[], float] = monotonic,
+    ) -> AIReply | None:
+        """Process already-durable work once, without waiting for a predecessor."""
+        lifecycle = self._store.claim_generation(message)
+        if lifecycle.state in {GenerationState.COMPLETED, GenerationState.SUPPRESSED}:
+            return None
+        if lifecycle.blocked_by_predecessor:
+            return None
+        canonical_message = replace(message, body=lifecycle.inbound_body)
+        deadline = ExecutionDeadline.start(clock=monotonic_clock)
+        if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
+            lifecycle = self._claim_exhausted_finalization(lifecycle, deadline)
+            if lifecycle.acquired:
+                return self._complete_owned_reply(lifecycle, self._safe_failure_reply, deadline)
+            return None
+        if not lifecycle.acquired:
+            return None
+        return self._generate_and_complete(canonical_message, lifecycle, deadline)
 
     def _generate_and_complete(
         self,

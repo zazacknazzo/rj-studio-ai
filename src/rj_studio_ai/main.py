@@ -19,6 +19,7 @@ from rj_studio_ai.persistence import (
     PersistenceUnavailable,
     SqliteConversationStore,
 )
+from rj_studio_ai.processing import ProcessingExecutor, ProcessingRunner
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
@@ -39,6 +40,7 @@ def create_app(
     generator: ReplyGenerator | None = None,
     salon_knowledge: SalonKnowledgeRepository | None = None,
     outbound_sender: OutboundMessageSender | None = None,
+    processing_executor: ProcessingExecutor | None = None,
     monotonic_clock: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
 ) -> FastAPI:
@@ -99,6 +101,18 @@ def create_app(
             else DeliveryState.UNKNOWN
         ),
     )
+    resolved_processing_executor = processing_executor
+    if resolved_settings.delivery_mode == "proactive" and resolved_processing_executor is None:
+        resolved_processing_executor = ProcessingExecutor(
+            runner=ProcessingRunner(
+                store=resolved_store,
+                responder=responder,
+                monotonic_clock=monotonic_clock,
+            ),
+            poll_interval_seconds=resolved_settings.processing_poll_interval_seconds,
+            concurrency=resolved_settings.processing_concurrency,
+            on_completion=outbound_executor.wake if outbound_executor is not None else None,
+        )
 
     def outbound_configuration_is_valid() -> bool:
         if resolved_settings.delivery_mode == "legacy":
@@ -113,17 +127,29 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         resolved_store.initialize()
         resolved_salon_knowledge.load()
-        if outbound_executor is not None and configuration_is_valid():
+        executor_configuration_ready = (
+            configuration_is_valid()
+            and resolved_settings.app_process_count == 1
+            and resolved_store.migrations_are_current()
+            and resolved_store.is_writable()
+            and all(value == "ok" for value in resolved_store.sqlite_durability_checks().values())
+        )
+        if outbound_executor is not None and executor_configuration_ready:
             outbound_executor.start()
+        if resolved_processing_executor is not None and executor_configuration_ready:
+            resolved_processing_executor.start()
         try:
             yield
         finally:
+            if resolved_processing_executor is not None:
+                resolved_processing_executor.stop()
             if outbound_executor is not None:
                 outbound_executor.stop()
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     app.state.outbound_sender = resolved_outbound_sender
     app.state.outbound_executor = outbound_executor
+    app.state.processing_executor = resolved_processing_executor
 
     def configuration_is_valid() -> bool:
         return (
@@ -161,6 +187,12 @@ def create_app(
             checks["outbound_executor"] = (
                 "ok" if outbound_executor is not None and outbound_executor.is_alive() else "failed"
             )
+            checks["processing_executor"] = (
+                "ok"
+                if resolved_processing_executor is not None
+                and resolved_processing_executor.is_alive()
+                else "failed"
+            )
         is_ready = all(result == "ok" for result in checks.values())
         return JSONResponse(
             status_code=(status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE),
@@ -187,21 +219,36 @@ def create_app(
 
         try:
             batch = resolved_provider.receive(webhook)
-            if len(batch.events) != 1 or not isinstance(batch.events[0], InboundMessageReceived):
-                raise InvalidWebhookPayload("Unsupported provider webhook event")
-            event = batch.events[0]
-            reply = await run_in_threadpool(responder.handle, event, deadline=deadline)
-            legacy_customer_reply = False
             if resolved_settings.delivery_mode == "proactive":
+                local_readiness = await run_in_threadpool(readiness)
+                if local_readiness.status_code != status.HTTP_200_OK:
+                    raise RetryableWebhookError("Proactive ingress is not locally ready")
+                if not batch.events or any(
+                    not isinstance(event, InboundMessageReceived) for event in batch.events
+                ):
+                    raise InvalidWebhookPayload("Unsupported provider webhook event")
+                for event in batch.events:
+                    await run_in_threadpool(
+                        resolved_store.admit_generation,
+                        event,
+                        lock_timeout=deadline.remaining_budget(),
+                    )
                 if deadline.is_expired():
                     raise RetryableWebhookError(
                         "Webhook deadline expired before provider acknowledgement"
                     )
                 provider_response = resolved_provider.acknowledge()
-                if outbound_executor is None:
-                    raise RetryableWebhookError("Outbound Delivery Executor is unavailable")
-                outbound_executor.wake()
+                if resolved_processing_executor is None:
+                    raise RetryableWebhookError("Processing Executor is unavailable")
+                resolved_processing_executor.wake()
+                legacy_customer_reply = False
             else:
+                if len(batch.events) != 1 or not isinstance(
+                    batch.events[0], InboundMessageReceived
+                ):
+                    raise InvalidWebhookPayload("Unsupported provider webhook event")
+                event = batch.events[0]
+                reply = await run_in_threadpool(responder.handle, event, deadline=deadline)
                 if deadline.is_expired():
                     raise RetryableWebhookError(
                         "Webhook deadline expired before provider rendering"

@@ -1,26 +1,28 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–04.
+The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–05.
 ADR 0006 approves the remaining messaging migration. Twilio remains the current
 development adapter; Meta WhatsApp Cloud API is the production target.
 
 ## Implemented runtime
 
 Delivery mode is an explicit process-level setting. `legacy` remains the safe
-default and preserves the existing synchronous TwiML path. `proactive` keeps AI
-processing synchronous for now, but separates customer delivery:
+default and preserves the synchronous TwiML path for controlled rollback.
+`proactive` separates ingress, AI processing, and customer delivery:
 
 ```text
 Twilio inbound webhook
-  → start one 10-second webhook deadline
   → Twilio authentication and canonical InboundMessage
-  → persist inbound and acquire the oldest eligible generation claim
+  → persist inbound and message_processing work in one short transaction
+  → return acknowledgement-only TwiML after commit
+
+SQLite → lifespan Processing Executor → ordered generation claim
+  → start one 10-second processing budget
   → bounded Conversation Context + approved Salon Knowledge
   → deterministic or Anthropic generation outside SQLite transaction
   → validated LLMDecision and privacy-safe metrics
   → one transaction persists AIReply, pending OutboundDelivery, and completed processing
-  → return acknowledgement-only TwiML
 
 SQLite → lifespan Outbound Executor → delivery claim → Twilio Message REST API
   → MessageSid returned → Provider Acceptance persisted
@@ -28,10 +30,14 @@ SQLite → lifespan Outbound Executor → delivery claim → Twilio Message REST
 Twilio status callback → signature validation → monotonic sent/delivered/read/failed
 ```
 
-The current webhook can wait for a predecessor and return retryable HTTP 503.
-Provider retry or the manual recovery command is needed to reactivate stored
-work. Manual recovery cannot proactively deliver the reply it creates. These
-behaviors remain true until the remaining messaging migration phases are implemented.
+The proactive webhook never waits for a predecessor or runs the LLM. Durable
+polling finds retryable and expired processing claims after restart. A later
+Message waits in SQLite until its predecessor reaches Provider Acceptance or
+another explicitly approved terminal outcome. Manual recovery remains an
+operator fallback and uses the current delivery mode.
+Because polling begins after the durable commit, processing may start before
+the provider receives the HTTP acknowledgement. The webhook does not call or
+wait for the LLM; no delivery relies on the acknowledgement being observed.
 
 The SQLite model contains one Outbound Delivery per AI Reply and minimal
 Delivery Attempt evidence. Proactive generation completion atomically creates
@@ -58,8 +64,9 @@ Messaging Migration 01 separates the seams while keeping the synchronous path:
   accepted, retryable, permanent, or unknown outcomes.
 
 `TwilioOutboundSender` maps canonical outbound content to the Twilio Message
-resource. A lifespan executor polls SQLite with configurable bounded
-concurrency and an optional in-memory wake-up. Status callbacks use the same
+resource. A lifespan Outbound Executor polls SQLite with configurable bounded
+concurrency and an optional in-memory wake-up. The Processing Executor follows
+the same polling principle with a separate claim and deadline. Status callbacks use the same
 Twilio signature validation boundary and retain unmatched canonical status
 evidence until MessageSid correlation becomes available.
 
@@ -222,7 +229,8 @@ distributed workers, and horizontal scaling remain out of scope.
 | --- | --- |
 | `main.py` | Composition root, ingress routes, lifespan-managed executors, health/readiness |
 | `application.py` | Processing coordination outside the webhook request |
-| `deadline.py` | Processing budget; ingress and outbound receive distinct deadlines |
+| `deadline.py` | Separate monotonic budgets for ingress and processing; outbound uses its own request timeout |
+| `processing.py` | Deterministic one-step runner and lifespan Processing Executor |
 | `conversation_context.py` | Bounded context filtered by delivery visibility |
 | `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
 | `persistence.py` | Durable inbound, processing claims, outbox/claims, monotonic status merge, early-status inbox, ordering, and redacted inspection |
@@ -242,7 +250,7 @@ or multi-tenant infrastructure.
 2. **Implemented:** enforce SQLite durability prerequisites and readiness gates.
 3. **Implemented:** add legacy-safe Outbound Delivery schema, transactional outbox, and provider-neutral deterministic runner seam.
 4. **Implemented:** add proactive Twilio REST delivery, delivery claims, status callbacks, and safe legacy/proactive cutover.
-5. Move processing to durable polling, acknowledge after ingress commit, remove predecessor HTTP 503, and separate deadlines.
+5. **Implemented:** move processing to durable polling, acknowledge after ingress commit, remove predecessor HTTP 503, and separate deadlines. Real Twilio smoke remains an operational gate.
 6. Add the Meta Cloud API production adapter and channel-policy seam.
 
 ADR 0006 owns this target. ADRs 0001, 0003, and 0005 retain their original

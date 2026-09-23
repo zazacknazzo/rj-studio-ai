@@ -1,6 +1,6 @@
 # 05: Move AI processing behind durable ingress
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Objective
 

@@ -70,5 +70,8 @@ allowlist of documented terminal Twilio Message errors becomes `failed`;
 undocumented 4xx, ambiguous transport, 5xx, and malformed-response outcomes
 become `unknown`. A minimal
 durable inbox closes the race in which an authenticated status callback arrives
-before local MessageSid correlation. Inbound processing and early acknowledgement
-remain deferred to Migration 05.
+before local MessageSid correlation. Messaging Migration 05 moves AI work to
+durable SQLite polling and acknowledges inbound callbacks after persistence.
+The Processing Executor reuses ADR 0005 claims and starts its own 10-second
+attempt-sequence budget after acquisition. The legacy TwiML mode remains a
+controlled rollback path; proactive ingress is gated by local readiness.

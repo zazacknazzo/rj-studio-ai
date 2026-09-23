@@ -6,7 +6,7 @@ from typing import ClassVar
 
 @dataclass(frozen=True, slots=True)
 class ExecutionDeadline:
-    """One monotonic budget shared by every stage of a webhook execution."""
+    """One monotonic budget for a processing attempt or legacy webhook execution."""
 
     DEFAULT_TOTAL_SECONDS: ClassVar[float] = 10.0
     DEFAULT_FINALIZATION_MARGIN_SECONDS: ClassVar[float] = 1.0

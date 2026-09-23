@@ -5,8 +5,9 @@ proativa:
 
 ```text
 legacy:    Twilio webhook → aplicação → SQLite → resposta em TwiML
-proactive: Twilio webhook → aplicação → SQLite outbox → Twilio REST
-                                      ↖ status callbacks
+proactive: Twilio webhook → SQLite ingress → ACK
+           SQLite → Processing Executor → AI Reply + outbox → Twilio REST
+                                                        ↖ status callbacks
 ```
 
 O núcleo usa uma interface `WhatsAppProvider`. A integração atual é Twilio; uma futura integração com Meta Cloud API pode entrar como outro provider sem alterar o fluxo de Conversations.
@@ -34,7 +35,7 @@ uvicorn rj_studio_ai.main:app --reload --port 8000
 
 `/health` confirma que o processo está vivo. `/ready` confirma configuração,
 migrations, modo de delivery, escrita, durabilidade do SQLite e, em modo
-proativo, que o Outbound Executor está vivo:
+proativo, que os Processing e Outbound Executors estão vivos:
 
 ```bash
 curl http://localhost:8000/health
@@ -80,8 +81,9 @@ da Anthropic antes de publicar. O backend salva a Conversation no arquivo indica
 URL como callback de status público; o sender também a envia ao criar cada
 Message resource. O Auth Token continua separado para validar webhooks.
 
-No modo proativo, o inbound ainda espera a geração da AI Reply nesta versão,
-mas devolve TwiML vazio. A Outbound Delivery `pending` é enviada pelo executor
+No modo proativo, o inbound persiste a Message e responde com TwiML vazio após
+o commit. O Processing Executor gera a AI Reply fora do webhook. A Outbound
+Delivery `pending` é enviada pelo executor
 REST exatamente por um caminho customer-visible. HTTP 429 usa retry limitado e
 backoff persistido; somente códigos Twilio explicitamente conhecidos como
 permanentes encerram a delivery. Timeout, perda de conexão, 5xx, 4xx sem
@@ -103,6 +105,8 @@ O smoke test real está em
 [`docs/runbooks/twilio-sandbox-smoke-test.md`](docs/runbooks/twilio-sandbox-smoke-test.md).
 O gate do modo proativo está em
 [`docs/runbooks/twilio-proactive-smoke-test.md`](docs/runbooks/twilio-proactive-smoke-test.md).
+O gate de early ACK e processamento assíncrono está em
+[`docs/runbooks/twilio-async-smoke-test.md`](docs/runbooks/twilio-async-smoke-test.md).
 
 ## Retenção e exclusão
 
@@ -132,11 +136,11 @@ somente metadados operacionais mínimos, sem endereços ou conteúdo.
 - `providers/twilio.py`: parsing, assinatura, TwiML e sender REST da Twilio.
 - `persistence.py`: Conversations, Messages, outbox, claims e manutenção em SQLite.
 - `delivery.py`: runner determinístico e executor outbound baseado no SQLite.
+- `processing.py`: runner determinístico e executor de AI baseado no SQLite.
 - `migrations/`: migrations versionadas com Alembic.
 - `main.py`: composição FastAPI, ciclo de vida e endpoints HTTP.
 
-Early ACK, processing executor, CRM avançado, Trinks, Google Ads e Meta Cloud
-API permanecem fora desta migração.
+CRM avançado, Trinks, Google Ads e Meta Cloud API permanecem fora desta migração.
 
 ## Smoke test Anthropic manual
 

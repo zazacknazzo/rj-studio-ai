@@ -5,6 +5,7 @@ from pathlib import Path
 
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
+from rj_studio_ai.conversation_context import ConversationContextBuilder, ConversationContextLimits
 from rj_studio_ai.persistence import (
     DeliveryState,
     PersistenceUnavailable,
@@ -12,6 +13,7 @@ from rj_studio_ai.persistence import (
 )
 from rj_studio_ai.recovery import PendingGenerationRecovery, RecoveryNotAvailable
 from rj_studio_ai.runtime import generator_from_settings
+from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
 
 
 def _positive_integer(value: str) -> int:
@@ -113,13 +115,32 @@ def main(
         return 0
 
     if args.command in {"list-pending-generations", "recover-generation"}:
+        context_builder = None
+        if args.command == "recover-generation":
+            knowledge = SalonKnowledgeRepository(settings.salon_knowledge_path)
+            knowledge.load()
+            context_builder = ConversationContextBuilder(
+                store=store,
+                salon_knowledge=knowledge,
+                limits=ConversationContextLimits(
+                    maximum_prior_messages=settings.conversation_context_maximum_messages,
+                    maximum_age=timedelta(days=settings.conversation_context_maximum_age_days),
+                    history_token_budget=settings.conversation_context_history_token_budget,
+                    total_input_token_budget=settings.llm_input_token_budget,
+                ),
+            )
         recovery = PendingGenerationRecovery(
             store=store,
             responder=MessageResponder(
                 store=store,
                 generator=generator_from_settings(settings),
                 safe_failure_reply=settings.automatic_reply,
-                completion_delivery_state=DeliveryState.UNKNOWN,
+                context_builder=context_builder,
+                completion_delivery_state=(
+                    DeliveryState.PENDING
+                    if settings.delivery_mode == "proactive"
+                    else DeliveryState.UNKNOWN
+                ),
             ),
         )
 

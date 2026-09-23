@@ -159,6 +159,38 @@ def test_manual_recovery_uses_the_normal_claim_and_generation_flow(tmp_path: Pat
     assert delivery.safe_error_code == "legacy_unverified"
 
 
+def test_manual_recovery_in_proactive_mode_keeps_pending_outbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "proactive-manual-recovery.db"
+    store = _store(database_path)
+    admitted = store.admit_generation(_message("proactive-manual"))
+    monkeypatch.setattr(
+        "rj_studio_ai.maintenance.Settings",
+        lambda: Settings(
+            _env_file=None,
+            database_path=database_path,
+            delivery_mode="proactive",
+            salon_knowledge_path=Path("knowledge/rj_studio.yaml"),
+        ),
+    )
+
+    result = maintenance_main(
+        [
+            "--database-path",
+            str(database_path),
+            "recover-generation",
+            "--inbound-message-id",
+            str(admitted.inbound_message_id),
+        ]
+    )
+
+    assert result == 0
+    delivery = store.get_delivery_for_inbound(admitted.inbound_message_id)
+    assert delivery is not None
+    assert delivery.state is DeliveryState.PENDING
+
+
 def test_recovery_does_not_bypass_a_nonterminal_predecessor(tmp_path: Path) -> None:
     store = _store(tmp_path / "ordered-recovery.db")
     first = store.admit_generation(_message("first"))
