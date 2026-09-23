@@ -16,6 +16,7 @@ from rj_studio_ai.generation import (
     TransientGenerationError,
 )
 from rj_studio_ai.persistence import (
+    DeliveryState,
     GenerationClaimResult,
     GenerationState,
     SqliteConversationStore,
@@ -39,6 +40,7 @@ class MessageResponder:
         maximum_ordering_wait_seconds: float = 1.0,
         retry_backoff_seconds: float = 0.1,
         minimum_generation_budget_seconds: float = 0.1,
+        completion_delivery_state: DeliveryState = DeliveryState.UNKNOWN,
     ) -> None:
         if not safe_failure_reply.strip():
             raise ValueError("Safe failure reply must not be empty")
@@ -51,6 +53,13 @@ class MessageResponder:
         self._maximum_ordering_wait_seconds = maximum_ordering_wait_seconds
         self._retry_backoff_seconds = retry_backoff_seconds
         self._minimum_generation_budget_seconds = minimum_generation_budget_seconds
+        if completion_delivery_state not in {
+            DeliveryState.PENDING,
+            DeliveryState.UNKNOWN,
+            DeliveryState.ACCEPTED_LEGACY,
+        }:
+            raise ValueError("Invalid initial Outbound Delivery state")
+        self._completion_delivery_state = completion_delivery_state
 
     def handle(
         self,
@@ -259,6 +268,7 @@ class MessageResponder:
             inbound_message_id=claim.inbound_message_id,
             owner_token=claim.owner_token,
             reply_body=reply_body,
+            delivery_state=self._completion_delivery_state,
             lock_timeout=deadline.remaining_budget(),
         )
         if not completed:

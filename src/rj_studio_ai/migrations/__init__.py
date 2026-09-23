@@ -84,6 +84,8 @@ class MigrationManager:
             "messages",
             "message_processing",
             "generation_metrics",
+            "outbound_deliveries",
+            "delivery_attempts",
         }.issubset(inspector.get_table_names()):
             return False
         required_columns = {
@@ -129,6 +131,34 @@ class MigrationManager:
                 "outcome",
                 "error_code",
                 "created_at",
+            },
+            "outbound_deliveries": {
+                "id",
+                "outbound_message_id",
+                "provider",
+                "provider_channel_id",
+                "recipient_address",
+                "state",
+                "owner_token",
+                "lease_expires_at",
+                "attempt_count",
+                "next_attempt_at",
+                "provider_message_id",
+                "safe_error_code",
+                "accepted_at",
+                "created_at",
+                "updated_at",
+            },
+            "delivery_attempts": {
+                "id",
+                "outbound_delivery_id",
+                "attempt_number",
+                "owner_token",
+                "outcome",
+                "provider_message_id",
+                "safe_error_code",
+                "started_at",
+                "completed_at",
             },
         }
         for table, required in required_columns.items():
@@ -181,6 +211,40 @@ class MigrationManager:
         metric_checks = {
             item["name"] for item in inspector.get_check_constraints("generation_metrics")
         }
+        delivery_uniques = {
+            frozenset(item["column_names"])
+            for item in inspector.get_unique_constraints("outbound_deliveries")
+        }
+        delivery_indexes = {
+            item["name"]: (tuple(item["column_names"]), bool(item["unique"]))
+            for item in inspector.get_indexes("outbound_deliveries")
+        }
+        delivery_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("outbound_deliveries")
+        }
+        delivery_checks = {
+            item["name"] for item in inspector.get_check_constraints("outbound_deliveries")
+        }
+        attempt_uniques = {
+            frozenset(item["column_names"])
+            for item in inspector.get_unique_constraints("delivery_attempts")
+        }
+        attempt_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("delivery_attempts")
+        }
+        attempt_checks = {
+            item["name"] for item in inspector.get_check_constraints("delivery_attempts")
+        }
         processing_triggers = {
             str(row[0])
             for row in connection.exec_driver_sql(
@@ -193,6 +257,8 @@ class MigrationManager:
             and reply_indexes.get("uq_messages_in_reply_to") == (("in_reply_to_message_id",), True)
             and reply_indexes.get("ix_messages_conversation_created")
             == (("conversation_id", "created_at", "id"), False)
+            and reply_indexes.get("ix_messages_conversation_direction_id")
+            == (("conversation_id", "direction", "id"), False)
             and (("conversation_id",), "conversations", ("id",)) in message_foreign_keys
             and (("in_reply_to_message_id",), "messages", ("id",)) in message_foreign_keys
             and (("inbound_message_id",), "messages", ("id",)) in processing_foreign_keys
@@ -224,6 +290,47 @@ class MigrationManager:
                 "ck_generation_metrics_outcome",
                 "ck_generation_metrics_error_shape",
             }.issubset(metric_checks)
+            and frozenset({"outbound_message_id"}) in delivery_uniques
+            and delivery_indexes.get("uq_outbound_deliveries_provider_message")
+            == (("provider", "provider_message_id"), True)
+            and delivery_indexes.get("ix_outbound_deliveries_due")
+            == (("state", "next_attempt_at", "id"), False)
+            and delivery_indexes.get("ix_outbound_deliveries_stale")
+            == (("state", "lease_expires_at", "id"), False)
+            and (("outbound_message_id",), "messages", ("id",)) in delivery_foreign_keys
+            and {
+                "ck_outbound_deliveries_state",
+                "ck_outbound_deliveries_attempt_count",
+                "ck_outbound_deliveries_claim_shape",
+                "ck_outbound_deliveries_schedule_shape",
+                "ck_outbound_deliveries_provider_id_shape",
+                "ck_outbound_deliveries_acceptance_shape",
+                "ck_outbound_deliveries_error_shape",
+            }.issubset(delivery_checks)
+            and frozenset({"outbound_delivery_id", "attempt_number"}) in attempt_uniques
+            and (("outbound_delivery_id",), "outbound_deliveries", ("id",)) in attempt_foreign_keys
+            and {
+                "ck_delivery_attempts_attempt_number",
+                "ck_delivery_attempts_owner_token",
+                "ck_delivery_attempts_outcome",
+                "ck_delivery_attempts_completion_shape",
+                "ck_delivery_attempts_evidence_shape",
+            }.issubset(attempt_checks)
+            and {
+                "outbound_delivery_requires_ai_reply_insert",
+                "outbound_delivery_requires_ai_reply_update",
+                "outbound_delivery_protects_message_identity",
+                "completed_processing_requires_delivery_insert",
+                "completed_processing_requires_delivery_update",
+                "completed_processing_protects_delivery_delete",
+                "outbound_delivery_identity_is_immutable",
+                "outbound_delivery_acceptance_evidence_is_immutable",
+                "outbound_delivery_state_transition",
+                "delivery_attempt_requires_current_claim",
+                "delivery_attempt_finalization_requires_current_claim",
+                "delivery_attempt_identity_is_immutable",
+                "terminal_delivery_attempt_is_immutable",
+            }.issubset(processing_triggers)
         )
 
     def _engine(self, *, set_journal_mode: bool) -> Engine:

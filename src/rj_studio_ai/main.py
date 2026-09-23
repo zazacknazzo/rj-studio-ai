@@ -13,7 +13,11 @@ from rj_studio_ai.conversation_context import ConversationContextBuilder, Conver
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import InboundMessageReceived
 from rj_studio_ai.generation import ReplyGenerator
-from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
+from rj_studio_ai.persistence import (
+    DeliveryState,
+    PersistenceUnavailable,
+    SqliteConversationStore,
+)
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
@@ -66,6 +70,7 @@ def create_app(
             ),
         ),
         sleeper=sleeper,
+        completion_delivery_state=DeliveryState.UNKNOWN,
     )
 
     @asynccontextmanager
@@ -140,6 +145,15 @@ def create_app(
             )
             if deadline.is_expired():
                 raise RetryableWebhookError("Webhook deadline expired during provider rendering")
+            if (
+                200 <= provider_response.status_code < 300
+                and not resolved_store.confirm_legacy_delivery(
+                    provider=event.provider,
+                    inbound_provider_message_id=event.provider_message_id,
+                    lock_timeout=deadline.remaining_budget(),
+                )
+            ):
+                raise RetryableWebhookError("Legacy delivery could not be confirmed")
         except InvalidWebhookSignature as error:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

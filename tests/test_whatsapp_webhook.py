@@ -10,7 +10,7 @@ from twilio.request_validator import RequestValidator
 from rj_studio_ai.config import Settings
 from rj_studio_ai.domain import AIReply, InboundMessageReceived, ProviderWebhookEventBatch
 from rj_studio_ai.main import create_app
-from rj_studio_ai.persistence import SqliteConversationStore
+from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.base import (
     ProviderAcceptance,
     ProviderWebhookRequest,
@@ -87,6 +87,15 @@ def test_customer_message_is_replied_to_and_persisted(tmp_path: Path) -> None:
         ("inbound", "Olá, quero marcar um horário"),
         ("outbound", "Oi! Recebemos sua mensagem."),
     ]
+    store = SqliteConversationStore(database_path)
+    generation = store.get_generation(
+        provider="twilio",
+        provider_message_id=TWILIO_FORM["MessageSid"],
+    )
+    assert generation is not None
+    delivery = store.get_delivery_for_inbound(generation.inbound_message_id)
+    assert delivery is not None
+    assert delivery.state is DeliveryState.ACCEPTED_LEGACY
 
 
 def test_twilio_named_route_accepts_the_same_v0_callback(tmp_path: Path) -> None:
@@ -244,6 +253,17 @@ def test_reply_render_failure_is_recovered_by_retry(tmp_path: Path) -> None:
             content=b"provider-specific-payload",
             headers={"Content-Type": "application/octet-stream"},
         )
+        store = SqliteConversationStore(database_path)
+        generation = store.get_generation(
+            provider="test-provider",
+            provider_message_id="provider-message-1",
+        )
+        assert generation is not None
+        delivery_after_failure = store.get_delivery_for_inbound(generation.inbound_message_id)
+        assert delivery_after_failure is not None
+        assert delivery_after_failure.state is DeliveryState.UNKNOWN
+        assert delivery_after_failure.safe_error_code == "legacy_unverified"
+
         retry_response = client.post(
             "/webhooks/twilio",
             content=b"provider-specific-payload",
@@ -255,6 +275,11 @@ def test_reply_render_failure_is_recovered_by_retry(tmp_path: Path) -> None:
     assert retry_response.text == "Resposta durável"
     assert provider.received_request is not None
     assert provider.received_request.body == b"provider-specific-payload"
+    delivery_after_retry = SqliteConversationStore(database_path).get_delivery_for_inbound(
+        generation.inbound_message_id
+    )
+    assert delivery_after_retry is not None
+    assert delivery_after_retry.state is DeliveryState.ACCEPTED_LEGACY
     history = SqliteConversationStore(database_path).get_history(
         provider="test-provider",
         customer_address="customer-1",

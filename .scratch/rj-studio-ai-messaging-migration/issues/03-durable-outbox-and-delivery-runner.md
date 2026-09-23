@@ -1,6 +1,6 @@
 # 03: Add durable Outbound Delivery and transactional outbox
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Objective
 

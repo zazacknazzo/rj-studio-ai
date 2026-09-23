@@ -1,9 +1,10 @@
 # RJ Studio AI
 
-V0.1 do atendimento de WhatsApp do RJ Studio:
+Atendimento de WhatsApp do RJ Studio em migração controlada para entrega
+proativa:
 
 ```text
-Twilio Sandbox → adapter Twilio → aplicação → SQLite → resposta automática em TwiML
+Twilio Sandbox → adapter Twilio → aplicação → SQLite → resposta em TwiML
 ```
 
 O núcleo usa uma interface `WhatsAppProvider`. A integração atual é Twilio; uma futura integração com Meta Cloud API pode entrar como outro provider sem alterar o fluxo de Conversations.
@@ -69,6 +70,10 @@ por milhão de tokens. Os preços são deliberadamente configuração: consulte 
 da Anthropic antes de publicar. O backend salva a Conversation no arquivo indicado por
 `DATABASE_PATH`.
 
+O schema já persiste uma Outbound Delivery por AI Reply. O runtime continua no
+modo TwiML legado: ele não inicia runner automático nem chama sender REST. O
+runner determinístico e o fake existem apenas para testes da outbox nesta etapa.
+
 `/webhooks/whatsapp` continua disponível como alias compatível com a V0.
 
 Para chamadas manuais locais sem assinatura da Twilio, use `TWILIO_VALIDATE_SIGNATURE=false`. Reative a validação ao conectar o Sandbox.
@@ -94,21 +99,28 @@ rj-studio-maintenance purge-messages
 rj-studio-maintenance delete-conversation \
   --provider twilio \
   --customer-address 'whatsapp:+55...'
+rj-studio-maintenance reconcile-legacy-delivery \
+  --delivery-id 123 \
+  --resolution accepted_legacy
 ```
 
-`MESSAGE_RETENTION_DAYS` altera o prazo usado pelo comando. Os comandos
-informam somente contagens; não imprimem endereços nem conteúdo.
+`MESSAGE_RETENTION_DAYS` altera o prazo usado pelo comando. Deliveries pendentes
+ou ambíguas protegem seu vínculo contra purge; deliveries terminais elegíveis
+podem ser removidas com as Messages expiradas na mesma transação. Os comandos informam
+somente metadados operacionais mínimos, sem endereços ou conteúdo.
 
 ## Estrutura
 
 - `application.py`: fluxo canônico de uma Message recebida até a Automatic Reply.
 - `providers/base.py`: interface abstrata `WhatsAppProvider`.
 - `providers/twilio.py`: parsing, assinatura e TwiML da Twilio.
-- `persistence.py`: Conversations, Messages, idempotência e manutenção em SQLite.
+- `persistence.py`: Conversations, Messages, outbox, claims e manutenção em SQLite.
+- `delivery.py`: runner determinístico de uma tentativa usando o sender canônico.
 - `migrations/`: migrations versionadas com Alembic.
 - `main.py`: composição FastAPI, ciclo de vida e endpoints HTTP.
 
-IA, CRM avançado, Trinks, Google Ads e Meta Cloud API permanecem fora desta versão.
+CRM avançado, Trinks, Google Ads, sender REST real e Meta Cloud API permanecem
+fora desta migração.
 
 ## Smoke test Anthropic manual
 

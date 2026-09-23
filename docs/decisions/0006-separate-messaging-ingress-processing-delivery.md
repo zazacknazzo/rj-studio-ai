@@ -35,10 +35,12 @@ know whether the previous process crossed the external submission boundary.
 It becomes `unknown` instead of being reclaimed for automatic submission.
 
 Conversation processing advances only after the previous Outbound Delivery is
-provider-accepted or explicitly marked as its legacy equivalent. Acceptance
-means the provider returned a durable Message identifier; it is not evidence of
-`sent`, `delivered`, or `read`. A later asynchronous `failed` status does not
-rewrite history already used by processing, but blocks future automation in the
+provider-accepted, explicitly marked as its legacy equivalent, or explicitly
+cancelled by an operator. Cancellation resolves the ordering barrier without
+making the unsent AI Reply customer-visible. Acceptance means the provider
+returned a durable Message identifier; it is not evidence of `sent`,
+`delivered`, or `read`. A later asynchronous `failed` status does not rewrite
+history already used by processing, but blocks future automation in the
 Conversation pending policy or recovery.
 
 Conversation Context may include an AI Reply as assistant speech only after

@@ -41,6 +41,20 @@ class GenerationState(StrEnum):
     SUPPRESSED = "suppressed"
 
 
+class DeliveryState(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    RETRYABLE = "retryable"
+    UNKNOWN = "unknown"
+    ACCEPTED = "accepted"
+    SENT = "sent"
+    DELIVERED = "delivered"
+    READ = "read"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    ACCEPTED_LEGACY = "accepted_legacy"
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationClaimResult:
     acquired: bool
@@ -103,8 +117,40 @@ class PendingGeneration:
     blocked_by_predecessor: bool
 
 
+@dataclass(frozen=True, slots=True)
+class OutboundDeliveryRecord:
+    delivery_id: int
+    outbound_message_id: int
+    inbound_message_id: int
+    provider: str
+    provider_channel_id: str
+    recipient_address: str
+    body: str
+    state: DeliveryState
+    attempt_count: int
+    owner_token: str | None
+    lease_expires_at: datetime | None
+    next_attempt_at: datetime | None
+    provider_message_id: str | None
+    safe_error_code: str | None
+    accepted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryAttemptRecord:
+    attempt_number: int
+    outcome: str
+    provider_message_id: str | None
+    safe_error_code: str | None
+    started_at: datetime
+    completed_at: datetime | None
+
+
 class SqliteConversationStore:
     _generation_lease = timedelta(seconds=30)
+    _delivery_lease = timedelta(seconds=30)
     _maximum_generation_attempts = 2
 
     def __init__(
@@ -262,6 +308,7 @@ class SqliteConversationStore:
         inbound_message_id: int,
         owner_token: str,
         reply_body: str,
+        delivery_state: DeliveryState = DeliveryState.UNKNOWN,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -272,11 +319,410 @@ class SqliteConversationStore:
                 inbound_message_id=inbound_message_id,
                 owner_token=owner_token,
                 reply_body=reply_body,
+                delivery_state=delivery_state,
                 now=now,
                 lock_timeout=lock_timeout,
             )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
+
+    def get_delivery_for_inbound(
+        self,
+        inbound_message_id: int,
+    ) -> OutboundDeliveryRecord | None:
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    f"""
+                    {self._delivery_select()}
+                    WHERE outbound.in_reply_to_message_id = ?
+                    """,
+                    (inbound_message_id,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        return None if row is None else self._delivery_record(row)
+
+    def get_delivery(self, delivery_id: int) -> OutboundDeliveryRecord | None:
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    f"""
+                    {self._delivery_select()}
+                    WHERE delivery.id = ?
+                    """,
+                    (delivery_id,),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        return None if row is None else self._delivery_record(row)
+
+    def get_delivery_attempts(self, delivery_id: int) -> list[DeliveryAttemptRecord]:
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT
+                        attempt_number,
+                        outcome,
+                        provider_message_id,
+                        safe_error_code,
+                        started_at,
+                        completed_at
+                    FROM delivery_attempts
+                    WHERE outbound_delivery_id = ?
+                    ORDER BY attempt_number
+                    """,
+                    (delivery_id,),
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        return [
+            DeliveryAttemptRecord(
+                attempt_number=int(row[0]),
+                outcome=str(row[1]),
+                provider_message_id=None if row[2] is None else str(row[2]),
+                safe_error_code=None if row[3] is None else str(row[3]),
+                started_at=datetime.fromisoformat(str(row[4])),
+                completed_at=None if row[5] is None else datetime.fromisoformat(str(row[5])),
+            )
+            for row in rows
+        ]
+
+    def claim_next_delivery(
+        self,
+        *,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> OutboundDeliveryRecord | None:
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                timestamp = current_time.isoformat()
+                self._expire_ambiguous_delivery_claims(connection, timestamp)
+                candidate = connection.execute(
+                    """
+                    SELECT delivery.id
+                    FROM outbound_deliveries AS delivery
+                    JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+                    JOIN messages AS inbound ON inbound.id = outbound.in_reply_to_message_id
+                    JOIN message_processing AS processing
+                      ON processing.inbound_message_id = inbound.id
+                    WHERE delivery.state IN ('pending', 'retryable')
+                      AND delivery.next_attempt_at <= ?
+                      AND processing.state = 'completed'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM messages AS predecessor
+                          JOIN message_processing AS predecessor_processing
+                            ON predecessor_processing.inbound_message_id = predecessor.id
+                          LEFT JOIN messages AS predecessor_reply
+                            ON predecessor_reply.in_reply_to_message_id = predecessor.id
+                           AND predecessor_reply.direction = 'outbound'
+                          LEFT JOIN outbound_deliveries AS predecessor_delivery
+                            ON predecessor_delivery.outbound_message_id = predecessor_reply.id
+                          WHERE predecessor.conversation_id = inbound.conversation_id
+                            AND predecessor.direction = 'inbound'
+                            AND predecessor.id < inbound.id
+                            AND (
+                                predecessor_processing.state NOT IN ('completed', 'suppressed')
+                                OR (
+                                    predecessor_processing.state = 'completed'
+                                    AND (
+                                        predecessor_delivery.id IS NULL
+                                        OR predecessor_delivery.state NOT IN (
+                                            'accepted', 'sent', 'delivered', 'read',
+                                            'accepted_legacy', 'cancelled'
+                                        )
+                                    )
+                                )
+                            )
+                      )
+                    ORDER BY delivery.next_attempt_at, delivery.id
+                    LIMIT 1
+                    """,
+                    (timestamp,),
+                ).fetchone()
+                if candidate is None:
+                    return None
+                delivery_id = int(candidate[0])
+                owner_token = uuid4().hex
+                lease_expires_at = (current_time + self._delivery_lease).isoformat()
+                updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries
+                    SET state = 'sending',
+                        owner_token = ?,
+                        lease_expires_at = ?,
+                        attempt_count = attempt_count + 1,
+                        next_attempt_at = NULL,
+                        safe_error_code = NULL,
+                        updated_at = ?
+                    WHERE id = ?
+                      AND state IN ('pending', 'retryable')
+                      AND next_attempt_at <= ?
+                    """,
+                    (owner_token, lease_expires_at, timestamp, delivery_id, timestamp),
+                ).rowcount
+                if updated != 1:
+                    raise sqlite3.IntegrityError("Outbound Delivery claim changed")
+                attempt_number = int(
+                    connection.execute(
+                        "SELECT attempt_count FROM outbound_deliveries WHERE id = ?",
+                        (delivery_id,),
+                    ).fetchone()[0]
+                )
+                connection.execute(
+                    """
+                    INSERT INTO delivery_attempts (
+                        outbound_delivery_id,
+                        attempt_number,
+                        owner_token,
+                        outcome,
+                        started_at
+                    ) VALUES (?, ?, ?, 'started', ?)
+                    """,
+                    (delivery_id, attempt_number, owner_token, timestamp),
+                )
+                row = connection.execute(
+                    f"""
+                    {self._delivery_select()}
+                    WHERE delivery.id = ?
+                    """,
+                    (delivery_id,),
+                ).fetchone()
+                if row is None:
+                    raise sqlite3.IntegrityError("Claimed Outbound Delivery is unavailable")
+                return self._delivery_record(row)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+
+    def delivery_claim_is_current(
+        self,
+        *,
+        delivery_id: int,
+        owner_token: str,
+        now: datetime | None = None,
+    ) -> bool:
+        if not owner_token.strip():
+            return False
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1 FROM outbound_deliveries
+                        WHERE id = ?
+                          AND state = 'sending'
+                          AND owner_token = ?
+                          AND lease_expires_at > ?
+                    )
+                    """,
+                    (delivery_id, owner_token, self._utc_time(now).isoformat()),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        return bool(row[0])
+
+    def finalize_delivery(
+        self,
+        *,
+        delivery_id: int,
+        owner_token: str,
+        outcome: DeliveryState,
+        provider_message_id: str | None = None,
+        safe_error_code: str | None = None,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> bool:
+        if not owner_token.strip():
+            raise ValueError("Delivery owner token must not be empty")
+        if outcome not in {
+            DeliveryState.ACCEPTED,
+            DeliveryState.RETRYABLE,
+            DeliveryState.UNKNOWN,
+            DeliveryState.FAILED,
+        }:
+            raise ValueError("Invalid Outbound Delivery finalization outcome")
+        if outcome is DeliveryState.ACCEPTED:
+            if provider_message_id is None or not provider_message_id.strip():
+                raise ValueError("Provider Acceptance requires a provider Message ID")
+            safe_error_code = None
+        elif safe_error_code is None or not safe_error_code.strip():
+            raise ValueError("Delivery failure requires a safe error code")
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current_time = self._utc_time(now)
+                timestamp = current_time.isoformat()
+                current = connection.execute(
+                    """
+                    SELECT attempt_count
+                    FROM outbound_deliveries
+                    WHERE id = ?
+                      AND state = 'sending'
+                      AND owner_token = ?
+                      AND lease_expires_at > ?
+                    """,
+                    (delivery_id, owner_token, timestamp),
+                ).fetchone()
+                if current is None:
+                    return False
+                attempt_number = int(current[0])
+                next_attempt_at = timestamp if outcome is DeliveryState.RETRYABLE else None
+                accepted_at = timestamp if outcome is DeliveryState.ACCEPTED else None
+                updated = connection.execute(
+                    """
+                    UPDATE delivery_attempts
+                    SET outcome = ?,
+                        provider_message_id = ?,
+                        safe_error_code = ?,
+                        completed_at = ?
+                    WHERE outbound_delivery_id = ?
+                      AND attempt_number = ?
+                      AND owner_token = ?
+                      AND outcome = 'started'
+                    """,
+                    (
+                        outcome,
+                        provider_message_id,
+                        safe_error_code,
+                        timestamp,
+                        delivery_id,
+                        attempt_number,
+                        owner_token,
+                    ),
+                ).rowcount
+                if updated != 1:
+                    raise sqlite3.IntegrityError("Delivery Attempt ownership changed")
+                delivery_updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries
+                    SET state = ?,
+                        owner_token = NULL,
+                        lease_expires_at = NULL,
+                        next_attempt_at = ?,
+                        provider_message_id = ?,
+                        safe_error_code = ?,
+                        accepted_at = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                      AND state = 'sending'
+                      AND owner_token = ?
+                      AND lease_expires_at > ?
+                    """,
+                    (
+                        outcome,
+                        next_attempt_at,
+                        provider_message_id,
+                        safe_error_code,
+                        accepted_at,
+                        timestamp,
+                        delivery_id,
+                        owner_token,
+                        timestamp,
+                    ),
+                ).rowcount
+                if delivery_updated != 1:
+                    raise sqlite3.IntegrityError("Outbound Delivery ownership changed")
+            return True
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+
+    def reconcile_legacy_delivery(
+        self,
+        *,
+        delivery_id: int,
+        resolution: DeliveryState,
+        now: datetime | None = None,
+    ) -> bool:
+        if resolution not in {DeliveryState.ACCEPTED_LEGACY, DeliveryState.CANCELLED}:
+            raise ValueError("Legacy reconciliation must accept or cancel the delivery")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                accepted_at = timestamp if resolution is DeliveryState.ACCEPTED_LEGACY else None
+                safe_error_code = (
+                    None if resolution is DeliveryState.ACCEPTED_LEGACY else "legacy_cancelled"
+                )
+                updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries
+                    SET state = ?,
+                        safe_error_code = ?,
+                        accepted_at = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                      AND state = 'unknown'
+                      AND safe_error_code = 'legacy_unverified'
+                      AND attempt_count = 0
+                      AND owner_token IS NULL
+                      AND lease_expires_at IS NULL
+                    """,
+                    (
+                        resolution,
+                        safe_error_code,
+                        accepted_at,
+                        timestamp,
+                        delivery_id,
+                    ),
+                ).rowcount
+            return updated == 1
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+
+    def confirm_legacy_delivery(
+        self,
+        *,
+        provider: str,
+        inbound_provider_message_id: str,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> bool:
+        """Record that the synchronous legacy reply was rendered successfully."""
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT delivery.id, delivery.state
+                    FROM outbound_deliveries AS delivery
+                    JOIN messages AS outbound
+                      ON outbound.id = delivery.outbound_message_id
+                    JOIN messages AS inbound
+                      ON inbound.id = outbound.in_reply_to_message_id
+                    WHERE inbound.provider = ?
+                      AND inbound.provider_message_id = ?
+                      AND inbound.direction = 'inbound'
+                    """,
+                    (provider, inbound_provider_message_id),
+                ).fetchone()
+                if row is None:
+                    return False
+                if str(row[1]) == DeliveryState.ACCEPTED_LEGACY:
+                    return True
+                timestamp = self._utc_time(now).isoformat()
+                updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries
+                    SET state = 'accepted_legacy',
+                        safe_error_code = NULL,
+                        accepted_at = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                      AND state = 'unknown'
+                      AND safe_error_code = 'legacy_unverified'
+                      AND attempt_count = 0
+                      AND owner_token IS NULL
+                      AND lease_expires_at IS NULL
+                    """,
+                    (timestamp, timestamp, int(row[0])),
+                ).rowcount
+                return updated == 1
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
 
     def claim_exhausted_finalization(
         self,
@@ -378,10 +824,27 @@ class SqliteConversationStore:
                             FROM messages AS predecessor
                             JOIN message_processing AS predecessor_processing
                               ON predecessor_processing.inbound_message_id = predecessor.id
+                            LEFT JOIN messages AS predecessor_reply
+                              ON predecessor_reply.in_reply_to_message_id = predecessor.id
+                             AND predecessor_reply.direction = 'outbound'
+                            LEFT JOIN outbound_deliveries AS predecessor_delivery
+                              ON predecessor_delivery.outbound_message_id = predecessor_reply.id
                             WHERE predecessor.conversation_id = inbound.conversation_id
                               AND predecessor.direction = 'inbound'
                               AND predecessor.id < inbound.id
-                              AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                              AND (
+                                  predecessor_processing.state NOT IN ('completed', 'suppressed')
+                                  OR (
+                                      predecessor_processing.state = 'completed'
+                                      AND (
+                                          predecessor_delivery.id IS NULL
+                                          OR predecessor_delivery.state NOT IN (
+                                              'accepted', 'sent', 'delivered', 'read',
+                                              'accepted_legacy', 'cancelled'
+                                          )
+                                      )
+                                  )
+                              )
                         ) AS blocked_by_predecessor
                     FROM message_processing AS processing
                     JOIN messages AS inbound ON inbound.id = processing.inbound_message_id
@@ -436,10 +899,27 @@ class SqliteConversationStore:
                             FROM messages AS predecessor
                             JOIN message_processing AS predecessor_processing
                               ON predecessor_processing.inbound_message_id = predecessor.id
+                            LEFT JOIN messages AS predecessor_reply
+                              ON predecessor_reply.in_reply_to_message_id = predecessor.id
+                             AND predecessor_reply.direction = 'outbound'
+                            LEFT JOIN outbound_deliveries AS predecessor_delivery
+                              ON predecessor_delivery.outbound_message_id = predecessor_reply.id
                             WHERE predecessor.conversation_id = inbound.conversation_id
                               AND predecessor.direction = 'inbound'
                               AND predecessor.id < inbound.id
-                              AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                              AND (
+                                  predecessor_processing.state NOT IN ('completed', 'suppressed')
+                                  OR (
+                                      predecessor_processing.state = 'completed'
+                                      AND (
+                                          predecessor_delivery.id IS NULL
+                                          OR predecessor_delivery.state NOT IN (
+                                              'accepted', 'sent', 'delivered', 'read',
+                                              'accepted_legacy', 'cancelled'
+                                          )
+                                      )
+                                  )
+                              )
                         ) AS blocked_by_predecessor
                     FROM messages AS inbound
                     JOIN conversations AS conversation ON conversation.id = inbound.conversation_id
@@ -558,6 +1038,10 @@ class SqliteConversationStore:
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                self._delete_terminal_delivery_lifecycle_before_cutoff(
+                    connection,
+                    cutoff_text,
+                )
                 messages_deleted = connection.execute(
                     "DELETE FROM messages WHERE created_at < ?",
                     (cutoff_text,),
@@ -597,11 +1081,53 @@ class SqliteConversationStore:
                 if row is None:
                     return ConversationDeletionResult(0, 0)
                 conversation_id = int(row[0])
+                nonterminal_delivery = connection.execute(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM outbound_deliveries AS delivery
+                        JOIN messages AS outbound
+                          ON outbound.id = delivery.outbound_message_id
+                        WHERE outbound.conversation_id = ?
+                          AND delivery.state NOT IN (
+                              'accepted', 'sent', 'delivered', 'read',
+                              'failed', 'cancelled', 'accepted_legacy'
+                          )
+                    )
+                    """,
+                    (conversation_id,),
+                ).fetchone()
+                if bool(nonterminal_delivery[0]):
+                    raise sqlite3.IntegrityError(
+                        "Conversation has nonterminal Outbound Delivery work"
+                    )
                 messages_deleted = int(
                     connection.execute(
                         "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
                         (conversation_id,),
                     ).fetchone()[0]
+                )
+                connection.execute(
+                    """
+                    DELETE FROM message_processing
+                    WHERE inbound_message_id IN (
+                        SELECT outbound.in_reply_to_message_id
+                        FROM outbound_deliveries AS delivery
+                        JOIN messages AS outbound
+                          ON outbound.id = delivery.outbound_message_id
+                        WHERE outbound.conversation_id = ?
+                    )
+                    """,
+                    (conversation_id,),
+                )
+                connection.execute(
+                    """
+                    DELETE FROM outbound_deliveries
+                    WHERE outbound_message_id IN (
+                        SELECT id FROM messages WHERE conversation_id = ?
+                    )
+                    """,
+                    (conversation_id,),
                 )
                 conversations_deleted = connection.execute(
                     "DELETE FROM conversations WHERE id = ?",
@@ -612,6 +1138,51 @@ class SqliteConversationStore:
         return ConversationDeletionResult(
             messages_deleted=messages_deleted,
             conversations_deleted=conversations_deleted,
+        )
+
+    @staticmethod
+    def _delete_terminal_delivery_lifecycle_before_cutoff(
+        connection: sqlite3.Connection,
+        cutoff: str,
+    ) -> None:
+        eligible = """
+            SELECT outbound.in_reply_to_message_id
+            FROM outbound_deliveries AS delivery
+            JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+            JOIN messages AS inbound ON inbound.id = outbound.in_reply_to_message_id
+            WHERE inbound.created_at < ?
+              AND outbound.created_at < ?
+              AND delivery.state IN (
+                  'accepted', 'sent', 'delivered', 'read',
+                  'cancelled', 'accepted_legacy'
+              )
+        """
+        connection.execute(
+            f"""
+            DELETE FROM message_processing
+            WHERE inbound_message_id IN ({eligible})
+            """,
+            (cutoff, cutoff),
+        )
+        connection.execute(
+            """
+            DELETE FROM outbound_deliveries
+            WHERE outbound_message_id IN (
+                SELECT outbound.id
+                FROM outbound_deliveries AS delivery
+                JOIN messages AS outbound
+                  ON outbound.id = delivery.outbound_message_id
+                JOIN messages AS inbound
+                  ON inbound.id = outbound.in_reply_to_message_id
+                WHERE inbound.created_at < ?
+                  AND outbound.created_at < ?
+                  AND delivery.state IN (
+                      'accepted', 'sent', 'delivered', 'read',
+                      'cancelled', 'accepted_legacy'
+                  )
+            )
+            """,
+            (cutoff, cutoff),
         )
 
     def _get_or_create_reply(self, message: InboundMessage, reply_body: str) -> str:
@@ -640,20 +1211,32 @@ class SqliteConversationStore:
             if existing[1] is not None:
                 return str(existing[1])
 
-            connection.execute(
-                """
+            outbound_message_id = int(
+                connection.execute(
+                    """
                 INSERT INTO messages (
                     conversation_id, provider, provider_message_id,
                     direction, body, created_at, in_reply_to_message_id
                 ) VALUES (?, ?, NULL, 'outbound', ?, ?, ?)
+                RETURNING id
                 """,
-                (
-                    conversation_id,
-                    message.provider,
-                    reply_body,
-                    timestamp,
-                    inbound_message_id,
-                ),
+                    (
+                        conversation_id,
+                        message.provider,
+                        reply_body,
+                        timestamp,
+                        inbound_message_id,
+                    ),
+                ).fetchone()[0]
+            )
+            self._insert_delivery(
+                connection,
+                outbound_message_id=outbound_message_id,
+                provider=message.provider,
+                provider_channel_id=message.recipient_address,
+                recipient_address=message.customer_address,
+                delivery_state=DeliveryState.UNKNOWN,
+                timestamp=timestamp,
             )
             processing_updated = connection.execute(
                 """
@@ -733,8 +1316,25 @@ class SqliteConversationStore:
                  AND predecessor.id < current.id
                 JOIN message_processing AS predecessor_processing
                   ON predecessor_processing.inbound_message_id = predecessor.id
+                LEFT JOIN messages AS predecessor_reply
+                  ON predecessor_reply.in_reply_to_message_id = predecessor.id
+                 AND predecessor_reply.direction = 'outbound'
+                LEFT JOIN outbound_deliveries AS predecessor_delivery
+                  ON predecessor_delivery.outbound_message_id = predecessor_reply.id
                 WHERE current.id = ?
-                  AND predecessor_processing.state NOT IN ('completed', 'suppressed')
+                  AND (
+                      predecessor_processing.state NOT IN ('completed', 'suppressed')
+                      OR (
+                          predecessor_processing.state = 'completed'
+                          AND (
+                              predecessor_delivery.id IS NULL
+                              OR predecessor_delivery.state NOT IN (
+                                  'accepted', 'sent', 'delivered', 'read',
+                                  'accepted_legacy', 'cancelled'
+                              )
+                          )
+                      )
+                  )
                 ORDER BY predecessor.id
                 LIMIT 1
                 """,
@@ -776,6 +1376,7 @@ class SqliteConversationStore:
         inbound_message_id: int,
         owner_token: str,
         reply_body: str,
+        delivery_state: DeliveryState,
         now: datetime | None,
         lock_timeout: float | None,
     ) -> bool:
@@ -785,9 +1386,14 @@ class SqliteConversationStore:
             timestamp = current_time.isoformat()
             inbound = connection.execute(
                 """
-                SELECT conversation_id, provider
-                FROM messages
-                WHERE id = ? AND direction = 'inbound'
+                SELECT
+                    inbound.conversation_id,
+                    inbound.provider,
+                    inbound.recipient_address,
+                    conversation.customer_address
+                FROM messages AS inbound
+                JOIN conversations AS conversation ON conversation.id = inbound.conversation_id
+                WHERE inbound.id = ? AND inbound.direction = 'inbound'
                 """,
                 (inbound_message_id,),
             ).fetchone()
@@ -811,14 +1417,26 @@ class SqliteConversationStore:
                 return False
 
             conversation_id = int(inbound[0])
-            connection.execute(
-                """
+            outbound_message_id = int(
+                connection.execute(
+                    """
                 INSERT INTO messages (
                     conversation_id, provider, provider_message_id,
                     direction, body, created_at, in_reply_to_message_id
                 ) VALUES (?, ?, NULL, 'outbound', ?, ?, ?)
+                RETURNING id
                 """,
-                (conversation_id, str(inbound[1]), reply_body, timestamp, inbound_message_id),
+                    (conversation_id, str(inbound[1]), reply_body, timestamp, inbound_message_id),
+                ).fetchone()[0]
+            )
+            self._insert_delivery(
+                connection,
+                outbound_message_id=outbound_message_id,
+                provider=str(inbound[1]),
+                provider_channel_id=str(inbound[2]),
+                recipient_address=str(inbound[3]),
+                delivery_state=delivery_state,
+                timestamp=timestamp,
             )
             updated = connection.execute(
                 """
@@ -841,6 +1459,148 @@ class SqliteConversationStore:
                 (timestamp, conversation_id),
             )
         return True
+
+    @staticmethod
+    def _insert_delivery(
+        connection: sqlite3.Connection,
+        *,
+        outbound_message_id: int,
+        provider: str,
+        provider_channel_id: str,
+        recipient_address: str,
+        delivery_state: DeliveryState,
+        timestamp: str,
+    ) -> int:
+        if delivery_state not in {
+            DeliveryState.PENDING,
+            DeliveryState.UNKNOWN,
+            DeliveryState.ACCEPTED_LEGACY,
+        }:
+            raise ValueError("Invalid initial Outbound Delivery state")
+        next_attempt_at = timestamp if delivery_state is DeliveryState.PENDING else None
+        safe_error_code = "legacy_unverified" if delivery_state is DeliveryState.UNKNOWN else None
+        accepted_at = timestamp if delivery_state is DeliveryState.ACCEPTED_LEGACY else None
+        return int(
+            connection.execute(
+                """
+                INSERT INTO outbound_deliveries (
+                    outbound_message_id,
+                    provider,
+                    provider_channel_id,
+                    recipient_address,
+                    state,
+                    owner_token,
+                    lease_expires_at,
+                    attempt_count,
+                    next_attempt_at,
+                    provider_message_id,
+                    safe_error_code,
+                    accepted_at,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?, ?, ?)
+                RETURNING id
+                """,
+                (
+                    outbound_message_id,
+                    provider,
+                    provider_channel_id,
+                    recipient_address,
+                    delivery_state,
+                    next_attempt_at,
+                    safe_error_code,
+                    accepted_at,
+                    timestamp,
+                    timestamp,
+                ),
+            ).fetchone()[0]
+        )
+
+    @staticmethod
+    def _expire_ambiguous_delivery_claims(
+        connection: sqlite3.Connection,
+        timestamp: str,
+    ) -> None:
+        connection.execute(
+            """
+            UPDATE delivery_attempts
+            SET outcome = 'unknown',
+                safe_error_code = 'sending_lease_expired',
+                completed_at = ?
+            WHERE outcome = 'started'
+              AND EXISTS (
+                  SELECT 1
+                  FROM outbound_deliveries AS delivery
+                  WHERE delivery.id = delivery_attempts.outbound_delivery_id
+                    AND delivery.state = 'sending'
+                    AND delivery.lease_expires_at <= ?
+                    AND delivery.owner_token = delivery_attempts.owner_token
+                    AND delivery.attempt_count = delivery_attempts.attempt_number
+              )
+            """,
+            (timestamp, timestamp),
+        )
+        connection.execute(
+            """
+            UPDATE outbound_deliveries
+            SET state = 'unknown',
+                owner_token = NULL,
+                lease_expires_at = NULL,
+                next_attempt_at = NULL,
+                safe_error_code = 'sending_lease_expired',
+                updated_at = ?
+            WHERE state = 'sending'
+              AND lease_expires_at <= ?
+            """,
+            (timestamp, timestamp),
+        )
+
+    @staticmethod
+    def _delivery_select() -> str:
+        return """
+            SELECT
+                delivery.id,
+                delivery.outbound_message_id,
+                outbound.in_reply_to_message_id,
+                delivery.provider,
+                delivery.provider_channel_id,
+                delivery.recipient_address,
+                outbound.body,
+                delivery.state,
+                delivery.attempt_count,
+                delivery.owner_token,
+                delivery.lease_expires_at,
+                delivery.next_attempt_at,
+                delivery.provider_message_id,
+                delivery.safe_error_code,
+                delivery.accepted_at,
+                delivery.created_at,
+                delivery.updated_at
+            FROM outbound_deliveries AS delivery
+            JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+        """
+
+    @staticmethod
+    def _delivery_record(row: sqlite3.Row | tuple[object, ...]) -> OutboundDeliveryRecord:
+        return OutboundDeliveryRecord(
+            delivery_id=int(row[0]),
+            outbound_message_id=int(row[1]),
+            inbound_message_id=int(row[2]),
+            provider=str(row[3]),
+            provider_channel_id=str(row[4]),
+            recipient_address=str(row[5]),
+            body=str(row[6]),
+            state=DeliveryState(str(row[7])),
+            attempt_count=int(row[8]),
+            owner_token=None if row[9] is None else str(row[9]),
+            lease_expires_at=(None if row[10] is None else datetime.fromisoformat(str(row[10]))),
+            next_attempt_at=(None if row[11] is None else datetime.fromisoformat(str(row[11]))),
+            provider_message_id=None if row[12] is None else str(row[12]),
+            safe_error_code=None if row[13] is None else str(row[13]),
+            accepted_at=None if row[14] is None else datetime.fromisoformat(str(row[14])),
+            created_at=datetime.fromisoformat(str(row[15])),
+            updated_at=datetime.fromisoformat(str(row[16])),
+        )
 
     def _claim_exhausted_finalization(
         self,
@@ -1072,6 +1832,18 @@ class SqliteConversationStore:
                          OR (candidate.direction = 'outbound'
                              AND candidate.in_reply_to_message_id < ?)
                       )
+                      AND (
+                            candidate.direction = 'inbound'
+                         OR EXISTS (
+                                SELECT 1
+                                FROM outbound_deliveries AS delivery
+                                WHERE delivery.outbound_message_id = candidate.id
+                                  AND delivery.state IN (
+                                      'accepted', 'sent', 'delivered', 'read',
+                                      'accepted_legacy'
+                                  )
+                            )
+                      )
                     ORDER BY
                         CASE
                             WHEN candidate.direction = 'inbound' THEN candidate.id
@@ -1099,6 +1871,18 @@ class SqliteConversationStore:
                                 (candidate.direction = 'inbound' AND candidate.id < ?)
                              OR (candidate.direction = 'outbound'
                                  AND candidate.in_reply_to_message_id < ?)
+                          )
+                          AND (
+                                candidate.direction = 'inbound'
+                             OR EXISTS (
+                                    SELECT 1
+                                    FROM outbound_deliveries AS delivery
+                                    WHERE delivery.outbound_message_id = candidate.id
+                                      AND delivery.state IN (
+                                          'accepted', 'sent', 'delivered', 'read',
+                                          'accepted_legacy'
+                                      )
+                                )
                           )
                     )
                     """,

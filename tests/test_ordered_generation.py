@@ -1,3 +1,4 @@
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -6,13 +7,19 @@ import pytest
 
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.deadline import ExecutionDeadline
+from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.generation import GeneratedReply, GenerationTimeout, TransientGenerationError
 from rj_studio_ai.persistence import (
+    DeliveryState,
     GenerationClaimResult,
     GenerationState,
     SqliteConversationStore,
 )
+from rj_studio_ai.providers.base import ProviderAcceptance
+from rj_studio_ai.providers.fake import DeterministicFakeOutboundSender
+
+NOW = datetime(2026, 9, 22, 12, 0, tzinfo=UTC)
 
 
 class FakeClock:
@@ -130,6 +137,7 @@ def _responder(
         generator=generator,
         safe_failure_reply="Resposta segura",
         sleeper=clock.sleep,
+        completion_delivery_state=DeliveryState.ACCEPTED_LEGACY,
         **overrides,
     )
 
@@ -273,6 +281,7 @@ def test_later_message_waits_then_generates_after_predecessor_finishes(
                 inbound_message_id=first.inbound_message_id,
                 owner_token=first.owner_token or "",
                 reply_body="Resposta da primeira",
+                delivery_state=DeliveryState.ACCEPTED_LEGACY,
             )
 
     responder = MessageResponder(
@@ -282,6 +291,7 @@ def test_later_message_waits_then_generates_after_predecessor_finishes(
         sleeper=finish_predecessor,
         ordering_poll_seconds=0.1,
         maximum_ordering_wait_seconds=1.0,
+        completion_delivery_state=DeliveryState.ACCEPTED_LEGACY,
     )
 
     reply = responder.handle(
@@ -337,6 +347,7 @@ def test_blocked_message_is_persisted_and_a_later_webhook_retry_processes_it(
         inbound_message_id=first.inbound_message_id,
         owner_token=first.owner_token,
         reply_body="Resposta da primeira",
+        delivery_state=DeliveryState.ACCEPTED_LEGACY,
     )
     retry_reply = responder.handle(
         _message("message-2", "Segunda alterada no retry"),
@@ -345,6 +356,64 @@ def test_blocked_message_is_persisted_and_a_later_webhook_retry_processes_it(
 
     assert retry_reply.body == "Resposta da segunda"
     assert len(generator.budgets) == 1
+
+
+def test_later_generation_waits_for_predecessor_provider_acceptance(tmp_path: Path) -> None:
+    store = _store(tmp_path / "delivery-barrier.db")
+    first = store.claim_generation(_message("message-1", "Primeira"), now=NOW)
+    assert first.owner_token is not None
+    assert store.complete_generation(
+        inbound_message_id=first.inbound_message_id,
+        owner_token=first.owner_token,
+        reply_body="Resposta da primeira",
+        delivery_state=DeliveryState.PENDING,
+        now=NOW,
+    )
+
+    blocked = store.claim_generation(_message("message-2", "Segunda"), now=NOW)
+
+    assert not blocked.acquired
+    assert blocked.blocked_by_predecessor
+    OutboundDeliveryRunner(
+        store=store,
+        sender=DeterministicFakeOutboundSender(outcomes=[ProviderAcceptance("PM-first")]),
+        timeout_seconds=1.0,
+    ).run_once(now=NOW)
+
+    acquired = store.claim_generation(_message("message-2", "Segunda"), now=NOW)
+    assert acquired.acquired
+
+
+def test_accepted_then_failed_delivery_blocks_future_generation(tmp_path: Path) -> None:
+    database_path = tmp_path / "accepted-failed.db"
+    store = _store(database_path)
+    first = store.claim_generation(_message("message-1", "Primeira"), now=NOW)
+    assert first.owner_token is not None
+    assert store.complete_generation(
+        inbound_message_id=first.inbound_message_id,
+        owner_token=first.owner_token,
+        reply_body="Resposta da primeira",
+        delivery_state=DeliveryState.PENDING,
+        now=NOW,
+    )
+    OutboundDeliveryRunner(
+        store=store,
+        sender=DeterministicFakeOutboundSender(outcomes=[ProviderAcceptance("PM-first")]),
+        timeout_seconds=1.0,
+    ).run_once(now=NOW)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            UPDATE outbound_deliveries
+            SET state = 'failed', safe_error_code = 'provider_later_failed', updated_at = ?
+            """,
+            (NOW.isoformat(),),
+        )
+
+    later = store.claim_generation(_message("message-2", "Segunda"), now=NOW)
+
+    assert not later.acquired
+    assert later.blocked_by_predecessor
 
 
 @pytest.mark.parametrize(

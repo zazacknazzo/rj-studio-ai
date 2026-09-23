@@ -148,11 +148,14 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         "messages",
         "message_processing",
         "generation_metrics",
+        "outbound_deliveries",
+        "delivery_attempts",
     }.issubset(tables)
-    assert versions == [("0006_conversation_context_index",)]
+    assert versions == [("0007_durable_outbox",)]
     with sqlite3.connect(database_path) as connection:
         indexes = {row[1] for row in connection.execute("PRAGMA index_list(messages)")}
     assert "ix_messages_conversation_created" in indexes
+    assert "ix_messages_conversation_direction_id" in indexes
     assert manager.is_current()
     _assert_migration_connection_durability(manager)
 
@@ -219,6 +222,12 @@ def test_v01_database_is_upgraded_with_completed_reply_lifecycle(tmp_path: Path)
             FROM message_processing
             """
         ).fetchall()
+        deliveries = connection.execute(
+            """
+            SELECT outbound_message_id, state, provider_message_id, safe_error_code
+            FROM outbound_deliveries
+            """
+        ).fetchall()
 
     assert manager.is_current()
     assert conversations == [(7, "twilio", "whatsapp:+5511000000000")]
@@ -227,6 +236,7 @@ def test_v01_database_is_upgraded_with_completed_reply_lifecycle(tmp_path: Path)
         (12, "outbound", "Resposta existente", 11, ""),
     ]
     assert processing == [(11, "completed", None, None, 0)]
+    assert deliveries == [(12, "unknown", None, "legacy_unverified")]
     _assert_migration_connection_durability(manager)
 
 
@@ -247,6 +257,12 @@ def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None
             FROM messages ORDER BY id
             """
         ).fetchall()
+        deliveries = connection.execute(
+            """
+            SELECT outbound_message_id, state, provider_message_id, safe_error_code
+            FROM outbound_deliveries
+            """
+        ).fetchall()
 
     assert manager.is_current()
     assert conversation == [(7, "twilio", "whatsapp:+5511000000000")]
@@ -254,7 +270,229 @@ def test_v0_database_is_upgraded_without_losing_messages(tmp_path: Path) -> None
         (11, "inbound", "Mensagem existente", None, ""),
         (12, "outbound", "Resposta existente", 11, ""),
     ]
+    assert deliveries == [(12, "unknown", None, "legacy_unverified")]
     _assert_migration_connection_durability(manager)
+
+
+def test_migration_never_queues_historical_replies_for_send(tmp_path: Path) -> None:
+    database_path = tmp_path / "historical.db"
+    _create_v01_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO conversations (
+                id, provider, customer_address, created_at, updated_at
+            ) VALUES (8, 'twilio', 'whatsapp:+5511000000001', '2026-09-12', '2026-09-12')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                direction, body, created_at, in_reply_to_message_id
+            ) VALUES (21, 8, 'twilio', 'SM-inbound-2', 'inbound', 'inbound', '2026-09-12', NULL)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                direction, body, created_at, in_reply_to_message_id
+            ) VALUES (
+                22, 8, 'twilio', 'SM-outbound-evidence',
+                'outbound', 'reply', '2026-09-12', 21
+            )
+            """
+        )
+
+    MigrationManager(database_path).upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        states = connection.execute(
+            """
+            SELECT outbound_message_id, state, provider_message_id, safe_error_code
+            FROM outbound_deliveries ORDER BY outbound_message_id
+            """
+        ).fetchall()
+        pending = connection.execute(
+            "SELECT COUNT(*) FROM outbound_deliveries WHERE state = 'pending'"
+        ).fetchone()[0]
+
+    assert states == [
+        (12, "unknown", None, "legacy_unverified"),
+        (22, "accepted_legacy", "SM-outbound-evidence", None),
+    ]
+    assert pending == 0
+
+
+def test_migration_rejects_historical_reply_linked_across_conversations(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "historical-cross-conversation.db"
+    _create_v01_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO conversations (
+                id, provider, customer_address, created_at, updated_at
+            ) VALUES (8, 'twilio', 'customer-b', '2026-09-12', '2026-09-12')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                direction, body, created_at, in_reply_to_message_id
+            ) VALUES (
+                21, 8, 'twilio', 'SM-cross-inbound',
+                'inbound', 'inbound', '2026-09-12', NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                direction, body, created_at, in_reply_to_message_id
+            ) VALUES (
+                22, 7, 'twilio', NULL,
+                'outbound', 'cross reply', '2026-09-12', 21
+            )
+            """
+        )
+
+    manager = MigrationManager(database_path)
+    with pytest.raises(RuntimeError, match="valid inbound"):
+        manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        version = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+
+    assert "outbound_deliveries" not in tables
+    assert "delivery_attempts" not in tables
+    assert version == "0006_conversation_context_index"
+
+
+def test_failed_outbox_migration_rolls_back_new_tables_and_preserves_messages(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "failed-outbox.db"
+    _create_v01_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                direction, body, created_at, in_reply_to_message_id
+            ) VALUES (
+                13, 7, 'twilio', NULL, 'outbound',
+                'orphan historical reply', '2026-09-12T10:00:02+00:00', NULL
+            )
+            """
+        )
+
+    manager = MigrationManager(database_path)
+    with pytest.raises(RuntimeError, match="without a valid inbound"):
+        manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        messages = connection.execute("SELECT id, body FROM messages ORDER BY id").fetchall()
+        version = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+
+    assert "outbound_deliveries" not in tables
+    assert "delivery_attempts" not in tables
+    assert messages == [
+        (11, "Mensagem existente"),
+        (12, "Resposta existente"),
+        (13, "orphan historical reply"),
+    ]
+    assert version == "0006_conversation_context_index"
+    assert not manager.is_current()
+
+
+def test_outbox_migration_rolls_back_failure_after_legacy_backfill(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "failed-after-outbox-backfill.db"
+    manager = MigrationManager(database_path)
+    original_upgrade = command.upgrade
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            command,
+            "upgrade",
+            lambda config, _: original_upgrade(
+                config,
+                "0006_conversation_context_index",
+            ),
+        )
+        manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(
+            """
+            INSERT INTO conversations (
+                id, provider, customer_address, created_at, updated_at
+            ) VALUES (1, 'twilio', 'customer', '2026-09-12', '2026-09-12')
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO messages (
+                id, conversation_id, provider, provider_message_id,
+                recipient_address, direction, body, created_at,
+                in_reply_to_message_id
+            ) VALUES (?, 1, 'twilio', ?, 'studio', ?, ?, '2026-09-12', ?)
+            """,
+            [
+                (1, "SM-inbound-manual", "inbound", "manual inbound", None),
+                (2, None, "outbound", "manual reply", 1),
+                (3, "SM-inbound-rendered", "inbound", "rendered inbound", None),
+                (4, "SM-rendered-evidence", "outbound", "rendered reply", 3),
+            ],
+        )
+        connection.execute(
+            """
+            CREATE TRIGGER outbound_delivery_requires_ai_reply_insert
+            BEFORE UPDATE OF body ON messages
+            WHEN 0
+            BEGIN
+                SELECT 1;
+            END
+            """
+        )
+
+    with pytest.raises(SQLAlchemyError, match="already exists"):
+        manager.upgrade()
+
+    with sqlite3.connect(database_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        messages = connection.execute("SELECT id, body FROM messages ORDER BY id").fetchall()
+        version = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+
+    assert "outbound_deliveries" not in tables
+    assert "delivery_attempts" not in tables
+    assert messages == [
+        (1, "manual inbound"),
+        (2, "manual reply"),
+        (3, "rendered inbound"),
+        (4, "rendered reply"),
+    ]
+    assert version == "0006_conversation_context_index"
+    assert not manager.is_current()
 
 
 def test_failed_legacy_schema_migration_is_not_marked_current(tmp_path: Path) -> None:
@@ -370,8 +608,11 @@ def test_database_constraints_enforce_generation_lifecycle(tmp_path: Path) -> No
             """
             INSERT INTO messages (
                 id, conversation_id, provider, provider_message_id,
-                direction, body, created_at
-            ) VALUES (1, 1, 'twilio', 'SM-inbound', 'inbound', 'body', '2026-09-13')
+                recipient_address, direction, body, created_at
+            ) VALUES (
+                1, 1, 'twilio', 'SM-inbound', 'studio',
+                'inbound', 'body', '2026-09-13'
+            )
             """
         )
 
@@ -416,6 +657,17 @@ def test_database_constraints_enforce_generation_lifecycle(tmp_path: Path) -> No
             ) VALUES (2, 1, 'twilio', NULL, 'outbound', 'reply', '2026-09-13', 1)
             """
         )
+        connection.execute(
+            """
+            INSERT INTO outbound_deliveries (
+                outbound_message_id, provider, provider_channel_id, recipient_address,
+                state, attempt_count, accepted_at, created_at, updated_at
+            ) VALUES (
+                2, 'twilio', 'studio', 'customer',
+                'accepted_legacy', 0, '2026-09-13', '2026-09-13', '2026-09-13'
+            )
+            """
+        )
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
                 """
@@ -431,6 +683,8 @@ def test_database_constraints_enforce_generation_lifecycle(tmp_path: Path) -> No
             WHERE inbound_message_id = 1
             """
         )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("DELETE FROM outbound_deliveries WHERE outbound_message_id = 2")
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute("DELETE FROM messages WHERE id = 2")
         with pytest.raises(sqlite3.IntegrityError):

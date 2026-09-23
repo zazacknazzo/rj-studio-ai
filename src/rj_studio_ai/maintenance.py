@@ -5,7 +5,11 @@ from pathlib import Path
 
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
-from rj_studio_ai.persistence import PersistenceUnavailable, SqliteConversationStore
+from rj_studio_ai.persistence import (
+    DeliveryState,
+    PersistenceUnavailable,
+    SqliteConversationStore,
+)
 from rj_studio_ai.recovery import PendingGenerationRecovery, RecoveryNotAvailable
 from rj_studio_ai.runtime import generator_from_settings
 
@@ -32,6 +36,17 @@ def _parser() -> argparse.ArgumentParser:
         help="Recover one selected eligible inbound Message through the normal lifecycle",
     )
     recover.add_argument("--inbound-message-id", type=_positive_integer, required=True)
+
+    reconcile = subparsers.add_parser(
+        "reconcile-legacy-delivery",
+        help="Resolve one legacy-unverified delivery without sending it",
+    )
+    reconcile.add_argument("--delivery-id", type=_positive_integer, required=True)
+    reconcile.add_argument(
+        "--resolution",
+        choices=("accepted_legacy", "cancelled"),
+        required=True,
+    )
 
     purge = subparsers.add_parser(
         "purge-messages",
@@ -66,6 +81,17 @@ def main(
         print("Database migrations are current.")
         return 0
 
+    if args.command == "reconcile-legacy-delivery":
+        reconciled = store.reconcile_legacy_delivery(
+            delivery_id=args.delivery_id,
+            resolution=DeliveryState(args.resolution),
+        )
+        print(
+            f"Legacy delivery reconciliation delivery_id={args.delivery_id} "
+            f"result={'updated' if reconciled else 'not_eligible'}."
+        )
+        return 0 if reconciled else 1
+
     if args.command in {"list-pending-generations", "recover-generation"}:
         recovery = PendingGenerationRecovery(
             store=store,
@@ -73,6 +99,7 @@ def main(
                 store=store,
                 generator=generator_from_settings(settings),
                 safe_failure_reply=settings.automatic_reply,
+                completion_delivery_state=DeliveryState.UNKNOWN,
             ),
         )
 

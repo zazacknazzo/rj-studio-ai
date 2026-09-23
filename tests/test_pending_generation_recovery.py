@@ -10,7 +10,11 @@ from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.generation import GeneratedReply, GenerationFailure, GenerationTimeout
 from rj_studio_ai.main import create_app
 from rj_studio_ai.maintenance import main as maintenance_main
-from rj_studio_ai.persistence import GenerationState, SqliteConversationStore
+from rj_studio_ai.persistence import (
+    DeliveryState,
+    GenerationState,
+    SqliteConversationStore,
+)
 from rj_studio_ai.recovery import PendingGenerationRecovery, RecoveryBlocked, RecoveryNotAvailable
 
 
@@ -82,6 +86,7 @@ def _recovery(
             store=store,
             generator=generator,
             safe_failure_reply="Resposta segura",
+            completion_delivery_state=DeliveryState.UNKNOWN,
         ),
     )
 
@@ -148,6 +153,10 @@ def test_manual_recovery_uses_the_normal_claim_and_generation_flow(tmp_path: Pat
     assert replay is not None
     assert replay.reply_body == "Resposta recuperada"
     assert len(store.get_history(provider="test-provider", customer_address="customer-1")) == 2
+    delivery = store.get_delivery_for_inbound(pending.inbound_message_id)
+    assert delivery is not None
+    assert delivery.state is DeliveryState.UNKNOWN
+    assert delivery.safe_error_code == "legacy_unverified"
 
 
 def test_recovery_does_not_bypass_a_nonterminal_predecessor(tmp_path: Path) -> None:
@@ -166,6 +175,12 @@ def test_recovery_does_not_bypass_a_nonterminal_predecessor(tmp_path: Path) -> N
         recovery.recover(second.inbound_message_id)
 
     assert recovery.recover(first.inbound_message_id).state is GenerationState.COMPLETED
+    first_delivery = store.get_delivery_for_inbound(first.inbound_message_id)
+    assert first_delivery is not None
+    assert store.reconcile_legacy_delivery(
+        delivery_id=first_delivery.delivery_id,
+        resolution=DeliveryState.ACCEPTED_LEGACY,
+    )
     assert recovery.recover(second.inbound_message_id).state is GenerationState.COMPLETED
     assert [message.provider_message_id for message in generator.messages] == ["first", "second"]
 
@@ -323,6 +338,20 @@ def test_maintenance_commands_list_redacted_work_and_recover_one_message(
         ]
     )
     recovered_output = capsys.readouterr().out
+    delivery = store.get_delivery_for_inbound(pending.inbound_message_id)
+    assert delivery is not None
+    reconciled = maintenance_main(
+        [
+            "--database-path",
+            str(database_path),
+            "reconcile-legacy-delivery",
+            "--delivery-id",
+            str(delivery.delivery_id),
+            "--resolution",
+            "accepted_legacy",
+        ]
+    )
+    reconciled_output = capsys.readouterr().out
 
     assert listed == 0
     assert f"inbound_message_id={pending.inbound_message_id}" in listed_output
@@ -332,3 +361,9 @@ def test_maintenance_commands_list_redacted_work_and_recover_one_message(
     assert (
         recovered_output == f"Recovery completed inbound_message_id={pending.inbound_message_id}.\n"
     )
+    assert reconciled == 0
+    assert reconciled_output == (
+        f"Legacy delivery reconciliation delivery_id={delivery.delivery_id} result=updated.\n"
+    )
+    assert "customer-private" not in reconciled_output
+    assert "body-private" not in reconciled_output

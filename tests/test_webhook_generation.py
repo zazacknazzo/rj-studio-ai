@@ -18,6 +18,7 @@ from rj_studio_ai.domain import (
 from rj_studio_ai.generation import GeneratedReply, GenerationMetric, TransientGenerationError
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import (
+    DeliveryState,
     GenerationMetricRecord,
     GenerationState,
     RecentContextHistory,
@@ -480,6 +481,7 @@ def test_active_predecessor_returns_503_then_provider_retry_processes_message(
             inbound_message_id=first.inbound_message_id,
             owner_token=first.owner_token,
             reply_body="reply:first",
+            delivery_state=DeliveryState.ACCEPTED_LEGACY,
         )
         retry_response = client.post(
             "/webhooks/twilio",
