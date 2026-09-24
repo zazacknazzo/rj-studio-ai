@@ -1,9 +1,9 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–05.
-ADR 0006 approves the remaining messaging migration. Twilio remains the current
-development adapter; Meta WhatsApp Cloud API is the production target.
+The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–06.
+ADR 0006 owns the messaging migration. Twilio remains available and Meta
+WhatsApp Cloud API is the next E2E target.
 
 ## Implemented runtime
 
@@ -12,8 +12,8 @@ default and preserves the synchronous TwiML path for controlled rollback.
 `proactive` separates ingress, AI processing, and customer delivery:
 
 ```text
-Twilio inbound webhook
-  → Twilio authentication and canonical InboundMessage
+Selected provider webhook
+  → provider authentication and canonical inbound/status batch
   → persist inbound and message_processing work in one short transaction
   → return acknowledgement-only TwiML after commit
 
@@ -24,10 +24,10 @@ SQLite → lifespan Processing Executor → ordered generation claim
   → validated LLMDecision and privacy-safe metrics
   → one transaction persists AIReply, pending OutboundDelivery, and completed processing
 
-SQLite → lifespan Outbound Executor → delivery claim → Twilio Message REST API
-  → MessageSid returned → Provider Acceptance persisted
+SQLite → lifespan Outbound Executor → provider-filtered delivery claim
+  → Twilio or Meta REST API → provider Message ID → Provider Acceptance persisted
 
-Twilio status callback → signature validation → monotonic sent/delivered/read/failed
+Provider status callback → authentication → monotonic sent/delivered/read/failed
 ```
 
 The proactive webhook never waits for a predecessor or runs the LLM. Durable
@@ -58,7 +58,7 @@ Messaging Migration 01 separates the seams while keeping the synchronous path:
 
 - `InboundWebhookAdapter.receive()` authenticates and returns an immutable
   canonical batch of `InboundMessageReceived` and/or `DeliveryStatusReceived`
-  events; Twilio currently returns one inbound event;
+  events; Meta can return supported inbound and status siblings in one batch;
 - `InboundWebhookAdapter.acknowledge()` renders provider acknowledgement with no
   customer-facing AI Reply;
 - `LegacyWebhookReplyRenderer.render_legacy_reply()` explicitly owns the
@@ -75,6 +75,15 @@ concurrency and an optional in-memory wake-up. The Processing Executor follows
 the same polling principle with a separate claim and deadline. Status callbacks use the same
 Twilio signature validation boundary and retain unmatched canonical status
 evidence until MessageSid correlation becomes available.
+
+`MetaProvider` verifies the subscription challenge and authenticates POST bodies
+with the app secret before parsing. One authenticated batch is persisted in one
+SQLite transaction before ACK; unsupported event types are ignored without
+discarding supported siblings. `MetaOutboundMessageSender` submits eligible
+text through the configured Graph API version and preserves the returned
+`wamid`. Free-form eligibility requires a durable inbound from the same Meta
+Customer/channel within 24 hours. The provider-selected delivery claim prevents
+pending work from another adapter from being submitted through the wrong sender.
 
 Delivery claims use a durable owner token, 30-second lease, attempt count, and
 stale-owner checks. A stale `sending` claim becomes `unknown`; it is never
@@ -242,6 +251,7 @@ distributed workers, and horizontal scaling remain out of scope.
 | `persistence.py` | Durable inbound, processing claims, outbox/claims, monotonic status merge, early-status inbox, ordering, and redacted inspection |
 | `delivery.py` | Deterministic runner plus lifespan-managed durable outbound polling |
 | `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |
+| `providers/meta.py` | Meta verification/signature boundary, webhook adapter, and REST outbound sender |
 | `providers/base.py` | Implemented inbound, acknowledgement, legacy renderer, and dormant outbound sender contracts |
 | `providers/fake.py` | Deterministic outbound contract fake; never selected by production configuration |
 | `recovery.py` | Manual fallback after automatic executor recovery is introduced |
@@ -257,7 +267,7 @@ or multi-tenant infrastructure.
 3. **Implemented:** add legacy-safe Outbound Delivery schema, transactional outbox, and provider-neutral deterministic runner seam.
 4. **Implemented:** add proactive Twilio REST delivery, delivery claims, status callbacks, and safe legacy/proactive cutover.
 5. **Implemented:** move processing to durable polling, acknowledge after ingress commit, remove predecessor HTTP 503, and separate deadlines. Real Twilio smoke remains an operational gate.
-6. Add the Meta Cloud API production adapter and channel-policy seam.
+6. **Implemented; real smoke pending:** add the Meta Cloud API adapter, atomic batch ingress, provider-filtered delivery acquisition, and 24-hour free-form channel-policy seam.
 
 ADR 0006 owns this target. ADRs 0001, 0003, and 0005 retain their original
 historical decisions and are explicitly amended where synchronous assumptions

@@ -1,6 +1,6 @@
 # 06: Add the Meta WhatsApp Cloud API production adapter
 
-**Status:** ready-for-agent
+**Status:** implemented-awaiting-real-smoke
 
 ## Objective
 
@@ -66,6 +66,9 @@ status adapter without changing application/domain orchestration.
 - Channel policy prevents ineligible free-form submission.
 - Real sanitized smoke passes without secrets or Customer PII in the repository.
 - Full suite, migrations, Ruff, static checks, security review, and code review pass.
+
+The automated implementation is complete on the M06 branch. The issue remains
+open until the sanitized real smoke with Meta's official test number passes.
 
 ## Rollout and rollback
 

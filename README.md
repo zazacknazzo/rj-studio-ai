@@ -1,16 +1,17 @@
 # RJ Studio AI
 
-Atendimento de WhatsApp do RJ Studio em migração controlada para entrega
-proativa:
+Atendimento de WhatsApp do RJ Studio com ingress e entrega proativa duráveis:
 
 ```text
 legacy:    Twilio webhook → aplicação → SQLite → resposta em TwiML
-proactive: Twilio webhook → SQLite ingress → ACK
-           SQLite → Processing Executor → AI Reply + outbox → Twilio REST
-                                                        ↖ status callbacks
+proactive: Twilio ou Meta webhook → SQLite ingress → ACK
+           SQLite → Processing Executor → AI Reply + outbox
+           SQLite → Outbound Executor → provider REST API ← status callbacks
 ```
 
-O núcleo usa uma interface `WhatsAppProvider`. A integração atual é Twilio; uma futura integração com Meta Cloud API pode entrar como outro provider sem alterar o fluxo de Conversations.
+`WHATSAPP_PROVIDER=twilio|meta` seleciona o adapter sem alterar Conversations,
+processing ou outbox. Twilio permanece disponível; Meta Cloud API é o caminho
+do próximo gate E2E.
 
 ## Preparar o ambiente
 
@@ -25,6 +26,7 @@ cp .env.example .env
 
 Edite `.env` e preencha `TWILIO_AUTH_TOKEN`. Para o modo proativo, configure
 também Account SID, API key dedicada, callback público e os limites do executor.
+Para Meta, siga o runbook específico e mantenha `DELIVERY_MODE=proactive`.
 
 ## Rodar localmente
 
@@ -89,6 +91,23 @@ backoff persistido; somente códigos Twilio explicitamente conhecidos como
 permanentes encerram a delivery. Timeout, perda de conexão, 5xx, 4xx sem
 semântica comprovada e resposta ambígua viram `unknown` sem retry automático.
 
+## Conectar à Meta WhatsApp Cloud API
+
+Use primeiro o número de teste oficial da Meta. Configure
+`WHATSAPP_PROVIDER=meta`, `DELIVERY_MODE=proactive` e as cinco variáveis
+`META_WHATSAPP_*` de `.env.example`. A rota `GET /webhooks/meta` confirma o
+verify token e `POST /webhooks/meta` exige `X-Hub-Signature-256` válido antes de
+persistir qualquer evento. O mesmo POST recebe inbound text e status.
+
+O sender usa `/{phone-number-id}/messages` e trata um `wamid` válido retornado
+como Provider Acceptance. Timeout, falha de transporte, resposta malformada ou
+erro sem prova segura de rejeição ficam `unknown`, sem retry. Texto livre só é
+submetido quando existe inbound Meta durável do mesmo Customer/canal nas últimas
+24 horas; fora dessa janela o envio falha fechado. Templates ficam fora de M06.
+
+Passos locais e a sequência exata no Meta Console estão em
+[`docs/runbooks/meta-cloud-api-smoke-test.md`](docs/runbooks/meta-cloud-api-smoke-test.md).
+
 `/webhooks/whatsapp` continua disponível como alias compatível com a V0.
 
 Para chamadas manuais locais sem assinatura da Twilio, use `TWILIO_VALIDATE_SIGNATURE=false`. Reative a validação ao conectar o Sandbox.
@@ -134,13 +153,14 @@ somente metadados operacionais mínimos, sem endereços ou conteúdo.
 - `application.py`: fluxo canônico de uma Message recebida até a Automatic Reply.
 - `providers/base.py`: interface abstrata `WhatsAppProvider`.
 - `providers/twilio.py`: parsing, assinatura, TwiML e sender REST da Twilio.
+- `providers/meta.py`: verificação, HMAC, parsing e sender REST da Meta.
 - `persistence.py`: Conversations, Messages, outbox, claims e manutenção em SQLite.
 - `delivery.py`: runner determinístico e executor outbound baseado no SQLite.
 - `processing.py`: runner determinístico e executor de AI baseado no SQLite.
 - `migrations/`: migrations versionadas com Alembic.
 - `main.py`: composição FastAPI, ciclo de vida e endpoints HTTP.
 
-CRM avançado, Trinks, Google Ads e Meta Cloud API permanecem fora desta migração.
+CRM avançado, Trinks e Google Ads permanecem fora desta migração.
 
 ## Smoke test Anthropic manual
 
