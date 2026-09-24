@@ -1,12 +1,9 @@
 # Manual pending-Message recovery
 
-> Baseline note: these commands describe the implemented synchronous runtime
-> through Ticket 08. ADR 0006 keeps them as an operator fallback. Messaging
-> Migration 05 will make durable executor polling the normal recovery path and
-> will require a recovered AI Reply to own an Outbound Delivery.
+> Messaging Migration 05 uses durable executor polling for normal recovery.
+> These commands remain an operator fallback for selected Messages.
 
-This V1 operation is explicit and local. It has no scheduler, worker, queue, or
-public administrative endpoint.
+This V1 operation is explicit and local. It has no public administrative endpoint.
 
 ## List work
 
@@ -37,14 +34,15 @@ means no terminal AI Reply was persisted; inspect the listed state before a
 later explicit attempt.
 
 Do not edit lifecycle rows directly, recover a later Message ahead of its
-predecessor, or run this as a loop. Until Messaging Migration 05 is deployed,
-no autonomous executor exists.
+predecessor, or run this as a loop. In proactive mode, normal retryable and
+expired work is already recovered by the Processing Executor. Run this command
+with the same `DELIVERY_MODE` and Salon Knowledge configuration as the app.
 
 ## Verify and delivery limit
 
 Run the list command again and confirm the selected Message is absent after a
-successful terminal recovery. The current WhatsApp provider replies only while
-handling an inbound webhook; this CLI does not add proactive WhatsApp delivery
-or print the AI Reply body. It safely restores the durable lifecycle and can
-unblock later Messages, but a missed customer delivery requires the planned
-Outbound Delivery capability or an operator's established manual process.
+successful terminal recovery. In proactive mode the recovered AI Reply receives
+a `pending` Outbound Delivery in the same transaction; the Outbound Executor
+finds it through SQLite polling. In legacy mode the CLI creates an unverified
+delivery requiring the established reconciliation process. The command never
+prints the AI Reply body.

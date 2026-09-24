@@ -1,3 +1,4 @@
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
@@ -203,6 +204,30 @@ def test_proactive_ingress_failure_cannot_return_success_ack(tmp_path: Path) -> 
         response = client.post("/webhooks/twilio", data=FORM)
 
     assert response.status_code == 503
+    assert store.get_history(provider="twilio", customer_address=FORM["From"]) == []
+
+
+def test_ingress_rolls_back_inbound_if_processing_work_insert_fails(tmp_path: Path) -> None:
+    database_path = tmp_path / "partial-ingress.db"
+    app = create_app(
+        _settings(database_path),
+        outbound_sender=DeterministicFakeOutboundSender(outcomes=[]),
+        processing_executor=_PausedExecutor(),
+    )
+
+    with TestClient(app) as client:
+        with sqlite3.connect(database_path) as connection:
+            connection.execute(
+                """
+                CREATE TRIGGER reject_processing_for_test
+                BEFORE INSERT ON message_processing
+                BEGIN SELECT RAISE(ABORT, 'synthetic processing insert failure'); END
+                """
+            )
+        response = client.post("/webhooks/twilio", data=FORM)
+
+    assert response.status_code == 503
+    store = SqliteConversationStore(database_path)
     assert store.get_history(provider="twilio", customer_address=FORM["From"]) == []
 
 

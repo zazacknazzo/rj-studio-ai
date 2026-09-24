@@ -412,6 +412,9 @@ class SqliteConversationStore:
                                 state = 'unknown'
                                 AND safe_error_code != 'legacy_unverified'
                            )
+                    ) AND NOT EXISTS(
+                        SELECT 1 FROM message_processing
+                        WHERE state IN ('retryable', 'processing')
                     )
                     """
                 ).fetchone()

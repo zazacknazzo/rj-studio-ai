@@ -122,9 +122,10 @@ class MessageResponder:
         message: InboundMessage,
         *,
         monotonic_clock: Callable[[], float] = monotonic,
+        preclaimed: GenerationClaimResult | None = None,
     ) -> AIReply | None:
         """Process already-durable work once, without waiting for a predecessor."""
-        lifecycle = self._store.claim_generation(message)
+        lifecycle = preclaimed or self._store.claim_generation(message)
         if lifecycle.state in {GenerationState.COMPLETED, GenerationState.SUPPRESSED}:
             return None
         if lifecycle.blocked_by_predecessor:
@@ -138,13 +139,16 @@ class MessageResponder:
             return None
         if not lifecycle.acquired:
             return None
-        return self._generate_and_complete(canonical_message, lifecycle, deadline)
+        return self._generate_and_complete(
+            canonical_message, lifecycle, deadline, safe_permanent_failure=True
+        )
 
     def _generate_and_complete(
         self,
         message: InboundMessage,
         claim: GenerationClaimResult,
         deadline: ExecutionDeadline,
+        safe_permanent_failure: bool = False,
     ) -> AIReply:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable")
@@ -177,9 +181,13 @@ class MessageResponder:
             self._record_metric(claim, generated.metric, deadline)
         except TransientGenerationError as error:
             self._record_metric(claim, error.metric, deadline)
-            return self._handle_generation_failure(message, claim, deadline, error)
+            return self._handle_generation_failure(
+                message, claim, deadline, error, safe_permanent_failure=safe_permanent_failure
+            )
         except GenerationFailure as error:
             self._record_metric(claim, error.metric, deadline)
+            if safe_permanent_failure:
+                return self._complete_owned_reply(claim, self._safe_failure_reply, deadline)
             self._release_for_retryable_failure(claim, deadline)
             raise RetryableWebhookError("Generation provider is unavailable") from error
 
@@ -235,6 +243,8 @@ class MessageResponder:
         claim: GenerationClaimResult,
         deadline: ExecutionDeadline,
         error: TransientGenerationError,
+        *,
+        safe_permanent_failure: bool = False,
     ) -> AIReply:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable") from error
@@ -264,7 +274,12 @@ class MessageResponder:
         if terminal_reply is not None:
             return terminal_reply
         if retry_claim.acquired:
-            return self._generate_and_complete(message, retry_claim, deadline)
+            return self._generate_and_complete(
+                message,
+                retry_claim,
+                deadline,
+                safe_permanent_failure=safe_permanent_failure,
+            )
         raise RetryableWebhookError("Generation retry claim is not available") from error
 
     def _claim_exhausted_finalization(

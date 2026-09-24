@@ -38,6 +38,12 @@ operator fallback and uses the current delivery mode.
 Because polling begins after the durable commit, processing may start before
 the provider receives the HTTP acknowledgement. The webhook does not call or
 wait for the LLM; no delivery relies on the acknowledgement being observed.
+Shutdown closes the short generation-claim gate before stopping polling, so it
+cannot acquire new work once shutdown begins. Readiness rejects a switch back
+to `legacy` while any nonterminal generation or unresolved proactive delivery
+remains at startup; those rows must be drained or recovered before rollback.
+This startup gate avoids changing readiness during an ordinary legacy webhook
+that temporarily owns a generation claim.
 
 The SQLite model contains one Outbound Delivery per AI Reply and minimal
 Delivery Attempt evidence. Proactive generation completion atomically creates

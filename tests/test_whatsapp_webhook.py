@@ -667,6 +667,66 @@ def test_legacy_readiness_rejects_unresolved_proactive_delivery(tmp_path: Path) 
     assert ready.json()["checks"]["delivery_mode"] == "failed"
 
 
+def test_legacy_readiness_rejects_acknowledged_unprocessed_inbound(tmp_path: Path) -> None:
+    database_path = tmp_path / "unprocessed-rollback.db"
+    store = SqliteConversationStore(database_path)
+    store.initialize()
+    store.admit_generation(
+        InboundMessage(
+            provider="twilio",
+            provider_message_id="SM-unprocessed-rollback",
+            customer_address="customer",
+            recipient_address="studio",
+            body="Mensagem sintética",
+        )
+    )
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            twilio_validate_signature=False,
+            delivery_mode="legacy",
+        ),
+        store=store,
+    )
+
+    with TestClient(app) as client:
+        ready = client.get("/ready")
+
+    assert ready.status_code == 503
+    assert ready.json()["checks"]["delivery_mode"] == "failed"
+
+
+def test_legacy_readiness_stays_ready_during_ordinary_generation(tmp_path: Path) -> None:
+    database_path = tmp_path / "ordinary-legacy-processing.db"
+    store = SqliteConversationStore(database_path)
+    app = create_app(
+        Settings(
+            _env_file=None,
+            database_path=database_path,
+            twilio_validate_signature=False,
+            delivery_mode="legacy",
+        ),
+        store=store,
+    )
+
+    with TestClient(app) as client:
+        claimed = store.claim_generation(
+            InboundMessage(
+                provider="twilio",
+                provider_message_id="SM-ordinary-legacy",
+                customer_address="customer",
+                recipient_address="studio",
+                body="Mensagem sintética",
+            )
+        )
+        ready = client.get("/ready")
+
+    assert claimed.owner_token is not None
+    assert ready.status_code == 200
+    assert ready.json()["checks"]["delivery_mode"] == "ok"
+
+
 def test_ready_endpoint_rejects_missing_provider_configuration(tmp_path: Path) -> None:
     app = create_app(
         Settings(

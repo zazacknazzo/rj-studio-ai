@@ -1,14 +1,19 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 
 import pytest
 
 from rj_studio_ai.application import MessageResponder
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.domain import DeliveryStatus, DeliveryStatusReceived, InboundMessage
-from rj_studio_ai.generation import FixedReplyGenerator, GeneratedReply, TransientGenerationError
+from rj_studio_ai.generation import (
+    FixedReplyGenerator,
+    GeneratedReply,
+    GenerationFailure,
+    TransientGenerationError,
+)
 from rj_studio_ai.persistence import DeliveryState, GenerationState, SqliteConversationStore
 from rj_studio_ai.processing import ProcessingExecutor, ProcessingRunner
 from rj_studio_ai.providers.base import (
@@ -258,6 +263,101 @@ def test_processing_attempts_share_one_budget_after_claim(tmp_path: Path) -> Non
     assert generator.budgets[1] > 0
 
 
+class _PermanentFailureGenerator:
+    def __init__(self, clock: _FakeClock) -> None:
+        self.clock = clock
+        self.calls = 0
+
+    def generate(
+        self, message: InboundMessage, *, context: object, remaining_budget: float
+    ) -> GeneratedReply:
+        self.calls += 1
+        self.clock.sleep(8.0)
+        raise GenerationFailure("provider_authentication")
+
+    def is_configured(self) -> bool:
+        return True
+
+
+def test_permanent_generation_failure_finalizes_within_first_processing_budget(
+    tmp_path: Path,
+) -> None:
+    store = SqliteConversationStore(tmp_path / "permanent-deadline.db")
+    store.initialize()
+    inbound = store.admit_generation(_message("permanent"))
+    clock = _FakeClock()
+    generator = _PermanentFailureGenerator(clock)
+    runner = ProcessingRunner(
+        store=store,
+        responder=MessageResponder(
+            store=store,
+            generator=generator,
+            safe_failure_reply="Resposta segura",
+            completion_delivery_state=DeliveryState.PENDING,
+        ),
+        monotonic_clock=clock,
+    )
+
+    assert runner.run_once() is not None
+    assert generator.calls == 1
+    assert clock.value == 8.0
+    assert store.get_delivery_for_inbound(inbound.inbound_message_id) is not None
+    assert runner.run_once() is None
+
+
+class _PauseBeforeClaimStore(SqliteConversationStore):
+    def __init__(self, database_path: Path) -> None:
+        super().__init__(database_path)
+        self.loaded = Event()
+        self.release = Event()
+
+    def load_recoverable_inbound_message(self, *, inbound_message_id: int) -> InboundMessage:
+        message = super().load_recoverable_inbound_message(inbound_message_id=inbound_message_id)
+        self.loaded.set()
+        assert self.release.wait(timeout=2.0)
+        return message
+
+
+class _SignallingRunner(ProcessingRunner):
+    def stop_acquiring(self) -> None:
+        super().stop_acquiring()
+        self.stopped = True
+
+
+def test_shutdown_stops_claim_between_scan_and_acquisition(tmp_path: Path) -> None:
+    store = _PauseBeforeClaimStore(tmp_path / "shutdown-gate.db")
+    store.initialize()
+    store.admit_generation(_message("unclaimed"))
+    runner = _SignallingRunner(
+        store=store,
+        responder=MessageResponder(
+            store=store,
+            generator=FixedReplyGenerator("Should not generate"),
+            safe_failure_reply="Safe",
+            completion_delivery_state=DeliveryState.PENDING,
+        ),
+    )
+    runner.stopped = False
+    executor = ProcessingExecutor(runner=runner, poll_interval_seconds=0.01, concurrency=1)
+
+    executor.start()
+    assert store.loaded.wait(timeout=2.0)
+    stopping = Thread(target=executor.stop)
+    stopping.start()
+    for _ in range(100):
+        if runner.stopped:
+            break
+        Event().wait(0.01)
+    assert runner.stopped
+    store.release.set()
+    stopping.join(timeout=2.0)
+
+    assert not stopping.is_alive()
+    generation = store.get_generation(provider="test-provider", provider_message_id="unclaimed")
+    assert generation is not None
+    assert generation.state is GenerationState.RETRYABLE
+
+
 @pytest.mark.parametrize(
     ("delivery_outcome", "can_advance"),
     [
@@ -334,6 +434,9 @@ def test_executor_polls_durable_work_after_restart_and_stops_new_claims(tmp_path
 class _BrokenRunner:
     def run_once(self) -> None:
         raise RuntimeError("synthetic failure without private data")
+
+    def stop_acquiring(self) -> None:
+        pass
 
 
 def test_unexpected_processing_loop_failure_makes_executor_unready() -> None:

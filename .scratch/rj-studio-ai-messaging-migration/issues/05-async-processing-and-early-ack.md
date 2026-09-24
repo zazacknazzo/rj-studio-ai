@@ -1,6 +1,6 @@
 # 05: Move AI processing behind durable ingress
 
-**Status:** in-progress
+**Status:** blocked
 
 ## Objective
 
@@ -73,3 +73,13 @@ durable Processing Executor, removing provider retry as the work scheduler.
 - Enable only after Tickets 02–04 readiness and proactive smoke pass.
 - Stop new processing acquisition during deploy; expired claims recover after restart.
 - Rollback to synchronous processing is allowed only with proactive delivery retained and a reviewed plan for already-acknowledged pending inbounds; never restore TwiML delivery for rows already owning deliveries.
+
+## Comments
+
+- 2026-09-23: Code, deterministic tests, migration/regression checks, lint, and
+  three independent reviews passed. Review findings on shutdown acquisition,
+  permanent-failure deadline, and unsafe legacy rollback were fixed and tested.
+  The real Twilio Sandbox smoke remains an operational gate because this
+  environment has no credentials, public callback URLs, or verifiable Sandbox
+  membership. See `docs/runbooks/twilio-async-smoke-test.md`. Do not mark this
+  ticket done until that gate is executed and recorded against a commit.

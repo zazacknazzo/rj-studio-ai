@@ -123,10 +123,18 @@ def create_app(
             return resolved_outbound_sender.is_configured()
         return True
 
+    legacy_mode_safe_at_start = False
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        nonlocal legacy_mode_safe_at_start
         resolved_store.initialize()
         resolved_salon_knowledge.load()
+        if resolved_settings.delivery_mode == "legacy":
+            try:
+                legacy_mode_safe_at_start = resolved_store.legacy_delivery_mode_is_safe()
+            except PersistenceUnavailable:
+                legacy_mode_safe_at_start = False
         executor_configuration_ready = (
             configuration_is_valid()
             and resolved_settings.app_process_count == 1
@@ -166,13 +174,9 @@ def create_app(
 
     @app.get("/ready")
     def readiness() -> JSONResponse:
-        try:
-            delivery_mode_safe = (
-                resolved_settings.delivery_mode == "proactive"
-                or resolved_store.legacy_delivery_mode_is_safe()
-            )
-        except PersistenceUnavailable:
-            delivery_mode_safe = False
+        delivery_mode_safe = (
+            resolved_settings.delivery_mode == "proactive" or legacy_mode_safe_at_start
+        )
         checks = {
             "configuration": ("ok" if configuration_is_valid() else "failed"),
             "sqlite_single_process": (

@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from time import monotonic
 
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
@@ -21,9 +21,17 @@ class ProcessingRunner:
     store: SqliteConversationStore
     responder: MessageResponder
     monotonic_clock: Callable[[], float] = monotonic
+    _stop_acquisition: Event = field(init=False, default_factory=Event)
+    _acquisition_gate: Lock = field(init=False, default_factory=Lock)
+
+    def stop_acquiring(self) -> None:
+        with self._acquisition_gate:
+            self._stop_acquisition.set()
 
     def run_once(self) -> GenerationClaimResult | None:
         for candidate in self.store.list_pending_generations():
+            if self._stop_acquisition.is_set():
+                return None
             if candidate.blocked_by_predecessor:
                 continue
             try:
@@ -32,10 +40,15 @@ class ProcessingRunner:
                 )
             except GenerationRecoveryNotAvailable:
                 continue
+            with self._acquisition_gate:
+                if self._stop_acquisition.is_set():
+                    return None
+                claim = self.store.claim_generation(message)
             try:
                 reply = self.responder.process_persisted(
                     message,
                     monotonic_clock=self.monotonic_clock,
+                    preclaimed=claim,
                 )
             except RetryableWebhookError:
                 return None
@@ -87,6 +100,7 @@ class ProcessingExecutor:
             thread.start()
 
     def stop(self) -> None:
+        self.runner.stop_acquiring()
         self._stop.set()
         self._wake.set()
         deadline = monotonic() + 11.0
