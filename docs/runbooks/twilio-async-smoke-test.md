@@ -1,6 +1,6 @@
 # Twilio asynchronous ingress smoke test
 
-Status: pending operational gate
+Status: INCONCLUSIVE / NOT APPROVED
 
 This is the real Twilio Sandbox gate for Messaging Migration 05. Use synthetic
 content, a fresh ignored SQLite database, one application process, and the
@@ -25,17 +25,25 @@ same credential hygiene as the M04 proactive smoke runbook.
    before processing when operationally possible; restart and verify polling
    completes the same durable work once.
 
-## Execution record
+## First real execution record
 
-- Date/time and timezone: 2026-09-23 16:28 America/Sao_Paulo
-- Candidate baseline: `cd958d88800f64f718a5621842e5b87bcd207e4c`
-- Result: not executed
+- Date/time and timezone: 2026-09-24 America/Sao_Paulo
+- Candidate baseline: `272088c8f4e679a8ab27654ef348dd676a973ffa`
+- Result: inconclusive; not approved
 - Expected: durable inbound before ACK, asynchronous AI processing, one REST
   submission and Provider Acceptance, no customer-facing TwiML, restart
   recovery when the controlled timing permits.
-- Observed: the local environment has no `.env`, Twilio credentials, or public
-  HTTPS webhook/status URLs; Sandbox membership could not be verified. No real provider
-  request was attempted and no success is claimed.
-- Gate: configure the Sandbox privately, execute the steps, and record the
-  tested commit and redacted evidence without secrets, phone numbers, raw
-  MessageSid, or real Customer content.
+- Observed: inbound reached the application; the webhook returned HTTP 200;
+  inbound persistence and M05 asynchronous processing completed; one AI Reply
+  and one Outbound Delivery were created. Outbound ended as `unknown`, was not
+  retried, and no reply appeared in WhatsApp. Twilio recorded error 12300.
+  REST credentials were later validated with read-only HTTP 200 calls. The
+  Twilio Try out WhatsApp environment has behavior and restrictions different
+  from the production provider path.
+- Evidence boundary: this run does not prove the root cause of either Twilio
+  12300 or the outbound `unknown`. No unsafe retry was performed and no success
+  is claimed.
+- Decision: M05 code remains accepted, while this operational smoke is not an
+  approved E2E gate. E2E validation continues with the official Meta test
+  number under Messaging Migration 06. Twilio remains available as an adapter;
+  Try out WhatsApp is not the production gate.
