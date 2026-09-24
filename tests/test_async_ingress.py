@@ -82,7 +82,7 @@ class _PausedExecutor:
 
 
 class _UnavailableIngressStore(SqliteConversationStore):
-    def admit_generation(self, *args: object, **kwargs: object) -> object:
+    def record_webhook_events(self, *args: object, **kwargs: object) -> object:
         raise PersistenceUnavailable("synthetic commit failure")
 
 

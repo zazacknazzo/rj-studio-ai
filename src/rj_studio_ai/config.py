@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     salon_knowledge_path: Path = Path("knowledge/rj_studio.yaml")
     automatic_reply: str = "Olá! Recebemos sua mensagem e retornaremos em breve. ✨"
     message_retention_days: int = Field(default=90, ge=1)
+    whatsapp_provider: Literal["twilio", "meta"] = "twilio"
     twilio_auth_token: str = ""
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_api_key_sid: str = ""
     twilio_api_key_secret: str = ""
+    meta_whatsapp_access_token: str = ""
+    meta_whatsapp_phone_number_id: str = ""
+    meta_whatsapp_verify_token: str = ""
+    meta_whatsapp_app_secret: str = ""
+    meta_whatsapp_api_version: str = ""
     delivery_mode: Literal["legacy", "proactive"] = "legacy"
     outbound_request_timeout_seconds: float = Field(default=5.0, gt=0, lt=30)
     outbound_poll_interval_seconds: float = Field(default=0.25, gt=0)

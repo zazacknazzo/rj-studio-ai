@@ -27,6 +27,7 @@ from rj_studio_ai.providers.base import (
     ProviderWebhookRequest,
     WhatsAppProvider,
 )
+from rj_studio_ai.providers.meta import MetaOutboundMessageSender, MetaProvider
 from rj_studio_ai.providers.twilio import TwilioOutboundSender, TwilioProvider
 from rj_studio_ai.runtime import generator_from_settings
 from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
@@ -45,12 +46,20 @@ def create_app(
     sleeper: Callable[[float], None] = sleep,
 ) -> FastAPI:
     resolved_settings = settings or Settings()
-    resolved_provider = provider or TwilioProvider(
-        auth_token=resolved_settings.twilio_auth_token,
-        validate_signature=resolved_settings.twilio_validate_signature,
-        public_webhook_url=resolved_settings.twilio_public_webhook_url,
-        public_status_callback_url=resolved_settings.twilio_status_callback_url,
-    )
+    if provider is not None:
+        resolved_provider = provider
+    elif resolved_settings.whatsapp_provider == "meta":
+        resolved_provider = MetaProvider(
+            verify_token=resolved_settings.meta_whatsapp_verify_token,
+            app_secret=resolved_settings.meta_whatsapp_app_secret,
+        )
+    else:
+        resolved_provider = TwilioProvider(
+            auth_token=resolved_settings.twilio_auth_token,
+            validate_signature=resolved_settings.twilio_validate_signature,
+            public_webhook_url=resolved_settings.twilio_public_webhook_url,
+            public_status_callback_url=resolved_settings.twilio_status_callback_url,
+        )
     resolved_store = store or SqliteConversationStore(
         resolved_settings.database_path,
         busy_timeout_seconds=resolved_settings.sqlite_busy_timeout_seconds,
@@ -62,12 +71,21 @@ def create_app(
     resolved_outbound_sender = outbound_sender
     outbound_executor: OutboundDeliveryExecutor | None = None
     if resolved_settings.delivery_mode == "proactive":
-        resolved_outbound_sender = resolved_outbound_sender or TwilioOutboundSender(
-            account_sid=resolved_settings.twilio_account_sid,
-            api_key_sid=resolved_settings.twilio_api_key_sid,
-            api_key_secret=resolved_settings.twilio_api_key_secret,
-            status_callback_url=resolved_settings.twilio_status_callback_url or "",
-        )
+        if resolved_outbound_sender is None:
+            if resolved_settings.whatsapp_provider == "meta":
+                resolved_outbound_sender = MetaOutboundMessageSender(
+                    access_token=resolved_settings.meta_whatsapp_access_token,
+                    phone_number_id=resolved_settings.meta_whatsapp_phone_number_id,
+                    api_version=resolved_settings.meta_whatsapp_api_version,
+                    free_form_is_eligible=resolved_store.meta_free_form_is_eligible,
+                )
+            else:
+                resolved_outbound_sender = TwilioOutboundSender(
+                    account_sid=resolved_settings.twilio_account_sid,
+                    api_key_sid=resolved_settings.twilio_api_key_sid,
+                    api_key_secret=resolved_settings.twilio_api_key_secret,
+                    status_callback_url=resolved_settings.twilio_status_callback_url or "",
+                )
         outbound_executor = OutboundDeliveryExecutor(
             store=resolved_store,
             sender=resolved_outbound_sender,
@@ -79,6 +97,7 @@ def create_app(
             retry_backoff_maximum_seconds=(
                 resolved_settings.outbound_retry_backoff_maximum_seconds
             ),
+            provider=resolved_settings.whatsapp_provider,
         )
     responder = MessageResponder(
         store=resolved_store,
@@ -116,10 +135,12 @@ def create_app(
 
     def outbound_configuration_is_valid() -> bool:
         if resolved_settings.delivery_mode == "legacy":
-            return True
+            return resolved_settings.whatsapp_provider == "twilio"
         if resolved_outbound_sender is None:
             return False
         if isinstance(resolved_outbound_sender, TwilioOutboundSender):
+            return resolved_outbound_sender.is_configured()
+        if isinstance(resolved_outbound_sender, MetaOutboundMessageSender):
             return resolved_outbound_sender.is_configured()
         return True
 
@@ -203,10 +224,39 @@ def create_app(
             content={"status": "ready" if is_ready else "not_ready", "checks": checks},
         )
 
+    @app.get("/webhooks/meta")
+    async def meta_webhook_verification(request: Request) -> Response:
+        if not isinstance(resolved_provider, MetaProvider):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        try:
+            verification = resolved_provider.verify_subscription(
+                mode=request.query_params.get("hub.mode"),
+                verify_token=request.query_params.get("hub.verify_token"),
+                challenge=request.query_params.get("hub.challenge"),
+            )
+        except InvalidWebhookSignature as error:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(error),
+            ) from error
+        return Response(
+            content=verification.body,
+            media_type=verification.media_type,
+            status_code=verification.status_code,
+        )
+
+    @app.post("/webhooks/meta")
     @app.post("/webhooks/twilio")
     @app.post("/webhooks/whatsapp")
     async def whatsapp_webhook(request: Request) -> Response:
         deadline = ExecutionDeadline.start(clock=monotonic_clock)
+        explicit_provider = {
+            "/webhooks/meta": "meta",
+            "/webhooks/twilio": "twilio",
+        }.get(request.url.path)
+        selected_provider = getattr(resolved_provider, "name", explicit_provider)
+        if explicit_provider is not None and selected_provider != explicit_provider:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         if not configuration_is_valid():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -227,24 +277,23 @@ def create_app(
                 local_readiness = await run_in_threadpool(readiness)
                 if local_readiness.status_code != status.HTTP_200_OK:
                     raise RetryableWebhookError("Proactive ingress is not locally ready")
-                if not batch.events or any(
-                    not isinstance(event, InboundMessageReceived) for event in batch.events
-                ):
-                    raise InvalidWebhookPayload("Unsupported provider webhook event")
-                for event in batch.events:
-                    await run_in_threadpool(
-                        resolved_store.admit_generation,
-                        event,
-                        lock_timeout=deadline.remaining_budget(),
-                    )
+                await run_in_threadpool(
+                    resolved_store.record_webhook_events,
+                    batch.events,
+                    lock_timeout=deadline.remaining_budget(),
+                )
                 if deadline.is_expired():
                     raise RetryableWebhookError(
                         "Webhook deadline expired before provider acknowledgement"
                     )
                 provider_response = resolved_provider.acknowledge()
-                if resolved_processing_executor is None:
-                    raise RetryableWebhookError("Processing Executor is unavailable")
-                resolved_processing_executor.wake()
+                has_inbound = any(
+                    isinstance(event, InboundMessageReceived) for event in batch.events
+                )
+                if has_inbound:
+                    if resolved_processing_executor is None:
+                        raise RetryableWebhookError("Processing Executor is unavailable")
+                    resolved_processing_executor.wake()
                 legacy_customer_reply = False
             else:
                 if len(batch.events) != 1 or not isinstance(
@@ -314,6 +363,8 @@ def create_app(
 
     @app.post("/webhooks/twilio/status")
     async def twilio_status_callback(request: Request) -> Response:
+        if getattr(resolved_provider, "name", "twilio") != "twilio":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         webhook = ProviderWebhookRequest(
             method=request.method,
             url=str(request.url),
@@ -326,8 +377,7 @@ def create_app(
             batch = resolved_provider.receive(webhook)
             if any(not isinstance(event, DeliveryStatusReceived) for event in batch.events):
                 raise InvalidWebhookPayload("Unsupported provider status event")
-            for event in batch.events:
-                resolved_store.record_delivery_status(event)
+            resolved_store.record_webhook_events(batch.events)
             acknowledgement = resolved_provider.acknowledge()
         except InvalidWebhookSignature as error:
             raise HTTPException(

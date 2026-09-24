@@ -12,6 +12,8 @@ from rj_studio_ai.domain import (
     DeliveryStatusReceived,
     InboundMessage,
     MessageRecord,
+    OutboundMessage,
+    ProviderWebhookEvent,
 )
 from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.migrations import MigrationManager
@@ -297,6 +299,73 @@ class SqliteConversationStore:
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
 
+    def record_webhook_events(
+        self,
+        events: tuple[ProviderWebhookEvent, ...],
+        *,
+        now: datetime | None = None,
+        lock_timeout: float | None = None,
+    ) -> None:
+        """Persist one authenticated provider batch atomically before its ACK."""
+        for event in events:
+            if isinstance(event, DeliveryStatusReceived):
+                self._validate_delivery_status(event)
+            elif not isinstance(event, InboundMessage):
+                raise ValueError("Unsupported canonical provider event")
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                for event in events:
+                    if isinstance(event, DeliveryStatusReceived):
+                        self._record_delivery_status_in_transaction(
+                            connection,
+                            event=event,
+                            timestamp=timestamp,
+                        )
+                    else:
+                        self._get_or_create_inbound(connection, event, timestamp)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Provider webhook persistence is unavailable") from error
+
+    def meta_free_form_is_eligible(
+        self,
+        message: OutboundMessage,
+        *,
+        now: datetime | None = None,
+        service_window: timedelta = timedelta(hours=24),
+    ) -> bool:
+        """Return whether a durable Meta inbound keeps the free-form window open."""
+        current_time = self._utc_time(now)
+        cutoff = current_time - service_window
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM messages AS inbound
+                        JOIN conversations AS conversation
+                          ON conversation.id = inbound.conversation_id
+                        WHERE inbound.direction = 'inbound'
+                          AND inbound.provider = 'meta'
+                          AND inbound.recipient_address = ?
+                          AND conversation.customer_address = ?
+                          AND inbound.created_at >= ?
+                          AND inbound.created_at <= ?
+                    )
+                    """,
+                    (
+                        message.sender_address,
+                        message.recipient_address,
+                        cutoff.isoformat(),
+                        current_time.isoformat(),
+                    ),
+                ).fetchone()
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Meta channel eligibility is unavailable") from error
+        return bool(row[0])
+
     def mark_generation_retryable(
         self,
         *,
@@ -559,6 +628,7 @@ class SqliteConversationStore:
     def claim_next_delivery(
         self,
         *,
+        provider: str | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> OutboundDeliveryRecord | None:
@@ -577,6 +647,7 @@ class SqliteConversationStore:
                     JOIN message_processing AS processing
                       ON processing.inbound_message_id = inbound.id
                     WHERE delivery.state IN ('pending', 'retryable')
+                      AND (? IS NULL OR delivery.provider = ?)
                       AND delivery.next_attempt_at <= ?
                       AND processing.state = 'completed'
                       AND NOT EXISTS (
@@ -609,7 +680,7 @@ class SqliteConversationStore:
                     ORDER BY delivery.next_attempt_at, delivery.id
                     LIMIT 1
                     """,
-                    (timestamp,),
+                    (provider, provider, timestamp),
                 ).fetchone()
                 if candidate is None:
                     return None
@@ -842,6 +913,21 @@ class SqliteConversationStore:
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> DeliveryStatusDisposition:
+        self._validate_delivery_status(event)
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                return self._record_delivery_status_in_transaction(
+                    connection,
+                    event=event,
+                    timestamp=timestamp,
+                )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Delivery status persistence is unavailable") from error
+
+    @staticmethod
+    def _validate_delivery_status(event: DeliveryStatusReceived) -> None:
         if not event.provider.strip() or not event.provider_message_id.strip():
             raise ValueError("Delivery status requires provider identity")
         if event.status is DeliveryStatus.FAILED:
@@ -849,81 +935,79 @@ class SqliteConversationStore:
                 raise ValueError("Failed delivery status requires a safe error code")
         elif event.safe_error_code is not None:
             raise ValueError("Successful delivery status cannot carry an error code")
-        try:
-            with self._connect(lock_timeout) as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                timestamp = self._utc_time(now).isoformat()
-                delivery = connection.execute(
-                    """
-                    SELECT id
-                    FROM outbound_deliveries
-                    WHERE provider = ? AND provider_message_id = ?
-                    """,
-                    (event.provider, event.provider_message_id),
-                ).fetchone()
-                if delivery is not None:
-                    applied = self._apply_delivery_status(
-                        connection,
-                        delivery_id=int(delivery[0]),
-                        status=event.status,
-                        safe_error_code=event.safe_error_code,
-                        timestamp=timestamp,
-                    )
-                    return (
-                        DeliveryStatusDisposition.APPLIED
-                        if applied
-                        else DeliveryStatusDisposition.IGNORED
-                    )
 
-                existing = connection.execute(
-                    """
-                    SELECT status
-                    FROM pending_delivery_statuses
-                    WHERE provider = ? AND provider_message_id = ?
-                    """,
-                    (event.provider, event.provider_message_id),
-                ).fetchone()
-                if existing is None:
-                    connection.execute(
-                        """
-                        INSERT INTO pending_delivery_statuses (
-                            provider, provider_message_id, status, safe_error_code,
-                            received_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            event.provider,
-                            event.provider_message_id,
-                            event.status,
-                            event.safe_error_code,
-                            timestamp,
-                            timestamp,
-                        ),
-                    )
-                    return DeliveryStatusDisposition.BUFFERED
+    def _record_delivery_status_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        event: DeliveryStatusReceived,
+        timestamp: str,
+    ) -> DeliveryStatusDisposition:
+        delivery = connection.execute(
+            """
+            SELECT id
+            FROM outbound_deliveries
+            WHERE provider = ? AND provider_message_id = ?
+            """,
+            (event.provider, event.provider_message_id),
+        ).fetchone()
+        if delivery is not None:
+            applied = self._apply_delivery_status(
+                connection,
+                delivery_id=int(delivery[0]),
+                status=event.status,
+                safe_error_code=event.safe_error_code,
+                timestamp=timestamp,
+            )
+            if applied:
+                return DeliveryStatusDisposition.APPLIED
+            return DeliveryStatusDisposition.IGNORED
 
-                current_status = DeliveryStatus(str(existing[0]))
-                if self._delivery_status_rank(event.status) <= self._delivery_status_rank(
-                    current_status
-                ):
-                    return DeliveryStatusDisposition.IGNORED
-                connection.execute(
-                    """
-                    UPDATE pending_delivery_statuses
-                    SET status = ?, safe_error_code = ?, updated_at = ?
-                    WHERE provider = ? AND provider_message_id = ?
-                    """,
-                    (
-                        event.status,
-                        event.safe_error_code,
-                        timestamp,
-                        event.provider,
-                        event.provider_message_id,
-                    ),
-                )
-                return DeliveryStatusDisposition.BUFFERED
-        except sqlite3.Error as error:
-            raise PersistenceUnavailable("Delivery status persistence is unavailable") from error
+        existing = connection.execute(
+            """
+            SELECT status
+            FROM pending_delivery_statuses
+            WHERE provider = ? AND provider_message_id = ?
+            """,
+            (event.provider, event.provider_message_id),
+        ).fetchone()
+        if existing is None:
+            connection.execute(
+                """
+                INSERT INTO pending_delivery_statuses (
+                    provider, provider_message_id, status, safe_error_code,
+                    received_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.provider,
+                    event.provider_message_id,
+                    event.status,
+                    event.safe_error_code,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            return DeliveryStatusDisposition.BUFFERED
+
+        current_status = DeliveryStatus(str(existing[0]))
+        if self._delivery_status_rank(event.status) <= self._delivery_status_rank(current_status):
+            return DeliveryStatusDisposition.IGNORED
+        connection.execute(
+            """
+            UPDATE pending_delivery_statuses
+            SET status = ?, safe_error_code = ?, updated_at = ?
+            WHERE provider = ? AND provider_message_id = ?
+            """,
+            (
+                event.status,
+                event.safe_error_code,
+                timestamp,
+                event.provider,
+                event.provider_message_id,
+            ),
+        )
+        return DeliveryStatusDisposition.BUFFERED
 
     @staticmethod
     def _delivery_status_rank(status: DeliveryStatus) -> int:

@@ -29,6 +29,7 @@ class OutboundDeliveryRunner:
     store: SqliteConversationStore
     sender: OutboundMessageSender
     timeout_seconds: float
+    provider: str | None = None
     maximum_attempts: int = 3
     retry_backoff_base_seconds: float = 1.0
     retry_backoff_maximum_seconds: float = 30.0
@@ -44,7 +45,7 @@ class OutboundDeliveryRunner:
             raise ValueError("Outbound maximum backoff must cover the base backoff")
 
     def run_once(self, *, now: datetime | None = None) -> OutboundDeliveryRecord | None:
-        claim = self.store.claim_next_delivery(now=now)
+        claim = self.store.claim_next_delivery(provider=self.provider, now=now)
         if claim is None:
             return None
         if claim.owner_token is None:
@@ -145,6 +146,7 @@ class OutboundDeliveryExecutor:
     request_timeout_seconds: float
     poll_interval_seconds: float
     concurrency: int
+    provider: str | None = None
     maximum_attempts: int = 3
     retry_backoff_base_seconds: float = 1.0
     retry_backoff_maximum_seconds: float = 30.0
@@ -163,6 +165,7 @@ class OutboundDeliveryExecutor:
             store=self.store,
             sender=self.sender,
             timeout_seconds=self.request_timeout_seconds,
+            provider=self.provider,
             maximum_attempts=self.maximum_attempts,
             retry_backoff_base_seconds=self.retry_backoff_base_seconds,
             retry_backoff_maximum_seconds=self.retry_backoff_maximum_seconds,
@@ -197,6 +200,7 @@ class OutboundDeliveryExecutor:
             store=self.store,
             sender=self.sender,
             timeout_seconds=self.request_timeout_seconds,
+            provider=self.provider,
             maximum_attempts=self.maximum_attempts,
             retry_backoff_base_seconds=self.retry_backoff_base_seconds,
             retry_backoff_maximum_seconds=self.retry_backoff_maximum_seconds,
