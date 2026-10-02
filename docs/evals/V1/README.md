@@ -18,3 +18,11 @@ Ticket 10 adds deterministic SQLite/webhook handoff lifecycle tests in
 `tests/test_human_handoff.py`: activation, suppression, replay, release,
 rollback, concurrency, and submission fencing. These tests do not replace the
 real-model handoff detection/confirmation quality gate owned by Ticket 12.
+
+Ticket 11 adds `appointment-interest-cases.yaml`: 13 synthetic episodes covering
+complete/missing details, Professional preference, short answers, change,
+cancellation, rescheduling, exhausted clarifications, invented slot values and
+model/Customer attempts to confirm availability or booking. Their deterministic
+policy contract runs in `tests/test_appointment_intake.py`. Ticket 12 must score
+live-model extraction, naturalness and trust-boundary behavior with the same
+expected outcomes; no model gate has been executed here.

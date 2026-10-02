@@ -211,6 +211,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
     assert set(schema["properties"]) == {
+        "appointment_preferences",
         "intents",
         "reply_text",
         "reply_parts",
@@ -229,7 +230,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     )
     assert "Você é Lívia, a atendente virtual do RJ Studio." in system
     assert "R$" not in system
-    assert "disponibilidade" not in system
+    assert "não é reserva nem disponibilidade" in system
     assert "reply_parts" in system
     assert request["messages"] == [{"role": "user", "content": "Olá"}]
     assert request["timeout"] == 4.5

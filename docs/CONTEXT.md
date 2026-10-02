@@ -70,6 +70,12 @@ _Avoid_: Provider, employee
 A reserved time for a Customer to receive one or more planned Services at RJ Studio.
 _Avoid_: Booking, schedule
 
+**Appointment Interest Intake**:
+A Conversation episode that collects the Customer's desired service, preferred
+day or period, and optional Professional preference for Human Handoff. These are
+declared preferences, not approved salon facts or an Appointment.
+_Avoid_: Booking, Customer profile, permanent preference
+
 **Completed Service**:
 A Service occurrence that RJ Studio actually delivered to a Customer.
 _Avoid_: Finished appointment

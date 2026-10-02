@@ -150,6 +150,11 @@ ou ambíguas protegem seu vínculo contra purge; deliveries terminais elegíveis
 podem ser removidas com as Messages expiradas na mesma transação. Os comandos informam
 somente metadados operacionais mínimos, sem endereços ou conteúdo.
 
+O intake de interesse em agendamento usa o mesmo purge explícito, por data da
+última atualização; a suspensão de handoff permanece. A inspeção privada das
+três preferências é uma operação separada, descrita em
+[`docs/appointment-interest.md`](docs/appointment-interest.md).
+
 ## Estrutura
 
 - `application.py`: fluxo canônico de uma Message recebida até a Automatic Reply.

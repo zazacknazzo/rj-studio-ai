@@ -36,3 +36,9 @@ active handoff even when all its Messages expire. Explicit Conversation deletion
 also deletes that Conversation's handoff and must not be used as release.
 
 Design and residual submission race: [ADR 0008](decisions/0008-durable-human-handoff.md).
+
+Ticket 11's [appointment-interest episode](appointment-interest.md) retains only
+the minimum declared preferences for the assuming person. Its explicit
+`inspect-appointment-interest` command is separate from metadata-only listing.
+Release ends the linked intake; it does not reuse those preferences or revive
+old Messages.

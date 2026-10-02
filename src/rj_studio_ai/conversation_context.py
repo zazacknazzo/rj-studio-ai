@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Literal
 
+from rj_studio_ai.appointment_intake import AppointmentIntake
 from rj_studio_ai.domain import MessageRecord
 from rj_studio_ai.persistence import RecentContextHistory, SqliteConversationStore
 from rj_studio_ai.salon_knowledge import SalonKnowledgeFact, SalonKnowledgeRepository
@@ -47,6 +48,7 @@ class ConversationContext:
     history: tuple[ConversationTurn, ...]
     knowledge: tuple[SalonKnowledgeFact, ...]
     history_may_be_incomplete: bool = False
+    appointment_intake: AppointmentIntake | None = None
 
 
 class ConversationContextBuilder:
@@ -70,7 +72,16 @@ class ConversationContextBuilder:
         current_body: str,
         lock_timeout: float | None = None,
     ) -> ConversationContext:
-        current_cost = _current_message_cost(current_body)
+        intake = self._store.get_appointment_intake(
+            inbound_message_id=inbound_message_id,
+            lock_timeout=lock_timeout,
+        )
+        intake_cost = (
+            len(intake.context_text().encode())
+            if intake is not None and intake.state == "collecting"
+            else 0
+        )
+        current_cost = _current_message_cost(current_body) + intake_cost
         content_budget = (
             self._limits.total_input_token_budget - self._limits.prompt_overhead_token_budget
         )
@@ -96,6 +107,7 @@ class ConversationContextBuilder:
             history=history,
             knowledge=knowledge,
             history_may_be_incomplete=(recent_history.has_omitted_messages or history_was_trimmed),
+            appointment_intake=intake,
         )
 
     def _select_knowledge(

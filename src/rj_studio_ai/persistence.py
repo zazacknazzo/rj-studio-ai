@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
+from rj_studio_ai.appointment_intake import AppointmentIntake, AppointmentIntakeUpdate
 from rj_studio_ai.domain import (
     DeliveryStatus,
     DeliveryStatusReceived,
@@ -215,6 +216,48 @@ class SqliteConversationStore:
     def initialize(self) -> None:
         self._migrations.upgrade()
 
+    def get_appointment_intake(
+        self,
+        *,
+        conversation_id: int | None = None,
+        inbound_message_id: int | None = None,
+        lock_timeout: float | None = None,
+    ) -> AppointmentIntake | None:
+        """Explicit inspection of three preferences; no full Message or address."""
+        if (conversation_id is None) == (inbound_message_id is None):
+            raise ValueError("Select one Conversation or inbound Message")
+        try:
+            with self._connect(lock_timeout) as connection:
+                row = connection.execute(
+                    "SELECT * FROM appointment_intakes WHERE conversation_id = "
+                    + (
+                        "?"
+                        if conversation_id is not None
+                        else "(SELECT conversation_id FROM messages "
+                        "WHERE id = ? AND direction = 'inbound')"
+                    ),
+                    (conversation_id if conversation_id is not None else inbound_message_id,),
+                ).fetchone()
+                return (
+                    None
+                    if row is None
+                    else AppointmentIntake(
+                        conversation_id=int(row[0]),
+                        episode_token=str(row[1]),
+                        state=str(row[2]),
+                        desired_service=row[3],
+                        preferred_time=row[4],
+                        professional_preference=row[5],
+                        clarification_count=int(row[6]),
+                        awaiting_field=row[7],
+                        last_inbound_message_id=int(row[8]),
+                        handoff_token=row[9],
+                        updated_at=datetime.fromisoformat(row[10]),
+                    )
+                )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Appointment intake persistence is unavailable") from error
+
     def list_active_handoffs(self) -> list[HumanHandoffRecord]:
         """Operational metadata only: no Customer address or Message body."""
         try:
@@ -251,6 +294,11 @@ class SqliteConversationStore:
                 ).rowcount
                 if not updated:
                     return False
+                connection.execute(
+                    "UPDATE appointment_intakes SET state = 'released', updated_at = ? "
+                    "WHERE conversation_id = ? AND state = 'handoff' AND handoff_token = ?",
+                    (timestamp, conversation_id, owner_token),
+                )
                 self._cancel_unsent_deliveries(connection, conversation_id, timestamp)
                 connection.execute(
                     "UPDATE conversations SET updated_at = ? WHERE id = ?",
@@ -521,6 +569,7 @@ class SqliteConversationStore:
         reply_body: str,
         delivery_state: DeliveryState = DeliveryState.UNKNOWN,
         handoff_reason: HandoffReason | str | None = None,
+        appointment_intake: AppointmentIntakeUpdate | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -533,6 +582,7 @@ class SqliteConversationStore:
                 reply_body=reply_body,
                 delivery_state=delivery_state,
                 handoff_reason=None if handoff_reason is None else HandoffReason(handoff_reason),
+                appointment_intake=appointment_intake,
                 now=now,
                 lock_timeout=lock_timeout,
             )
@@ -1711,6 +1761,9 @@ class SqliteConversationStore:
                     connection,
                     cutoff_text,
                 )
+                connection.execute(
+                    "DELETE FROM appointment_intakes WHERE updated_at < ?", (cutoff_text,)
+                )
                 messages_deleted = connection.execute(
                     "DELETE FROM messages WHERE created_at < ?",
                     (cutoff_text,),
@@ -2051,6 +2104,7 @@ class SqliteConversationStore:
         reply_body: str,
         delivery_state: DeliveryState,
         handoff_reason: HandoffReason | None,
+        appointment_intake: AppointmentIntakeUpdate | None,
         now: datetime | None,
         lock_timeout: float | None,
     ) -> bool:
@@ -2097,6 +2151,51 @@ class SqliteConversationStore:
             ).fetchone():
                 return False
             handoff_token = uuid4().hex if handoff_reason is not None else None
+            if appointment_intake is not None:
+                existing = connection.execute(
+                    "SELECT episode_token, last_inbound_message_id FROM appointment_intakes "
+                    "WHERE conversation_id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                expected = (
+                    appointment_intake.expected_episode_token,
+                    appointment_intake.expected_last_inbound_message_id,
+                )
+                if (None if existing is None else tuple(existing)) != (
+                    None if expected == (None, None) else expected
+                ):
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO appointment_intakes (
+                        conversation_id, episode_token, state, desired_service, preferred_time,
+                        professional_preference, clarification_count, awaiting_field,
+                        last_inbound_message_id, handoff_token, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(conversation_id) DO UPDATE SET
+                        episode_token = excluded.episode_token, state = excluded.state,
+                        desired_service = excluded.desired_service,
+                        preferred_time = excluded.preferred_time,
+                        professional_preference = excluded.professional_preference,
+                        clarification_count = excluded.clarification_count,
+                        awaiting_field = excluded.awaiting_field,
+                        last_inbound_message_id = excluded.last_inbound_message_id,
+                        handoff_token = excluded.handoff_token, updated_at = excluded.updated_at
+                    """,
+                    (
+                        conversation_id,
+                        appointment_intake.episode_token,
+                        "handoff" if handoff_token is not None else "collecting",
+                        appointment_intake.desired_service,
+                        appointment_intake.preferred_time,
+                        appointment_intake.professional_preference,
+                        appointment_intake.clarification_count,
+                        None if handoff_token is not None else appointment_intake.awaiting_field,
+                        inbound_message_id,
+                        handoff_token,
+                        timestamp,
+                    ),
+                )
             outbound_message_id = int(
                 connection.execute(
                     """
@@ -2140,6 +2239,12 @@ class SqliteConversationStore:
                 (timestamp, conversation_id),
             )
             if handoff_token is not None:
+                connection.execute(
+                    "UPDATE appointment_intakes SET state = 'handoff', awaiting_field = NULL, "
+                    "handoff_token = ?, last_inbound_message_id = ?, updated_at = ? "
+                    "WHERE conversation_id = ? AND state = 'collecting'",
+                    (handoff_token, inbound_message_id, timestamp, conversation_id),
+                )
                 connection.execute(
                     """
                     INSERT INTO conversation_handoffs (

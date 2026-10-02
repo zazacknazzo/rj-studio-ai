@@ -10,6 +10,13 @@ typed `reply_parts`, categorical `uncertainty` (`low`, `medium`, or `high`), sel
 reason. The reply has an 800-character hard structural limit and the Anthropic
 request has a 200-token output limit.
 
+Ticket 11 adds nullable `appointment_preferences` with `desired_service`,
+`preferred_time` and optional `professional_preference`. These are untrusted
+Customer excerpts, not `critical_claims` or `knowledge_refs`. Older decisions
+remain readable without this field; new provider requests require it (nullable).
+See [appointment interest](appointment-interest.md) for trusted questions,
+deterministic grounding precedence and durable handoff completion.
+
 The Anthropic adapter uses the official JSON-schema output mechanism, parses its
 response, and validates it against the current selected approved knowledge. A
 missing field, unknown enum, duplicate Intent/reference, unknown field, invalid

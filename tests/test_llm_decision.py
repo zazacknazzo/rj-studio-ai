@@ -119,3 +119,38 @@ def test_reply_plan_cannot_smuggle_custom_text_or_substitute_a_fact_value(part) 
         validate_llm_decision(
             _payload(reply_parts=[part]), allowed_knowledge_refs={"service-corte"}
         )
+
+
+@pytest.mark.parametrize(
+    "preferences",
+    [
+        {"desired_service": 42},
+        {"preferred_time": ""},
+        {"professional_preference": "x" * 121},
+        {"availability": True},
+    ],
+)
+def test_appointment_preferences_are_strict_bounded_proposals(preferences) -> None:
+    with pytest.raises(StructuredDecisionValidationError):
+        validate_llm_decision(
+            _payload(appointment_preferences=preferences), allowed_knowledge_refs={"service-corte"}
+        )
+
+
+def test_appointment_proposal_preserves_multi_intent_refs_and_legacy_decisions() -> None:
+    decision = validate_llm_decision(
+        _payload(
+            intents=["price", "appointment_interest"],
+            appointment_preferences={"desired_service": "corte", "preferred_time": "sexta"},
+        ),
+        allowed_knowledge_refs={"service-corte"},
+    )
+    assert decision.appointment_preferences.desired_service == "corte"
+    assert decision.knowledge_refs == ("service-corte",)
+    assert decision.intents == (Intent.PRICE, Intent.APPOINTMENT_INTEREST)
+    assert (
+        validate_llm_decision(
+            _payload(), allowed_knowledge_refs={"service-corte"}
+        ).appointment_preferences
+        is None
+    )

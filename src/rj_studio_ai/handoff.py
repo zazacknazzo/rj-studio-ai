@@ -24,6 +24,9 @@ class HandoffReason(StrEnum):
     UNSAFE_SURFACE = "unsafe_reply_surface"
     MODEL_REQUEST = "model_requested_handoff"
     GENERATION_UNAVAILABLE = "generation_unavailable"
+    APPOINTMENT_INTEREST = "appointment_interest_collected"
+    APPOINTMENT_INTAKE_LIMIT = "appointment_intake_limit"
+    APPOINTMENT_CHANGE = "appointment_change_requested"
 
 
 def safe_handoff_reason(proposal: str) -> HandoffReason:
@@ -36,6 +39,8 @@ def safe_handoff_reason(proposal: str) -> HandoffReason:
 
 def handoff_confirmation(reason: HandoffReason, customer_message: str) -> str:
     text = "Vou encaminhar sua conversa para uma pessoa da equipe."
+    if reason in {HandoffReason.APPOINTMENT_INTEREST, HandoffReason.APPOINTMENT_INTAKE_LIMIT}:
+        text = "Vou encaminhar essas informações para a equipe confirmar a disponibilidade."
     if reason is HandoffReason.TECHNICAL_RISK:
         text = (
             "Se um procedimento estiver em andamento, pare e procure avaliação profissional. "

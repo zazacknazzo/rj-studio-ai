@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import anthropic
 
+from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
 from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.generation import (
     GeneratedReply,
@@ -301,6 +302,7 @@ class AnthropicReplyGenerator:
     def _system_prompt_for(cls, context: "ConversationContext | None") -> str:
         prompt = (
             f"{cls._system_prompt}\n\n{cls._persona.instructions}\n\n{reply_plan_instructions()}"
+            f"\n\n{APPOINTMENT_EXTRACTION_INSTRUCTIONS}"
         )
         if context is not None and context.history_may_be_incomplete:
             prompt += (
@@ -332,5 +334,12 @@ class AnthropicReplyGenerator:
             }
             for turn in history
         ]
-        messages.append({"role": "user", "content": message.body})
+        content = message.body
+        if (
+            context is not None
+            and context.appointment_intake is not None
+            and context.appointment_intake.state == "collecting"
+        ):
+            content = context.appointment_intake.context_text() + "\n\n" + content
+        messages.append({"role": "user", "content": content})
         return messages

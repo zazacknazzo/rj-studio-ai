@@ -88,9 +88,23 @@ class MigrationManager:
             "delivery_attempts",
             "pending_delivery_statuses",
             "conversation_handoffs",
+            "appointment_intakes",
         }.issubset(inspector.get_table_names()):
             return False
         required_columns = {
+            "appointment_intakes": {
+                "conversation_id",
+                "episode_token",
+                "state",
+                "desired_service",
+                "preferred_time",
+                "professional_preference",
+                "clarification_count",
+                "awaiting_field",
+                "last_inbound_message_id",
+                "handoff_token",
+                "updated_at",
+            },
             "conversation_handoffs": {
                 "conversation_id",
                 "active",
@@ -295,7 +309,27 @@ class MigrationManager:
             )
         }
         return (
-            {
+            inspector.get_pk_constraint("appointment_intakes")["constrained_columns"]
+            == ["conversation_id"]
+            and {
+                "ck_intake_state",
+                "ck_intake_questions",
+                "ck_intake_episode",
+                "ck_intake_lifecycle",
+                "ck_intake_desired_service",
+                "ck_intake_preferred_time",
+                "ck_intake_professional_preference",
+            }.issubset(
+                {item["name"] for item in inspector.get_check_constraints("appointment_intakes")}
+            )
+            and any(
+                item["constrained_columns"] == ["conversation_id"]
+                and item["referred_table"] == "conversations"
+                and item["referred_columns"] == ["id"]
+                and item["options"].get("ondelete") == "CASCADE"
+                for item in inspector.get_foreign_keys("appointment_intakes")
+            )
+            and {
                 "ai_reply_rejects_active_handoff",
                 "processing_rejects_active_handoff",
                 "submission_evidence_is_immutable",

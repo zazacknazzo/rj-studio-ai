@@ -91,6 +91,16 @@ class FactReplyPart(BaseModel):
 ReplyPart = PhraseReplyPart | FactReplyPart
 
 
+class AppointmentPreferences(BaseModel):
+    """Untrusted exact excerpts of Customer preferences, never salon facts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    desired_service: StrictStr | None = Field(default=None, min_length=1, max_length=120)
+    preferred_time: StrictStr | None = Field(default=None, min_length=1, max_length=120)
+    professional_preference: StrictStr | None = Field(default=None, min_length=1, max_length=120)
+
+
 class LLMDecision(BaseModel):
     """A structurally valid but still untrusted proposal for one inbound Message."""
 
@@ -106,6 +116,7 @@ class LLMDecision(BaseModel):
     critical_claims: tuple[CriticalFactualClaim, ...]
     handoff: StrictBool
     handoff_reason: StrictStr | None = Field(max_length=320)
+    appointment_preferences: AppointmentPreferences | None = None
 
     @model_validator(mode="after")
     def validate_internal_consistency(self) -> "LLMDecision":
@@ -164,6 +175,11 @@ def decision_json_schema() -> dict[str, Any]:
     # The Python contract still reads legacy proposals, but all new provider
     # requests require the typed rendering plan explicitly (possibly empty).
     schema["properties"]["reply_parts"].pop("default", None)
+    schema["properties"]["appointment_preferences"].pop("default", None)
+    preferences = schema["$defs"]["AppointmentPreferences"]
+    preferences["required"] = list(preferences["properties"])
+    for field in preferences["properties"].values():
+        field.pop("default", None)
     schema["required"] = list(schema["properties"])
     return schema
 

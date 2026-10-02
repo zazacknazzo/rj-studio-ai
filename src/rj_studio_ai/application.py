@@ -2,6 +2,13 @@ from collections.abc import Callable
 from dataclasses import replace
 from time import monotonic, sleep
 
+from rj_studio_ai.appointment_intake import (
+    AppointmentIntakeUpdate,
+    appointment_change_requested,
+    intake_handoff_reason,
+    intake_question,
+    plan_appointment_intake,
+)
 from rj_studio_ai.conversation_context import (
     ConversationContext,
     ConversationContextBuilder,
@@ -17,7 +24,8 @@ from rj_studio_ai.generation import (
 )
 from rj_studio_ai.grounding import finalize_reply
 from rj_studio_ai.handoff import HandoffReason, handoff_confirmation, safe_handoff_reason
-from rj_studio_ai.livia_persona import LiviaPersona
+from rj_studio_ai.livia_persona import LiviaPersona, PersonaValidationError
+from rj_studio_ai.llm_decision import FactReplyPart, Intent, PhraseReplyPart, ReplyPhrase
 from rj_studio_ai.persistence import (
     DeliveryState,
     GenerationClaimResult,
@@ -175,18 +183,74 @@ class MessageResponder:
                 remaining_budget=deadline.work_budget(),
             )
             handoff_reason = None
+            intake_update = None
             if generated.trusted_reply is not None:
                 reply_body = generated.trusted_reply.body
             else:
+                proposal = generated.decision
+                if appointment_change_requested(message.body):
+                    proposal = proposal.model_copy(
+                        update={
+                            "handoff": True,
+                            "handoff_reason": HandoffReason.APPOINTMENT_CHANGE.value,
+                            "intents": tuple(
+                                dict.fromkeys((*proposal.intents, Intent.APPOINTMENT_CHANGE))
+                            ),
+                        }
+                    )
+                intake_update = plan_appointment_intake(
+                    proposal,
+                    customer_message=message.body,
+                    prior=context.appointment_intake,
+                )
+                if intake_update is not None and not proposal.reply_parts:
+                    # An intake question has its own trusted surface. All factual
+                    # and handoff validation still runs through Ticket 09 below.
+                    proposal = proposal.model_copy(
+                        update={
+                            "reply_parts": (
+                                PhraseReplyPart(kind="phrase", phrase=ReplyPhrase.HELP),
+                            )
+                        }
+                    )
                 finalized = finalize_reply(
-                    generated.decision,
+                    proposal,
                     customer_message=message.body,
                     context=context,
                 )
                 reply_body = finalized.reply_text
+                if intake_update is not None and not finalized.handoff:
+                    handoff_reason = intake_handoff_reason(intake_update)
+                    if handoff_reason is None:
+                        has_rendered_facts = bool(finalized.critical_claims) or any(
+                            isinstance(part, FactReplyPart) for part in finalized.reply_parts
+                        )
+                        question = intake_question(
+                            intake_update, "" if has_rendered_facts else message.body
+                        )
+                        reply_body = (
+                            finalized.reply_text + " " + question
+                            if has_rendered_facts
+                            else question
+                        )
+                    else:
+                        reply_body = handoff_confirmation(handoff_reason, message.body)
                 if finalized.handoff:
                     handoff_reason = safe_handoff_reason(finalized.handoff_reason or "")
                     reply_body = handoff_confirmation(handoff_reason, message.body)
+                if intake_update is not None:
+                    try:
+                        LiviaPersona().validate_reply(message.body, reply_body)
+                    except PersonaValidationError:
+                        handoff_reason = HandoffReason.UNSAFE_SURFACE
+                        reply_body = handoff_confirmation(handoff_reason, message.body)
+                    if handoff_reason is not None and intake_update.awaiting_field is not None:
+                        # Only committed clarification replies consume the budget.
+                        intake_update = replace(
+                            intake_update,
+                            clarification_count=intake_update.clarification_count - 1,
+                            awaiting_field=None,
+                        )
             if not isinstance(reply_body, str) or not reply_body.strip():
                 raise TransientGenerationError("invalid_generation_result", generated.metric)
             if deadline.work_budget() <= 0.0:
@@ -205,7 +269,11 @@ class MessageResponder:
             raise RetryableWebhookError("Generation provider is unavailable") from error
 
         return self._complete_owned_reply(
-            claim, reply_body, deadline, handoff_reason=handoff_reason
+            claim,
+            reply_body,
+            deadline,
+            handoff_reason=handoff_reason,
+            appointment_intake=intake_update,
         )
 
     def _build_context(
@@ -215,7 +283,14 @@ class MessageResponder:
         deadline: ExecutionDeadline,
     ) -> ConversationContext:
         if self._context_builder is None:
-            return ConversationContext(history=(), knowledge=())
+            return ConversationContext(
+                history=(),
+                knowledge=(),
+                appointment_intake=self._store.get_appointment_intake(
+                    inbound_message_id=claim.inbound_message_id,
+                    lock_timeout=deadline.work_budget(),
+                ),
+            )
         return self._context_builder.build(
             inbound_message_id=claim.inbound_message_id,
             current_body=message.body,
@@ -335,6 +410,7 @@ class MessageResponder:
         deadline: ExecutionDeadline,
         *,
         handoff_reason: HandoffReason | None = None,
+        appointment_intake: AppointmentIntakeUpdate | None = None,
     ) -> AIReply:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable")
@@ -343,6 +419,7 @@ class MessageResponder:
             owner_token=claim.owner_token,
             reply_body=reply_body,
             handoff_reason=handoff_reason,
+            appointment_intake=appointment_intake,
             delivery_state=self._completion_delivery_state,
             lock_timeout=deadline.remaining_budget(),
         )

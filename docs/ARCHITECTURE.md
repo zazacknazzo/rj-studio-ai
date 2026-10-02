@@ -1,7 +1,7 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 10 plus Messaging Migrations 01–06.
+The runtime baseline is V1 through Ticket 11 plus Messaging Migrations 01–06.
 ADR 0006 owns the messaging migration. Twilio remains available and Meta
 WhatsApp Cloud API is the next E2E target.
 
@@ -53,8 +53,7 @@ mandatory policies are enforced independently of model references. Persona
 limits and identity transparency apply to the rendered result. Deterministic
 fixed replies remain explicitly trusted for V0 compatibility. See
 [structured decision](structured-decision.md) and ADR 0007 for this contract.
-Human-review proposals are not durable Human Handoff yet: Ticket 10 must add
-activation, suppression, and release before customer piloting.
+Ticket 10 persists Human Handoff activation, suppression, and explicit release.
 
 The SQLite model contains one Outbound Delivery per AI Reply and minimal
 Delivery Attempt evidence. Proactive generation completion atomically creates
@@ -237,7 +236,11 @@ handoff state even after its Messages expire.
 
 [ADR 0008](decisions/0008-durable-human-handoff.md) owns the migration and race
 trade-offs. [Human Handoff operations](human-handoff.md) owns local list/release
-commands. Appointment collection remains Ticket 11.
+commands. Ticket 11 adds one bounded appointment-interest episode per
+Conversation; its preferences, clarification counter and handoff link commit
+with owned generation completion. The LLM proposes current-Message excerpts,
+never availability or salon facts. See [appointment interest](appointment-interest.md)
+for episode, two-question, release, retention and explicit inspection rules.
 
 ## Deadlines and recovery
 

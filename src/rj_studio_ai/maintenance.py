@@ -1,4 +1,5 @@
 import argparse
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,6 +30,11 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("migrate", help="Apply pending database migrations")
     subparsers.add_parser("list-handoffs", help="List active handoffs without Customer data")
+    intake = subparsers.add_parser(
+        "inspect-appointment-interest",
+        help="Inspect only three declared preferences for one Conversation",
+    )
+    intake.add_argument("--conversation-id", type=_positive_integer, required=True)
     release = subparsers.add_parser(
         "release-handoff", help="Release one explicitly selected handoff episode"
     )
@@ -103,6 +109,25 @@ def main(
                 f"reason={handoff.reason_code.value} "
                 f"activated_at={handoff.activated_at.isoformat()}"
             )
+        return 0
+
+    if args.command == "inspect-appointment-interest":
+        intake = store.get_appointment_intake(conversation_id=args.conversation_id)
+        if intake is None:
+            print("No appointment-interest intake for the selected Conversation.")
+            return 1
+        print(
+            json.dumps(
+                {
+                    "conversation_id": intake.conversation_id,
+                    "state": intake.state,
+                    "desired_service": intake.desired_service,
+                    "preferred_time": intake.preferred_time,
+                    "professional_preference": intake.professional_preference,
+                },
+                ensure_ascii=False,
+            )
+        )
         return 0
 
     if args.command == "release-handoff":
