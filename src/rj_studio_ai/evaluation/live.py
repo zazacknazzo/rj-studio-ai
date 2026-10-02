@@ -259,7 +259,7 @@ def _write(path, data):
 def live_summary(samples, contracts, pricing):
     run_count = len({s.repetition for s in samples}) or 1
     summary = summarize(samples, contracts, run_count=run_count).model_dump(mode="json")
-    provider_samples = [s for s in samples if s.attempts]
+    provider_samples = [s for s in samples if s.attempts or s.execution_kind == "preflight_failure"]
     if provider_samples:
         quality = summarize(provider_samples, contracts, run_count=run_count).model_dump(
             mode="json"
@@ -273,7 +273,9 @@ def live_summary(samples, contracts, pricing):
             for c in contract.checks.values()
         }
         summary["critical_failures"] = {"numerator": 0, "denominator": 0}
-    summary["deterministic_guard_turns"] = len(samples) - len(provider_samples)
+    summary["deterministic_guard_turns"] = sum(
+        s.execution_kind in {"delivery_barrier", "handoff_suppression"} for s in samples
+    )
     summary["critical_not_evaluable"] = sum(
         s.checks[key] == "not_run"
         for s in provider_samples
@@ -305,7 +307,7 @@ def live_summary(samples, contracts, pricing):
     known = all(a.usage is not None and a.pricing_verified for a in attempts)
     completed = sum(s.reply_origin == "model" for s in samples)
     summary.update(
-        completed_logical_replies=summary["completed_replies"],
+        completed_logical_replies=sum(s.reply_hash is not None for s in samples),
         completed_replies=completed,
         completed_model_replies=completed,
         system_safe_fallbacks=sum(s.reply_origin == "system_safe_fallback" for s in samples),

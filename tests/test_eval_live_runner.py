@@ -161,6 +161,38 @@ def test_incomplete_generation_has_no_evaluable_persona_output(tmp_path):
     ledger.close()
 
 
+def test_preflight_failure_keeps_durable_fallback_separate_without_paid_generation(tmp_path):
+    requests = []
+
+    def transport(request):
+        requests.append(request)
+        return httpx.Response(503, json={"error": "synthetic preflight failure"})
+
+    result = execute_live(
+        load_suite(Path("docs/evals/V1")),
+        api_key="synthetic-value",
+        output=tmp_path / "run",
+        revision="93b83eb",
+        transport=httpx.MockTransport(transport),
+    )
+    assert len(requests) == 1
+    assert requests[0].url.path.endswith("input_tokens")
+    assert result["phase_a_status"] == "blocked"
+    assert result["phase_b_executed"] is False
+    summary = result["summary"]
+    assert summary["live_calls"] == 0
+    assert summary["paid_failures"] == 0
+    assert summary["completed_model_replies"] == 0
+    assert summary["system_safe_fallbacks"] == 1
+    assert summary["completed_logical_replies"] == 1
+    assert summary["generation_failures"] == 1
+    assert summary["estimated_cost_usd"] == 0.0
+    assert summary["cost_per_1000_replies_usd"] is None
+    assert summary["deterministic_guard_turns"] == 0
+    assert summary["critical_not_evaluable"] == 2
+    assert summary["critical_failures"] == {"numerator": 2, "denominator": 2}
+
+
 def test_failed_noncritical_smoke_check_blocks_phase_a(tmp_path):
     def transport(request):
         if request.url.path.endswith("input_tokens"):
