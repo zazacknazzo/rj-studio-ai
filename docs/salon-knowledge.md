@@ -1,14 +1,15 @@
 # Salon Knowledge
 
 The versioned source is [knowledge/rj_studio.yaml](../knowledge/rj_studio.yaml).
-It currently has no real approved facts. Add only institutional information that
+It currently contains 22 approved commercial/institutional facts. Add only information that
 the RJ Studio operator has reviewed; never add Customer data, credentials, or
 assumptions.
 
 Human collection starts with [the draft intake](salon-knowledge-intake.md).
 It records 22 commercial/institutional facts approved by the product owner,
-eight technical/provisional drafts, and remaining blank worksheets. The approved
-intake has not yet been transferred to runtime YAML.
+eight technical/provisional drafts, and remaining blank worksheets. Only those
+22 approved facts have been published to runtime YAML; the eight drafts remain
+unchanged in the intake. The stable approver identifier is `rj-studio-product-owner`.
 
 Each `facts` item needs a stable lowercase `id`, `category`, Portuguese `topic`,
 `status`, `fact_type`, `statement`, `source`, and `reviewed_at`. An approved

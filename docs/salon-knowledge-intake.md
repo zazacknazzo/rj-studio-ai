@@ -1,6 +1,6 @@
 # Intake humano — Salon Knowledge do RJ Studio
 
-Estado: **22 facts `approved` no intake e 8 facts `draft`**; publicação no runtime pendente.
+Estado: **22 facts `approved` publicados no YAML de runtime e 8 facts `draft` preservados no intake**.
 Base inicial: `f8e7ff695b0947c82486afe54aae14acd118713f`.
 Conteúdo aprovado pelo product owner: commit `0b017cdb0d8fbd5c03e25854cab318a7b6fded8d`.
 Dados institucionais/comerciais: responsável do RJ Studio via WhatsApp em
@@ -9,16 +9,16 @@ Correções posteriores são identificadas na fonte de cada ficha; sua data não
 
 O WhatsApp abaixo é o contato institucional explicitamente fornecido. Não há
 dados de Customers, fixtures, pesquisa externa ou credenciais. O YAML de runtime
-continua `version: 1` e `facts: []`.
+usa `version: 1` e contém exclusivamente os 22 facts comerciais/institucionais aprovados.
 
 ## Estado de confiança e revisão
 
 - `approved` no intake: os 22 dados institucionais/comerciais antes `pending`
   foram aprovados explicitamente pelo product owner em 02/10/2026. A aprovação
-  corresponde aos textos/fontes do commit indicado; ainda não foram publicados no YAML.
+  corresponde aos textos/fontes do commit indicado; o conjunto está publicado no YAML.
 - `draft` técnico: duração/resultado informados ainda exigem validação técnica.
 - `draft` provisório: propostas/inferências que não vieram da responsável do salão.
-- Os 22 facts aprovados recebem `approved_by: Responsável do produto (aprovação neste chat)`
+- Os 22 facts aprovados recebem `approved_by: rj-studio-product-owner`
   e `reviewed_at: 2026-10-02`, conforme aprovação humana atual.
 - Os oito drafts continuam sem `approved_by`, com revisão/validação ainda pendentes.
   Todas as fichas mantêm `validated_by: []`; nenhuma validação técnica foi inferida.
@@ -68,7 +68,7 @@ data da aprovação atual; os oito drafts ainda não têm revisão humana regist
 em `reviewed_at`. A lacuna impede carregar esses drafts pelo loader mesmo como
 draft. Não inventar uma data para satisfazer validação.
 
-## Facts comerciais/institucionais aprovados no intake e drafts
+## Facts comerciais/institucionais publicados e drafts preservados
 
 IDs propostos são estáveis após publicação. `topic` é metadata de busca proposta,
 sem aprovação implícita de serviço, efeito ou regra. Cada preço inclui o nome do
@@ -83,7 +83,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 02. `tempo-mesmo-endereco`
@@ -95,7 +95,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 03. `localizacao-publica`
@@ -107,7 +107,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 04. `horarios-atendimento`
@@ -119,7 +119,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 05. `contato-publico`
@@ -131,7 +131,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 06. `precos-cortes`
@@ -143,7 +143,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 07. `precos-escova`
@@ -155,7 +155,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 08. `precos-progressiva`
@@ -167,7 +167,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 09. `precos-coloracao`
@@ -179,7 +179,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 10. `preco-gloss-express`
@@ -191,7 +191,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 11. `preco-botox-capilar`
@@ -203,7 +203,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 12. `preco-tonalizacao`
@@ -215,7 +215,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 13. `preco-reconstrucao-capilar`
@@ -227,7 +227,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 14. `preco-cauterizacao`
@@ -239,7 +239,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 15. `preco-limpeza-cor`
@@ -251,7 +251,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 16. `preco-mechas-reflexo`
@@ -263,7 +263,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 17. `precos-mega-hair`
@@ -275,7 +275,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a QUERATINA; data dessa confirmação não informada.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 18. `precos-unhas`
@@ -287,7 +287,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 19. `precos-sobrancelhas`
@@ -299,7 +299,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a HENNA; data dessa confirmação não informada.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 20. `precos-penteados`
@@ -311,7 +311,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 21. `precos-maquiagem`
@@ -323,7 +323,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 22. `precos-depilacao`
@@ -335,7 +335,7 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
 - **reviewed_at:** `2026-10-02`
-- **approved_by:** `Responsável do produto (aprovação neste chat)`
+- **approved_by:** `rj-studio-product-owner`
 - **Responsável pela validação:** product owner.
 
 ### 23. `tecnica-botox-capilar`
@@ -451,7 +451,7 @@ Seu estado inicial continua `draft`; não têm fonte, data de revisão ou aprova
 | `handoff-operacional-a-confirmar` | `handoff_condition` / operacional | Gatilhos operacionais/comerciais específicos aprovados. |
 | `handoff-excecao-a-confirmar` | `handoff_condition` / operacional | Outras exceções específicas confirmadas. |
 
-## Ambiguidades e gaps para fechar antes da publicação
+## Ambiguidades e gaps ainda abertos
 
 - Endereço: cidade, UF, CEP e orientações de acesso não foram informados; não
   completar por dedução. “Santana” e o número informado foram preservados.
@@ -483,7 +483,7 @@ Seu estado inicial continua `draft`; não têm fonte, data de revisão ou aprova
 - Topics usam o nome e variantes específicas. A seleção lexical atual é por
   qualquer termo em comum, sem ranking semântico: termos como cabelo, escova,
   social e noiva ainda podem selecionar mais de um grupo. Preço em pergunta genérica
-  não identifica sozinho o serviço. Revisar seleção antes de publicar, sem alterar
+  não identifica sozinho o serviço. Revisar seleção antes do piloto, sem alterar
   código nesta tarefa. Topics não tornam uma inferência em fato confiável.
 - Um `handoff_condition` selecionado sempre aciona encaminhamento; não cadastrar
   condições numéricas/genéricas como se o texto executasse comparação.
@@ -491,7 +491,7 @@ Seu estado inicial continua `draft`; não têm fonte, data de revisão ou aprova
   de fotos nem implementa multimodal. Vigência/expiração de promoções também não
   é automatizada pelo schema.
 
-## Reply AST e critérios para publicação posterior
+## Reply AST e critérios para futuras publicações
 
 Uma parte `{"kind": "fact", "knowledge_ref": "id-do-fato"}` usa o `id` da ficha.
 O mesmo ID deve constar em `knowledge_refs` e pertencer ao conjunto aprovado e
@@ -506,9 +506,8 @@ atual, reserva, agenda e alterações automáticas não são criadas por este do
 
 Próximos registros humanos dos drafts, por ID: texto final, fonte, data real de
 revisão, confirmação de regras provisórias, validação técnica quando exigida e
-decisão final do product owner. A publicação dos 22 facts já aprovados no YAML
-continua como etapa separada. **Há 22 facts aprovados no intake, oito drafts e
-zero facts no runtime.**
+decisão final do product owner. **Há 22 facts aprovados no runtime e oito drafts
+preservados exclusivamente no intake.**
 
 ## Registro de aprovação humana — 02/10/2026
 
@@ -519,7 +518,32 @@ A aprovação abrange exclusivamente as fichas 01–22 (IDs, statements e source
 do commit `0b017cdb0d8fbd5c03e25854cab318a7b6fded8d`. Os respectivos metadados
 de status, aprovador e revisão foram registrados; os textos e fontes não foram
 alterados. Fichas 23–30 e as fichas de coleta vazias continuam sem aprovação.
-Não foi atribuída validação técnica nem realizada publicação no runtime.
+Esse registro inicial não atribuiu validação técnica nem publicou o YAML; a
+publicação posterior autorizada está registrada abaixo.
+
+## Registro de publicação no YAML — 02/10/2026
+
+Foram materializados em `knowledge/rj_studio.yaml` exclusivamente os 22 IDs das
+fichas 01–22 acima, vinculados à aprovação do conteúdo de `0b017cdb`. Os IDs,
+topics, statements e sources foram copiados sem alteração. Todos usam
+`status: approved`, `fact_type: operational_commercial`, `reviewed_at: 2026-10-02`,
+`approved_by: rj-studio-product-owner` e `validated_by: []`. O identificador do
+aprovador representa o papel estável do responsável pelo produto; não atribui
+nome completo nem uma validação técnica.
+
+As oito fichas 23–30 permanecem **literalmente inalteradas**, como `draft`,
+e não foram incluídas no YAML. As fichas de coleta vazias também permanecem fora.
+Nenhum campo de consulta humana ou vínculo de política foi inferido. O arquivo
+publicado não contém fatos técnicos, regras provisórias, serviços descritivos,
+profissionais ou políticas adicionais.
+
+Validação da publicação: `SalonKnowledgeRepository` carregou exatamente os
+22 IDs aprovados, sem referência inválida, com igualdade de IDs/topics/textos/fontes
+em relação ao commit aprovado. Foram preservados os 43 valores, os cinco
+“a partir de” e o “por sessão”. Testes Knowledge/grounding: 68 passaram; suíte
+completa: 440 passaram, com um aviso existente de depreciação do Starlette.
+Ruff check/format, compileall, pip check e diff check passaram. Não houve mudança
+de código, teste, migration, provider ou configuração local.
 
 Referências: [contrato Knowledge](salon-knowledge.md),
 [trusted rendering](structured-decision.md),

@@ -1,2 +1,235 @@
 version: 1
-facts: []
+facts:
+- id: identidade-institucional
+  category: identity
+  topic: nome salão studio identidade beleza
+  status: approved
+  fact_type: operational_commercial
+  statement: O nome do salão é RJ Studio de Beleza.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: tempo-mesmo-endereco
+  category: identity
+  topic: história tempo anos endereço studio
+  status: approved
+  fact_type: operational_commercial
+  statement: Em 02/10/2026, foi informado que o RJ Studio de Beleza está há 22 anos no mesmo
+    endereço.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: localizacao-publica
+  category: location
+  topic: endereço localização onde fica avenida doutor zuquim santana
+  status: approved
+  fact_type: operational_commercial
+  statement: O RJ Studio de Beleza fica na Avenida Dr. Zuquim, 1854, Santana.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: horarios-atendimento
+  category: hours
+  topic: horário funcionamento abre fecha terça quarta quinta sexta sábado
+  status: approved
+  fact_type: operational_commercial
+  statement: O funcionamento informado é de terça a sábado, das 9h às 18h30.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: contato-publico
+  category: channel
+  topic: whatsapp telefone contato número falar salão
+  status: approved
+  fact_type: operational_commercial
+  statement: O WhatsApp principal do RJ Studio de Beleza é (11) 98289-6366.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-cortes
+  category: price
+  topic: corte feminino mulher masculino homem cortar
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Corte feminino: R$ 100,00. Corte masculino: R$ 60,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-escova
+  category: price
+  topic: escova cabelo curto médio longo extra
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Escova: cabelo curto, R$ 50,00; curto a médio, R$ 60,00; longo, R$ 70,00; longo
+    a extra longo, R$ 80,00; extra longo, R$ 90,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-progressiva
+  category: price
+  topic: progressiva escova alisar alisamento cabelo liso
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Escova progressiva: curto, R$ 180,00; médio, R$ 200,00; longo, R$ 250,00; extra
+    longo, R$ 270,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-coloracao
+  category: price
+  topic: coloração coloracao raiz completa aplicação aplicar
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Coloração de raiz: R$ 140,00. Coloração completa: R$ 170,00. Aplicação de coloração:
+    R$ 90,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-gloss-express
+  category: price
+  topic: gloss express
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Gloss Express: R$ 170,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-botox-capilar
+  category: price
+  topic: botox capilar
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Botox capilar: R$ 180,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-tonalizacao
+  category: price
+  topic: tonalização tonalizar
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Tonalização: R$ 150,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-reconstrucao-capilar
+  category: price
+  topic: reconstrução capilar
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Reconstrução capilar: R$ 220,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-cauterizacao
+  category: price
+  topic: cauterização
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Cauterização: R$ 180,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-limpeza-cor
+  category: price
+  topic: limpeza cor
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Limpeza de cor: a partir de R$ 300,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: preco-mechas-reflexo
+  category: price
+  topic: mechas reflexo luzes orçamento
+  status: approved
+  fact_type: operational_commercial
+  statement: Mechas ou reflexo custam a partir de R$ 500,00. O valor varia conforme comprimento,
+    quantidade de cabelo, quantidade de mechas, cor e modelo de mechas.
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-mega-hair
+  category: price
+  topic: mega hair megahair alongamento ponto americano fita adesiva queratina
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Mega hair: ponto americano, a partir de R$ 400,00; fita adesiva, a partir de
+    R$ 500,00; queratina, a partir de R$ 500,00. O valor varia conforme a quantidade.'
+  source: 'Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+    Confirmação posterior pelo responsável do produto: o termo original corresponde a QUERATINA;
+    data dessa confirmação não informada.'
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-unhas
+  category: price
+  topic: unhas manicure pedicure gel esmaltação blindagem
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Manicure: R$ 42,00. Pedicure: R$ 48,00. Unha de gel: R$ 150,00. Esmaltação em
+    gel: R$ 70,00. Blindagem: R$ 100,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-sobrancelhas
+  category: price
+  topic: sobrancelha sobrancelhas design desenho henna fio despigmentação
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Design de sobrancelha: R$ 50,00. Design de sobrancelha com henna: R$ 80,00.
+    Sobrancelha fio a fio: R$ 400,00. Despigmentação de sobrancelhas: R$ 250,00 por sessão.'
+  source: 'Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+    Confirmação posterior pelo responsável do produto: o termo original corresponde a HENNA;
+    data dessa confirmação não informada.'
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-penteados
+  category: price
+  topic: penteado penteados social noiva
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Penteado social: R$ 200,00. Penteado de noiva: R$ 350,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-maquiagem
+  category: price
+  topic: maquiagem maquiar social noiva
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Maquiagem social: R$ 200,00. Maquiagem de noiva: R$ 350,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
+- id: precos-depilacao
+  category: price
+  topic: depilação depilar virilha simples íntima buço axila meia perna completa
+  status: approved
+  fact_type: operational_commercial
+  statement: 'Depilação: virilha simples, R$ 70,00; virilha íntima, R$ 90,00; buço, R$ 35,00;
+    axila, R$ 40,00; meia perna, R$ 50,00; perna completa, R$ 80,00.'
+  source: Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+  reviewed_at: '2026-10-02'
+  approved_by: rj-studio-product-owner
+  validated_by: []
