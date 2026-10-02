@@ -23,4 +23,5 @@ Rules:
 - Keep prompts and implementation out of the expected answer so evals survive refactors.
 - Evals complement deterministic tests; they do not replace webhook, persistence, adapter, or failure-path tests.
 
-Create the first suite with the approved V1 spec. No V1 eval cases exist yet.
+The synthetic V1 seeds are indexed under `V1/README.md`; no live-model gate result
+is claimed yet.

@@ -16,8 +16,8 @@ from rj_studio_ai.generation import (
     TransientGenerationError,
 )
 from rj_studio_ai.grounding import finalize_reply
-from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
-from rj_studio_ai.llm_decision import ReplyPhrase
+from rj_studio_ai.handoff import HandoffReason, handoff_confirmation, safe_handoff_reason
+from rj_studio_ai.livia_persona import LiviaPersona
 from rj_studio_ai.persistence import (
     DeliveryState,
     GenerationClaimResult,
@@ -69,11 +69,13 @@ class MessageResponder:
         message: InboundMessage,
         *,
         deadline: ExecutionDeadline,
-    ) -> AIReply:
+    ) -> AIReply | None:
         lifecycle = self._store.admit_generation(
             message,
             lock_timeout=deadline.work_budget(),
         )
+        if lifecycle.state is GenerationState.SUPPRESSED:
+            return None
         terminal_reply = self._terminal_reply(lifecycle)
         if terminal_reply is not None:
             return terminal_reply
@@ -82,7 +84,7 @@ class MessageResponder:
         ordering_wait_started_with: float | None = None
         while True:
             if lifecycle.state is GenerationState.SUPPRESSED:
-                raise RetryableWebhookError("AI Reply is suppressed")
+                return None
 
             if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
                 lifecycle = self._claim_exhausted_finalization(lifecycle, deadline)
@@ -90,11 +92,7 @@ class MessageResponder:
                 if terminal_reply is not None:
                     return terminal_reply
                 if lifecycle.acquired:
-                    return self._complete_owned_reply(
-                        lifecycle,
-                        self._safe_failure_for(canonical_message),
-                        deadline,
-                    )
+                    return self._complete_failure(lifecycle, canonical_message, deadline)
             elif not lifecycle.acquired:
                 self._require_generation_budget(deadline)
                 lifecycle = self._store.claim_generation(
@@ -138,9 +136,7 @@ class MessageResponder:
         if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
             lifecycle = self._claim_exhausted_finalization(lifecycle, deadline)
             if lifecycle.acquired:
-                return self._complete_owned_reply(
-                    lifecycle, self._safe_failure_for(canonical_message), deadline
-                )
+                return self._complete_failure(lifecycle, canonical_message, deadline)
             return None
         if not lifecycle.acquired:
             return None
@@ -171,13 +167,14 @@ class MessageResponder:
         try:
             context = self._build_context(claim, message, deadline)
         except ConversationContextTooLarge:
-            return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
+            return self._complete_failure(claim, message, deadline)
         try:
             generated = self._generator.generate(
                 message,
                 context=context,
                 remaining_budget=deadline.work_budget(),
             )
+            handoff_reason = None
             if generated.trusted_reply is not None:
                 reply_body = generated.trusted_reply.body
             else:
@@ -187,6 +184,9 @@ class MessageResponder:
                     context=context,
                 )
                 reply_body = finalized.reply_text
+                if finalized.handoff:
+                    handoff_reason = safe_handoff_reason(finalized.handoff_reason or "")
+                    reply_body = handoff_confirmation(handoff_reason, message.body)
             if not isinstance(reply_body, str) or not reply_body.strip():
                 raise TransientGenerationError("invalid_generation_result", generated.metric)
             if deadline.work_budget() <= 0.0:
@@ -200,11 +200,13 @@ class MessageResponder:
         except GenerationFailure as error:
             self._record_metric(claim, error.metric, deadline)
             if safe_permanent_failure:
-                return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
+                return self._complete_failure(claim, message, deadline)
             self._release_for_retryable_failure(claim, deadline)
             raise RetryableWebhookError("Generation provider is unavailable") from error
 
-        return self._complete_owned_reply(claim, reply_body, deadline)
+        return self._complete_owned_reply(
+            claim, reply_body, deadline, handoff_reason=handoff_reason
+        )
 
     def _build_context(
         self,
@@ -220,10 +222,24 @@ class MessageResponder:
             lock_timeout=deadline.work_budget(),
         )
 
-    def _safe_failure_for(self, message: InboundMessage) -> str:
-        if LiviaPersona().requires_identity_transparency(message.body):
-            return REPLY_PHRASES[ReplyPhrase.IDENTITY]
-        return self._safe_failure_reply
+    def _complete_failure(
+        self,
+        claim: GenerationClaimResult,
+        message: InboundMessage,
+        deadline: ExecutionDeadline,
+    ) -> AIReply:
+        required_reason = LiviaPersona().required_handoff_reason(message.body)
+        reason = (
+            safe_handoff_reason(required_reason)
+            if required_reason is not None
+            else HandoffReason.GENERATION_UNAVAILABLE
+        )
+        return self._complete_owned_reply(
+            claim,
+            handoff_confirmation(reason, message.body),
+            deadline,
+            handoff_reason=reason,
+        )
 
     def _record_metric(
         self,
@@ -267,7 +283,7 @@ class MessageResponder:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable") from error
         if claim.attempt_count >= 2:
-            return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
+            return self._complete_failure(claim, message, deadline)
 
         released = self._store.mark_generation_retryable(
             inbound_message_id=claim.inbound_message_id,
@@ -317,6 +333,8 @@ class MessageResponder:
         claim: GenerationClaimResult,
         reply_body: str,
         deadline: ExecutionDeadline,
+        *,
+        handoff_reason: HandoffReason | None = None,
     ) -> AIReply:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable")
@@ -324,6 +342,7 @@ class MessageResponder:
             inbound_message_id=claim.inbound_message_id,
             owner_token=claim.owner_token,
             reply_body=reply_body,
+            handoff_reason=handoff_reason,
             delivery_state=self._completion_delivery_state,
             lock_timeout=deadline.remaining_budget(),
         )

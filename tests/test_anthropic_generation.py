@@ -561,7 +561,7 @@ def test_invalid_sdk_response_retries_safely_and_records_failure_metrics(tmp_pat
         )
 
     assert response.status_code == 200
-    assert "Resposta segura" in response.text
+    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in response.text
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
@@ -639,12 +639,13 @@ def test_invalid_structured_decision_retries_safely_then_replays_safe_reply(tmp_
         )
 
     assert first.text == replay.text
-    assert "<Message>Resposta segura</Message>" in first.text
+    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in first.text
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
     assert lifecycle is not None
-    assert lifecycle.reply_body == "Resposta segura"
+    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert SqliteConversationStore(database_path).list_active_handoffs()
     assert [
         (metric.outcome, metric.error_code)
         for metric in SqliteConversationStore(database_path).get_generation_metrics(
@@ -709,14 +710,11 @@ def test_valid_multi_intent_decision_survives_webhook_and_replay(tmp_path) -> No
 
     assert first.status_code == replay.status_code == 200
     assert first.text == replay.text
-    assert "Ainda não tenho essa informação aprovada" in first.text
+    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in first.text
     assert "disponível" not in first.text
     assert len(client.messages.calls) == 1
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
     assert lifecycle is not None
-    assert (
-        lifecycle.reply_body
-        == "Ainda não tenho essa informação aprovada. Pode detalhar sua dúvida?"
-    )
+    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."

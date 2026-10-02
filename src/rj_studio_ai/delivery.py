@@ -50,18 +50,20 @@ class OutboundDeliveryRunner:
             return None
         if claim.owner_token is None:
             raise DeliveryOwnershipLost("Claimed Outbound Delivery has no owner")
-        if not self.store.delivery_claim_is_current(
-            delivery_id=claim.delivery_id,
-            owner_token=claim.owner_token,
-            now=now,
-        ):
-            raise DeliveryOwnershipLost("Outbound Delivery claim expired before submission")
-
         message = OutboundMessage(
             sender_address=claim.provider_channel_id,
             recipient_address=claim.recipient_address,
             body=claim.body,
         )
+        if not self.store.authorize_delivery_submission(
+            delivery_id=claim.delivery_id,
+            owner_token=claim.owner_token,
+            now=now,
+        ):
+            current = self.store.get_delivery(claim.delivery_id)
+            if current is not None and current.state is DeliveryState.CANCELLED:
+                return current
+            raise DeliveryOwnershipLost("Outbound Delivery is not eligible for submission")
         try:
             acceptance = self.sender.send(message, timeout_seconds=self.timeout_seconds)
         except OutboundRetryableError:

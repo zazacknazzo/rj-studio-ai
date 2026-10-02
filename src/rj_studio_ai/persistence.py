@@ -16,6 +16,7 @@ from rj_studio_ai.domain import (
     ProviderWebhookEvent,
 )
 from rj_studio_ai.generation import GenerationMetric
+from rj_studio_ai.handoff import HandoffReason
 from rj_studio_ai.migrations import MigrationManager
 from rj_studio_ai.sqlite import (
     DEFAULT_BUSY_TIMEOUT_SECONDS,
@@ -149,6 +150,17 @@ class OutboundDeliveryRecord:
     accepted_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    handoff_token: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HumanHandoffRecord:
+    conversation_id: int
+    active: bool
+    owner_token: str
+    reason_code: HandoffReason
+    activated_at: datetime
+    released_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +214,104 @@ class SqliteConversationStore:
 
     def initialize(self) -> None:
         self._migrations.upgrade()
+
+    def list_active_handoffs(self) -> list[HumanHandoffRecord]:
+        """Operational metadata only: no Customer address or Message body."""
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT conversation_id, active, owner_token, reason_code, activated_at, "
+                    "released_at FROM conversation_handoffs WHERE active = 1 "
+                    "ORDER BY conversation_id"
+                ).fetchall()
+                return [self._handoff_record(row) for row in rows]
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Human Handoff persistence is unavailable") from error
+
+    def release_handoff(
+        self,
+        *,
+        conversation_id: int,
+        owner_token: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Release only the selected episode; never revive suppressed Messages."""
+        if not owner_token.strip():
+            raise ValueError("Handoff owner token must not be empty")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                updated = connection.execute(
+                    """
+                    UPDATE conversation_handoffs SET active = 0, released_at = ?
+                    WHERE conversation_id = ? AND active = 1 AND owner_token = ?
+                    """,
+                    (timestamp, conversation_id, owner_token),
+                ).rowcount
+                if not updated:
+                    return False
+                self._cancel_unsent_deliveries(connection, conversation_id, timestamp)
+                connection.execute(
+                    "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                    (timestamp, conversation_id),
+                )
+                return True
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Human Handoff persistence is unavailable") from error
+
+    @staticmethod
+    def _handoff_record(row: sqlite3.Row | tuple[object, ...]) -> HumanHandoffRecord:
+        return HumanHandoffRecord(
+            conversation_id=int(row[0]),
+            active=bool(row[1]),
+            owner_token=str(row[2]),
+            reason_code=HandoffReason(str(row[3])),
+            activated_at=datetime.fromisoformat(str(row[4])),
+            released_at=None if row[5] is None else datetime.fromisoformat(str(row[5])),
+        )
+
+    @staticmethod
+    def _cancel_unsent_deliveries(
+        connection: sqlite3.Connection,
+        conversation_id: int,
+        timestamp: str,
+        *,
+        except_handoff_token: str | None = None,
+    ) -> None:
+        rows = connection.execute(
+            """
+            SELECT delivery.id FROM outbound_deliveries AS delivery
+            JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+            WHERE outbound.conversation_id = ?
+              AND (? IS NULL OR delivery.handoff_token IS NOT ?)
+              AND (
+                delivery.state IN ('pending', 'retryable')
+                OR (delivery.state = 'sending' AND delivery.submission_started_at IS NULL)
+                OR (delivery.state = 'unknown' AND delivery.safe_error_code = 'legacy_unverified'
+                    AND delivery.submission_started_at IS NULL AND delivery.attempt_count = 0)
+              )
+            """,
+            (conversation_id, except_handoff_token, except_handoff_token),
+        ).fetchall()
+        for row in rows:
+            connection.execute(
+                """
+                UPDATE delivery_attempts SET outcome = 'failed',
+                    safe_error_code = 'handoff_cancelled_before_submission', completed_at = ?
+                WHERE outbound_delivery_id = ? AND outcome = 'started'
+                """,
+                (timestamp, row[0]),
+            )
+            connection.execute(
+                """
+                UPDATE outbound_deliveries SET state = 'cancelled', owner_token = NULL,
+                    lease_expires_at = NULL, next_attempt_at = NULL,
+                    safe_error_code = 'handoff_cancelled_before_submission', updated_at = ?
+                WHERE id = ?
+                """,
+                (timestamp, row[0]),
+            )
 
     def migrations_are_current(self) -> bool:
         return self._migrations.is_current()
@@ -410,6 +520,7 @@ class SqliteConversationStore:
         owner_token: str,
         reply_body: str,
         delivery_state: DeliveryState = DeliveryState.UNKNOWN,
+        handoff_reason: HandoffReason | str | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -421,6 +532,7 @@ class SqliteConversationStore:
                 owner_token=owner_token,
                 reply_body=reply_body,
                 delivery_state=delivery_state,
+                handoff_reason=None if handoff_reason is None else HandoffReason(handoff_reason),
                 now=now,
                 lock_timeout=lock_timeout,
             )
@@ -650,6 +762,16 @@ class SqliteConversationStore:
                       AND (? IS NULL OR delivery.provider = ?)
                       AND delivery.next_attempt_at <= ?
                       AND processing.state = 'completed'
+                      AND (
+                        (delivery.handoff_token IS NULL AND NOT EXISTS (
+                            SELECT 1 FROM conversation_handoffs WHERE active = 1
+                              AND conversation_id = outbound.conversation_id
+                        )) OR EXISTS (
+                            SELECT 1 FROM conversation_handoffs WHERE active = 1
+                              AND conversation_id = outbound.conversation_id
+                              AND owner_token = delivery.handoff_token
+                        )
+                      )
                       AND NOT EXISTS (
                           SELECT 1
                           FROM messages AS predecessor
@@ -691,6 +813,7 @@ class SqliteConversationStore:
                     """
                     UPDATE outbound_deliveries
                     SET state = 'sending',
+                        submission_started_at = NULL,
                         owner_token = ?,
                         lease_expires_at = ?,
                         attempt_count = attempt_count + 1,
@@ -750,11 +873,22 @@ class SqliteConversationStore:
                 row = connection.execute(
                     """
                     SELECT EXISTS(
-                        SELECT 1 FROM outbound_deliveries
-                        WHERE id = ?
-                          AND state = 'sending'
-                          AND owner_token = ?
-                          AND lease_expires_at > ?
+                        SELECT 1 FROM outbound_deliveries AS delivery
+                        JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+                        WHERE delivery.id = ?
+                          AND delivery.state = 'sending'
+                          AND delivery.owner_token = ?
+                          AND delivery.lease_expires_at > ?
+                          AND (
+                            (delivery.handoff_token IS NULL AND NOT EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                            )) OR EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                                  AND owner_token = delivery.handoff_token
+                            )
+                          )
                     )
                     """,
                     (delivery_id, owner_token, self._utc_time(now).isoformat()),
@@ -762,6 +896,82 @@ class SqliteConversationStore:
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
         return bool(row[0])
+
+    def authorize_delivery_submission(
+        self,
+        *,
+        delivery_id: int,
+        owner_token: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """Fence owner and handoff immediately before possibly irreversible HTTP."""
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries AS delivery SET submission_started_at = ?
+                    WHERE id = ? AND state = 'sending' AND owner_token = ?
+                      AND lease_expires_at > ? AND submission_started_at IS NULL
+                      AND EXISTS (
+                        SELECT 1 FROM messages AS outbound
+                        WHERE outbound.id = delivery.outbound_message_id
+                        AND (
+                            (delivery.handoff_token IS NULL AND NOT EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                            )) OR EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                                  AND owner_token = delivery.handoff_token
+                            )
+                        )
+                      )
+                    """,
+                    (timestamp, delivery_id, owner_token, timestamp),
+                ).rowcount
+                return updated == 1
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable(
+                "Outbound submission authorization is unavailable"
+            ) from error
+
+    def authorize_legacy_reply(
+        self, *, delivery_id: int, lock_timeout: float | None = None
+    ) -> bool:
+        """Fence the rollback-mode HTTP submission using the same handoff policy."""
+        try:
+            with self._connect(lock_timeout) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(None).isoformat()
+                updated = connection.execute(
+                    """
+                    UPDATE outbound_deliveries AS delivery
+                    SET submission_started_at = COALESCE(submission_started_at, ?)
+                    WHERE id = ? AND (
+                        state = 'accepted_legacy'
+                        OR (state = 'unknown' AND safe_error_code = 'legacy_unverified')
+                    ) AND EXISTS (
+                        SELECT 1 FROM messages AS outbound
+                        WHERE outbound.id = delivery.outbound_message_id
+                        AND (
+                            (delivery.handoff_token IS NULL AND NOT EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                            )) OR EXISTS (
+                                SELECT 1 FROM conversation_handoffs WHERE active = 1
+                                  AND conversation_id = outbound.conversation_id
+                                  AND owner_token = delivery.handoff_token
+                            )
+                        )
+                    )
+                    """,
+                    (timestamp, delivery_id),
+                ).rowcount
+                return updated == 1
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Legacy reply authorization is unavailable") from error
 
     def finalize_delivery(
         self,
@@ -876,6 +1086,29 @@ class SqliteConversationStore:
                 ).rowcount
                 if delivery_updated != 1:
                     raise sqlite3.IntegrityError("Outbound Delivery ownership changed")
+                if outcome is DeliveryState.RETRYABLE:
+                    policy = connection.execute(
+                        """
+                        SELECT outbound.conversation_id, delivery.handoff_token,
+                               handoff.active, handoff.owner_token
+                        FROM outbound_deliveries AS delivery
+                        JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
+                        LEFT JOIN conversation_handoffs AS handoff
+                          ON handoff.conversation_id = outbound.conversation_id
+                        WHERE delivery.id = ?
+                        """,
+                        (delivery_id,),
+                    ).fetchone()
+                    if policy is not None and (
+                        (policy[1] is None and policy[2] == 1)
+                        or (policy[1] is not None and (policy[2] != 1 or policy[1] != policy[3]))
+                    ):
+                        self._cancel_unsent_deliveries(
+                            connection,
+                            int(policy[0]),
+                            timestamp,
+                            except_handoff_token=str(policy[3]) if policy[2] == 1 else None,
+                        )
                 if outcome is DeliveryState.ACCEPTED and provider_message_id is not None:
                     pending_status = connection.execute(
                         """
@@ -1489,6 +1722,10 @@ class SqliteConversationStore:
                         SELECT 1 FROM messages
                         WHERE messages.conversation_id = conversations.id
                     )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM conversation_handoffs
+                        WHERE conversation_id = conversations.id AND active = 1
+                    )
                     """
                 ).rowcount
         except sqlite3.Error as error:
@@ -1813,6 +2050,7 @@ class SqliteConversationStore:
         owner_token: str,
         reply_body: str,
         delivery_state: DeliveryState,
+        handoff_reason: HandoffReason | None,
         now: datetime | None,
         lock_timeout: float | None,
     ) -> bool:
@@ -1853,6 +2091,12 @@ class SqliteConversationStore:
                 return False
 
             conversation_id = int(inbound[0])
+            if connection.execute(
+                "SELECT 1 FROM conversation_handoffs WHERE conversation_id = ? AND active = 1",
+                (conversation_id,),
+            ).fetchone():
+                return False
+            handoff_token = uuid4().hex if handoff_reason is not None else None
             outbound_message_id = int(
                 connection.execute(
                     """
@@ -1873,6 +2117,7 @@ class SqliteConversationStore:
                 recipient_address=str(inbound[3]),
                 delivery_state=delivery_state,
                 timestamp=timestamp,
+                handoff_token=handoff_token,
             )
             updated = connection.execute(
                 """
@@ -1894,6 +2139,31 @@ class SqliteConversationStore:
                 "UPDATE conversations SET updated_at = ? WHERE id = ?",
                 (timestamp, conversation_id),
             )
+            if handoff_token is not None:
+                connection.execute(
+                    """
+                    INSERT INTO conversation_handoffs (
+                        conversation_id, active, owner_token, reason_code, activated_at, released_at
+                    ) VALUES (?, 1, ?, ?, ?, NULL)
+                    ON CONFLICT(conversation_id) DO UPDATE SET active = 1,
+                        owner_token = excluded.owner_token, reason_code = excluded.reason_code,
+                        activated_at = excluded.activated_at, released_at = NULL
+                    """,
+                    (conversation_id, handoff_token, handoff_reason, timestamp),
+                )
+                self._cancel_unsent_deliveries(
+                    connection, conversation_id, timestamp, except_handoff_token=handoff_token
+                )
+                connection.execute(
+                    """
+                    UPDATE message_processing SET state = 'suppressed', updated_at = ?
+                    WHERE state = 'retryable' AND attempt_count = 0
+                      AND inbound_message_id IN (
+                        SELECT id FROM messages WHERE conversation_id = ? AND direction = 'inbound'
+                      )
+                    """,
+                    (timestamp, conversation_id),
+                )
         return True
 
     @staticmethod
@@ -1906,6 +2176,7 @@ class SqliteConversationStore:
         recipient_address: str,
         delivery_state: DeliveryState,
         timestamp: str,
+        handoff_token: str | None = None,
     ) -> int:
         if delivery_state not in {
             DeliveryState.PENDING,
@@ -1933,8 +2204,8 @@ class SqliteConversationStore:
                     safe_error_code,
                     accepted_at,
                     created_at,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?, ?, ?)
+                    updated_at, handoff_token
+                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -1948,6 +2219,7 @@ class SqliteConversationStore:
                     accepted_at,
                     timestamp,
                     timestamp,
+                    handoff_token,
                 ),
             ).fetchone()[0]
         )
@@ -2011,7 +2283,7 @@ class SqliteConversationStore:
                 delivery.safe_error_code,
                 delivery.accepted_at,
                 delivery.created_at,
-                delivery.updated_at
+                delivery.updated_at, delivery.handoff_token
             FROM outbound_deliveries AS delivery
             JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
         """
@@ -2036,6 +2308,7 @@ class SqliteConversationStore:
             accepted_at=None if row[14] is None else datetime.fromisoformat(str(row[14])),
             created_at=datetime.fromisoformat(str(row[15])),
             updated_at=datetime.fromisoformat(str(row[16])),
+            handoff_token=None if row[17] is None else str(row[17]),
         )
 
     def _claim_exhausted_finalization(

@@ -52,11 +52,16 @@ human-review Intent overrides `handoff=false`. Explicit AI identity questions
 receive transparent identity text, including generation-failure paths. Persona
 limits apply to the final rendering, never truncate a factual statement.
 
-This policy returns a handoff **proposal**, not an activated handoff or a
-transfer confirmation. Ticket 10 owns durable activation, suppression,
-release, and atomic handoff completion; these remain a pilot gate. The current
-application persists the rendered AI Reply and its Outbound Delivery using the
-existing atomic completion. It does not yet persist the whole decision.
+This policy returns a handoff **proposal**. Ticket 10's application finalization
+normalizes its reason to a safe code and creates a trusted confirmation through
+the atomic Conversation handoff completion. That transaction also persists the
+AI Reply and Outbound Delivery, suspends automation, and suppresses waiting
+Messages. Raw model reason text is not stored or echoed. Generation exhaustion
+uses the same handoff path; recognized technical-risk and transparency rules
+still apply. The whole LLM decision is not persisted.
+
+See [Human Handoff operations](human-handoff.md) for explicit release and
+[ADR 0008](decisions/0008-durable-human-handoff.md) for delivery race semantics.
 
 `GeneratedReply.from_reply_text()` is reserved for trusted deterministic
 configuration/test replies. LLM adapters must never call it with model data or

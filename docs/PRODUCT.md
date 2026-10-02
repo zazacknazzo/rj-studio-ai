@@ -27,14 +27,14 @@ V7 is a separate product phase that may turn the proven system into a multi-busi
 
 ## Current product
 
-The implemented baseline through V1 Ticket 09 and Messaging Migration 06 handles
+The implemented baseline through V1 Ticket 10 and Messaging Migration 06 handles
 provider-selected ingress, durable generation claims and outbound delivery,
 automatic AI processing, proactive REST submission, delivery-status callbacks,
 Claude or
 deterministic generation, approved Salon Knowledge, bounded Conversation
 Context, structured Intent decisions, Lívia persona rules, and trusted factual
-rendering. Meta's real smoke remains an operational gate. Durable Human
-Handoff remains Ticket 10 work. The legacy
+rendering and durable Human Handoff with explicit local release. Meta's real
+smoke remains an operational gate. The legacy
 delivery mode remains synchronous for controlled rollback. CRM behavior,
 scheduling, multimodal processing, and advertising integration remain absent.
 

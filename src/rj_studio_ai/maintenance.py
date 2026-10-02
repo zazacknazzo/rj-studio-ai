@@ -28,6 +28,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--database-path", type=Path)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("migrate", help="Apply pending database migrations")
+    subparsers.add_parser("list-handoffs", help="List active handoffs without Customer data")
+    release = subparsers.add_parser(
+        "release-handoff", help="Release one explicitly selected handoff episode"
+    )
+    release.add_argument("--conversation-id", type=_positive_integer, required=True)
+    release.add_argument("--owner-token", required=True)
     subparsers.add_parser(
         "list-pending-generations",
         help="List retryable or stale inbound Messages without Customer content",
@@ -86,6 +92,28 @@ def main(
     if args.command == "migrate":
         print("Database migrations are current.")
         return 0
+
+    if args.command == "list-handoffs":
+        handoffs = store.list_active_handoffs()
+        if not handoffs:
+            print("No active Human Handoffs.")
+        for handoff in handoffs:
+            print(
+                f"conversation_id={handoff.conversation_id} owner_token={handoff.owner_token} "
+                f"reason={handoff.reason_code.value} "
+                f"activated_at={handoff.activated_at.isoformat()}"
+            )
+        return 0
+
+    if args.command == "release-handoff":
+        released = store.release_handoff(
+            conversation_id=args.conversation_id, owner_token=args.owner_token
+        )
+        print(
+            f"Handoff release conversation_id={args.conversation_id} "
+            f"result={'released' if released else 'not_current'}."
+        )
+        return 0 if released else 1
 
     if args.command == "reconcile-legacy-delivery":
         reconciled = store.reconcile_legacy_delivery(

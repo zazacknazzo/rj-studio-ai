@@ -30,6 +30,8 @@ Para Meta, siga o runbook específico e mantenha `DELIVERY_MODE=proactive`.
 
 ## Rodar localmente
 
+Operação de handoff: [listar e liberar manualmente](docs/human-handoff.md).
+
 ```bash
 rj-studio-maintenance migrate
 uvicorn rj_studio_ai.main:app --reload --port 8000

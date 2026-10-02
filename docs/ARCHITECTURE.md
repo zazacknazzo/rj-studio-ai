@@ -1,7 +1,7 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 09 plus Messaging Migrations 01–06.
+The runtime baseline is V1 through Ticket 10 plus Messaging Migrations 01–06.
 ADR 0006 owns the messaging migration. Twilio remains available and Meta
 WhatsApp Cloud API is the next E2E target.
 
@@ -23,7 +23,8 @@ SQLite → lifespan Processing Executor → ordered generation claim
   → deterministic or Anthropic generation outside SQLite transaction
   → validated LLMDecision and privacy-safe metrics
   → trusted reply parts rendered from selected approved facts and institutional phrases
-  → one transaction persists AIReply, pending OutboundDelivery, and completed processing
+  → one transaction persists AIReply, pending OutboundDelivery, completed processing,
+    and any required Conversation handoff
 
 SQLite → lifespan Outbound Executor → provider-filtered delivery claim
   → Twilio or Meta REST API → provider Message ID → Provider Acceptance persisted
@@ -212,9 +213,31 @@ are durably retained for later correlation. Out-of-order success callbacks can
 only advance evidence; they cannot downgrade delivered/read.
 
 Before every external submission, the outbound executor revalidates the owner,
-delivery eligibility, and current Human Handoff policy. A future handoff can
+delivery eligibility, and current Human Handoff policy. A handoff can
 cancel work not yet submitted. A request already in flight cannot be recalled;
 handoff guarantees must state that residual race explicitly.
+
+## Durable Human Handoff
+
+`conversation_handoffs` holds one current episode per Conversation: active flag,
+safe reason, episode owner token, activation time, and explicit release time.
+Owned generation completion atomically creates the confirmation and outbox,
+completes processing, activates the episode, cancels proven-unsubmitted work,
+and suppresses waiting Messages. New inbound inserts during handoff receive the
+terminal processing state `suppressed`. Release never revives them.
+
+Only the current episode's confirmation may submit during active handoff.
+Delivery authorization commits `submission_started_at` just before external
+HTTP; cancellation can include a claimed delivery only before this marker.
+Possible in-flight work retains provider outcomes, including `unknown`.
+Manual release uses an episode-token compare-and-set and cancels an unsent
+confirmation; it does not reconcile unknown/failed deliveries or promise that
+automation can cross an unresolved ordering barrier. Purge preserves active
+handoff state even after its Messages expire.
+
+[ADR 0008](decisions/0008-durable-human-handoff.md) owns the migration and race
+trade-offs. [Human Handoff operations](human-handoff.md) owns local list/release
+commands. Appointment collection remains Ticket 11.
 
 ## Deadlines and recovery
 
@@ -259,6 +282,7 @@ distributed workers, and horizontal scaling remain out of scope.
 | `conversation_context.py` | Bounded context filtered by delivery visibility |
 | `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
 | `grounding.py` | Trusted reply composition and deterministic human-review overrides before completion |
+| `handoff.py` | Localized safe reasons and truthful one-time confirmation, including technical-risk guidance |
 | `persistence.py` | Durable inbound, processing claims, outbox/claims, monotonic status merge, early-status inbox, ordering, and redacted inspection |
 | `delivery.py` | Deterministic runner plus lifespan-managed durable outbound polling |
 | `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |

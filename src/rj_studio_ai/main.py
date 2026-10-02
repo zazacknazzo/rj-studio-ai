@@ -302,21 +302,29 @@ def create_app(
                     raise InvalidWebhookPayload("Unsupported provider webhook event")
                 event = batch.events[0]
                 reply = await run_in_threadpool(responder.handle, event, deadline=deadline)
+                legacy_customer_reply = False
                 if deadline.is_expired():
                     raise RetryableWebhookError(
                         "Webhook deadline expired before provider rendering"
                     )
-                delivery = resolved_store.get_delivery_for_provider_inbound(
-                    provider=event.provider,
-                    provider_message_id=event.provider_message_id,
-                    lock_timeout=deadline.remaining_budget(),
-                )
-                if delivery is None:
-                    raise RetryableWebhookError("Outbound Delivery is unavailable")
-                legacy_customer_reply = delivery.state is DeliveryState.ACCEPTED_LEGACY or (
-                    delivery.state is DeliveryState.UNKNOWN
-                    and delivery.safe_error_code == "legacy_unverified"
-                )
+                if reply is not None:
+                    delivery = resolved_store.get_delivery_for_provider_inbound(
+                        provider=event.provider,
+                        provider_message_id=event.provider_message_id,
+                        lock_timeout=deadline.remaining_budget(),
+                    )
+                    if delivery is None:
+                        raise RetryableWebhookError("Outbound Delivery is unavailable")
+                    legacy_customer_reply = delivery.state is DeliveryState.ACCEPTED_LEGACY or (
+                        delivery.state is DeliveryState.UNKNOWN
+                        and delivery.safe_error_code == "legacy_unverified"
+                    )
+                    if legacy_customer_reply:
+                        legacy_customer_reply = await run_in_threadpool(
+                            resolved_store.authorize_legacy_reply,
+                            delivery_id=delivery.delivery_id,
+                            lock_timeout=deadline.remaining_budget(),
+                        )
                 provider_response = (
                     resolved_provider.render_legacy_reply(reply)
                     if legacy_customer_reply

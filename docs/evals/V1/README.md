@@ -13,3 +13,8 @@ executes their deterministic proposal → rendering contract with synthetic
 approval metadata. Live model quality, naturalness, token/cost/latency and
 repeat-run prohibited-claim scoring remain Ticket 12; these unit cases are not
 a live provider eval or a real smoke report.
+
+Ticket 10 adds deterministic SQLite/webhook handoff lifecycle tests in
+`tests/test_human_handoff.py`: activation, suppression, replay, release,
+rollback, concurrency, and submission fencing. These tests do not replace the
+real-model handoff detection/confirmation quality gate owned by Ticket 12.

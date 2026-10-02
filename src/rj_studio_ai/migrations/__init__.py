@@ -87,9 +87,18 @@ class MigrationManager:
             "outbound_deliveries",
             "delivery_attempts",
             "pending_delivery_statuses",
+            "conversation_handoffs",
         }.issubset(inspector.get_table_names()):
             return False
         required_columns = {
+            "conversation_handoffs": {
+                "conversation_id",
+                "active",
+                "owner_token",
+                "reason_code",
+                "activated_at",
+                "released_at",
+            },
             "conversations": {
                 "id",
                 "provider",
@@ -134,6 +143,8 @@ class MigrationManager:
                 "created_at",
             },
             "outbound_deliveries": {
+                "handoff_token",
+                "submission_started_at",
                 "id",
                 "outbound_message_id",
                 "provider",
@@ -176,6 +187,21 @@ class MigrationManager:
             if not required.issubset(actual):
                 return False
 
+        handoff_checks = {
+            item["name"] for item in inspector.get_check_constraints("conversation_handoffs")
+        }
+        handoff_indexes = {
+            item["name"]: (tuple(item["column_names"]), bool(item["unique"]))
+            for item in inspector.get_indexes("conversation_handoffs")
+        }
+        handoff_foreign_keys = {
+            (
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("conversation_handoffs")
+        }
         conversation_uniques = {
             frozenset(item["column_names"])
             for item in inspector.get_unique_constraints("conversations")
@@ -269,7 +295,23 @@ class MigrationManager:
             )
         }
         return (
-            frozenset({"provider", "customer_address"}) in conversation_uniques
+            {
+                "ai_reply_rejects_active_handoff",
+                "processing_rejects_active_handoff",
+                "submission_evidence_is_immutable",
+            }.issubset(processing_triggers)
+            and inspector.get_pk_constraint("conversation_handoffs")["constrained_columns"]
+            == ["conversation_id"]
+            and (("conversation_id",), "conversations", ("id",)) in handoff_foreign_keys
+            and {
+                "ck_handoff_active",
+                "ck_handoff_reason_owner",
+                "ck_handoff_release_shape",
+            }.issubset(handoff_checks)
+            and handoff_indexes.get("ix_handoffs_active") == (("active", "conversation_id"), False)
+            and delivery_indexes.get("uq_delivery_handoff_confirmation")
+            == (("handoff_token",), True)
+            and frozenset({"provider", "customer_address"}) in conversation_uniques
             and frozenset({"provider", "provider_message_id"}) in message_uniques
             and reply_indexes.get("uq_messages_in_reply_to") == (("in_reply_to_message_id",), True)
             and reply_indexes.get("ix_messages_conversation_created")
