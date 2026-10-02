@@ -38,7 +38,7 @@ from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.salon_knowledge import SalonKnowledgeFact, SalonKnowledgeRepository
 
 
-def _facts(case: EvalCase):
+def synthetic_facts(case: EvalCase):
     return tuple(
         SalonKnowledgeFact.model_validate(
             {
@@ -73,18 +73,18 @@ class _FixtureGenerator:
         return result
 
 
-def _message(identifier, body):
+def synthetic_message(identifier, body):
     return InboundMessage("eval", identifier, "synthetic-customer", "synthetic-channel", body)
 
 
-def _context_case(case, store, directory):
+def prepare_context_case(case, store, directory):
     now = datetime.now(UTC)
     scenario = case.data["scenario"]
     count = 10 if scenario == "bounded" else 1
     prior_time = now - timedelta(days=31) if scenario == "expired" else now
     for number in range(count):
         claim = store.claim_generation(
-            _message(f"prior-{number}", "Dúvida sintética"), now=prior_time
+            synthetic_message(f"prior-{number}", "Dúvida sintética"), now=prior_time
         )
         store.complete_generation(
             inbound_message_id=claim.inbound_message_id,
@@ -95,7 +95,7 @@ def _context_case(case, store, directory):
             else DeliveryState.ACCEPTED_LEGACY,
             now=prior_time,
         )
-    current = store.admit_generation(_message("current", "Outra dúvida"), now=now)
+    current = store.admit_generation(synthetic_message("current", "Outra dúvida"), now=now)
     knowledge_path = directory / "synthetic-knowledge.yaml"
     knowledge_path.write_text("version: 1\nfacts: []\n")
     knowledge = SalonKnowledgeRepository(knowledge_path)
@@ -122,10 +122,10 @@ def _single_case(case):
         result = finalize_reply(
             decision,
             customer_message=data["customer_message"],
-            context=ConversationContext(history=(), knowledge=_facts(case)),
+            context=ConversationContext(history=(), knowledge=synthetic_facts(case)),
         )
         residue = result.reply_text
-        approved_texts = [fact.statement for fact in _facts(case)]
+        approved_texts = [fact.statement for fact in synthetic_facts(case)]
         authorized_phrases = [*REPLY_PHRASES.values(), HUMAN_REVIEW_REPLY]
         for text in sorted([*approved_texts, *authorized_phrases], key=len, reverse=True):
             residue = residue.replace(text, "")
@@ -174,7 +174,7 @@ def _episode_turn(case, turn, number, store, database_path):
         appointment_preferences=turn.get("preferences"),
     )
     generator = _FixtureGenerator(decision)
-    inbound = _message(f"turn-{number}", turn["customer_message"])
+    inbound = synthetic_message(f"turn-{number}", turn["customer_message"])
     reply = MessageResponder(
         store=store,
         generator=generator,
@@ -243,7 +243,7 @@ def dry_run(suite: EvalSuite, *, repetitions: int = 1, revision: str) -> RunReco
                             database_path,
                         )
                     elif case.kind == "context":
-                        checks, body, latencies = _context_case(case, store, directory)
+                        checks, body, latencies = prepare_context_case(case, store, directory)
                     else:
                         checks, body, latencies = _single_case(case)
                     samples.append(
