@@ -12,8 +12,9 @@ The original 45 seeds remain; the seven additions close deterministic
 handoff/context coverage. An episode is one case even when it has several turns.
 
 [Harness operations](harness.md) documents commands, versioned records,
-accounting, blind pairing and Phase 2 prerequisites. No paid/model comparison,
-latency/cost gate or human naturalness review has been executed.
+accounting, blind pairing and Phase 2 prerequisites. That Phase 1 performed no
+paid calls. The dated partial-execution amendment records the later OpenAI
+smoke; comparative, complete operational and human-review gates remain pending.
 
 Ticket 07 supplies these synthetic Intent cases as a stable input set. They are
 not a model-quality report and contain no real Customer data. Phase 1 uses

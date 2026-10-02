@@ -37,6 +37,18 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- OpenAI-only partial live gate executed 2026-10-02: Phase A stopped at case
+  `persona-incomplete-context` after 9/10 calls (`incomplete`, 200 output tokens);
+  B not executed. Usage/accounting valid: US$0.0239327 total, one paid failure,
+  no retries, 0/16 critical failures. Human packet has eight unscored answers.
+  Full details/private record paths: `docs/evals/V1/openai-partial-2026-10-02.md`.
+  This is not V1 approval. Comparative criteria remain unchecked; comparison
+  deferred, further live coverage and human/operational review pending.
+- Post-execution validation: 569 tests passed (15 new eval tests), Ruff check,
+  format check, compileall, pip check and diff check passed. Independent Standards
+  and Spec reviews approved the collector after the recorded fixes. One existing
+  Starlette/AnyIO deprecation warning remains. No production code was changed.
+
 - 2026-10-02 product-owner revision: Anthropic comparison deferred. Authorized
   OpenAI-only `gpt-6.1-sol`, Medium, standard, US$1 smoke / US$5 global cap.
   See `docs/evals/V1/openai-partial-2026-10-02.md`. Comparative acceptance stays

@@ -7,6 +7,11 @@ WhatsApp Cloud API is the next E2E target.
 
 ## Implemented runtime
 
+Ticket 12's `evaluation` package is isolated from the production provider factory.
+Its OpenAI-only live collector uses synthetic SQLite, existing policy seams and
+a fake outbound sender. See [partial eval execution](evals/V1/openai-partial-2026-10-02.md)
+for billing/evidence boundaries; it does not configure production or live messaging.
+
 Delivery mode is an explicit process-level setting. `legacy` remains the safe
 default and preserves the synchronous TwiML path for controlled rollback.
 `proactive` separates ingress, AI processing, and customer delivery:

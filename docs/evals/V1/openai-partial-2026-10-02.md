@@ -79,5 +79,50 @@ human rubric dimensions remain unscored; no paired comparison or LLM judge.
 
 ## Execution status
 
-Prepared; live results will be recorded after the controlled command.
-Cross-provider comparison and human review remain pending. No Meta smoke.
+OpenAI-only live gate **partially executed, blocked**, 2026-10-02 at
+23:15:26 UTC (20:15:26 America/Sao_Paulo). Code revision:
+`e58d4e309e6c57ad7947c3ddfad3825367a29881`.
+Private, Git-ignored evidence: `work/evals/openai-partial-2026-10-02-01/`.
+
+Phase A executed 9 of 10 cases. `persona-incomplete-context` returned
+`status=incomplete`, with 200 output tokens (133 reasoning tokens) against the
+configured 200-token total limit. No valid structured decision was available;
+the application committed its safe handoff reply. The recorded evidence is
+consistent with token-budget exhaustion; the provider's detailed incomplete
+reason was not retained, so no more specific root cause is claimed.
+`grounding-multiple-facts` was not executed. **Phase B was not started.** No
+retry, fresh-run restart or token/deadline increase followed the stop.
+
+| Observed population | Result |
+| --- | --- |
+| Live generation calls / retries / paid failures | 9 / 0 / 1 |
+| Input / output tokens | 11,434 / 1,339 |
+| Cache read / cache write / reasoning tokens | 7,512 / 3,895 / 516 |
+| Completed logical replies | 9: 8 valid decisions plus 1 safe failure handoff |
+| Total cost / cost per 1,000 completed replies | US$0.0239327 / US$2.659188889 |
+| Model p50 / p95 | 4.961 s / 6.812 s |
+| Simulated E2E billable p50 / p95 | 5.332 s / 7.214 s |
+| Critical failures | 0/16 executed critical checks |
+| Grounding / handoff / appointment safety | 8/8 / 8/8 / 2/2 |
+| Intent / persona structural compliance | 0/0 unexecuted / 0/1 |
+
+Real usage was present in all nine attempts. Cost was reconciled independently
+against every spend-journal settlement and phase record, including the paid
+failure. No known billing was omitted. Both caps were respected. These sparse,
+partially stopped samples cannot approve V1; simulated E2E does not replace the
+real-provider gate. No prohibited claim was observed in executed critical cases.
+
+Single-model blind packet: `human-review.md` and `human-review.json` in that
+directory; eight final answers from valid decisions, no technical metadata,
+unscored. The safe fallback is excluded from model-naturalness review.
+
+Remaining blockers: resolve the incomplete structured output within an approved
+token/deadline configuration; approve any further paid resumption; finish live
+coverage, human review and real-provider operational evidence. Cross-provider
+comparison remains deferred. **Ticket 12 remains in-progress**, with comparative
+acceptance unchecked. No Anthropic request, Meta smoke, real Customer or
+WhatsApp message was used; no credential was displayed or committed.
+
+Validation: 15 new billing/adapter/SQLite runner tests; independent Standards
+and Spec reviews approved after fixing context-orphan, smoke-gate and Intent
+coverage findings. Full test/check results are recorded with the ticket.

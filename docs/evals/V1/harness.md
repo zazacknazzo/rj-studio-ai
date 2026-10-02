@@ -1,5 +1,9 @@
 # Offline V1 harness — Ticket 12 Phase 1
 
+This page documents the offline Phase 1 path. The separate, explicitly authorized
+[partial OpenAI live collector](openai-partial-2026-10-02.md) records current
+execution status, version-2 evidence, budgets and pending gates.
+
 **Harness implemented / live model gate pending.** No live adapter, credentials,
 network client, provider factory or production configuration is constructed.
 The default is one repetition with deterministic fixture proposals. There is
