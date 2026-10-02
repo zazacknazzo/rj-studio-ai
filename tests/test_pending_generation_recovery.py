@@ -351,9 +351,19 @@ def test_recovery_cannot_preempt_a_new_owner_after_a_stale_claim_is_reacquired(
 
 
 def test_maintenance_commands_list_redacted_work_and_recover_one_message(
-    tmp_path: Path, capsys
+    tmp_path: Path, capsys, monkeypatch
 ) -> None:
     database_path = tmp_path / "maintenance-recovery.db"
+    # This legacy recovery contract must never inherit local smoke credentials/mode.
+    monkeypatch.setattr(
+        "rj_studio_ai.maintenance.Settings",
+        lambda: Settings(
+            _env_file=None,
+            database_path=database_path,
+            llm_provider="fixed",
+            delivery_mode="legacy",
+        ),
+    )
     store = _store(database_path)
     pending = store.admit_generation(
         _message("pending", customer="customer-private", body="body-private")

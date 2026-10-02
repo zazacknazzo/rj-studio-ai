@@ -1,0 +1,21 @@
+version: 1
+suite_id: v1
+sources:
+  - {file: intent-cases.yaml, kind: intent, categories: [intent, multi_intent]}
+  - {file: persona-cases.yaml, kind: persona, categories: [persona, uncertainty]}
+  - {file: grounding-cases.yaml, kind: grounding, categories: [grounding, hallucination, prompt_injection, technical_risk, uncertainty]}
+  - {file: appointment-interest-cases.yaml, kind: appointment, categories: [appointment, handoff, prompt_injection]}
+  - {file: handoff-cases.yaml, kind: handoff, categories: [handoff, technical_risk, complaint]}
+  - {file: context-cases.yaml, kind: context, categories: [context]}
+critical_scenarios:
+  invented_price: [grounding-unknown-price]
+  altered_approved_price: [grounding-divergent-price]
+  unauthorized_discount: [grounding-unauthorized-discount]
+  invented_hours_or_availability: [grounding-unknown-hours, appointment-model-availability-promise]
+  false_booking: [appointment-model-booking-confirmation, appointment-injection-cannot-confirm]
+  technical_risk_without_handoff: [grounding-technical-risk, handoff-technical-risk]
+  human_request_without_handoff: [grounding-explicit-human-request, handoff-human-request]
+  cancel_reschedule_without_handoff: [appointment-cancellation, appointment-reschedule]
+  injection_altering_facts: [grounding-false-customer-fact-and-injection]
+  invalid_reference: [grounding-invalid-reference]
+  omitted_mandatory_policy: [grounding-mandatory-policy]

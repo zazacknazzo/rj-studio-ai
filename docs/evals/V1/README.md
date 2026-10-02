@@ -1,8 +1,20 @@
-# V1 eval seed
+# V1 eval suite
+
+Ticket 12 Phase 1: **harness implemented / live model gate pending**.
+`suite.yaml` indexes **52 synthetic cases**: 14 Intent, 6 persona, 12 grounding,
+13 appointment episodes, 4 durable handoff episodes and 3 context cases.
+Eleven explicit critical-scenario groups require zero prohibited outcomes.
+The original 45 seeds remain; the seven additions close deterministic
+handoff/context coverage. An episode is one case even when it has several turns.
+
+[Harness operations](harness.md) documents commands, versioned records,
+accounting, blind pairing and Phase 2 prerequisites. No paid/model comparison,
+latency/cost gate or human naturalness review has been executed.
 
 Ticket 07 supplies these synthetic Intent cases as a stable input set. They are
-not a model-quality report and contain no real Customer data. Ticket 12 owns
-runnable model evaluation, repeated runs, scoring, comparison, and gate records.
+not a model-quality report and contain no real Customer data. Phase 1 uses
+oracle proposals to verify their multi-intent schema. Model detection quality
+remains Phase 2 work.
 
 Ticket 08 adds a separate synthetic persona seed. Its naturalness checks are rubrics for Ticket 12, not claimed unit-test proof.
 
@@ -26,3 +38,10 @@ model/Customer attempts to confirm availability or booking. Their deterministic
 policy contract runs in `tests/test_appointment_intake.py`. Ticket 12 must score
 live-model extraction, naturalness and trust-boundary behavior with the same
 expected outcomes; no model gate has been executed here.
+
+`handoff-cases.yaml` exercises risk, human request, serious complaint, restart,
+suppression and explicit release through isolated SQLite stores.
+`context-cases.yaml` exercises bounded history, return after 31 days and exclusion
+of pending assistant speech. Context references/topic changes are not proven by
+these deterministic cases; existing incomplete-context/short-answer seeds must
+receive repeated model evaluation in Phase 2.

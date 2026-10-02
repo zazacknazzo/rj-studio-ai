@@ -1,0 +1,800 @@
+{
+  "$defs": {
+    "Attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "exclusiveMinimum": 0,
+          "title": "Number",
+          "type": "integer"
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "failure"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "billable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Billable"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "latency_ms": {
+          "minimum": 0,
+          "title": "Latency Ms",
+          "type": "number"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        }
+      },
+      "required": [
+        "number",
+        "outcome",
+        "billable",
+        "input_tokens",
+        "output_tokens",
+        "latency_ms"
+      ],
+      "title": "Attempt",
+      "type": "object"
+    },
+    "CaseContract": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "turns": {
+          "exclusiveMinimum": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "checks": {
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$": {
+              "$ref": "#/$defs/CheckContract"
+            }
+          },
+          "title": "Checks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "case_id",
+        "turns",
+        "checks"
+      ],
+      "title": "CaseContract",
+      "type": "object"
+    },
+    "CheckContract": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "enum": [
+            "grounding",
+            "intent",
+            "handoff",
+            "persona",
+            "context"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "critical": {
+          "default": false,
+          "title": "Critical",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "metric"
+      ],
+      "title": "CheckContract",
+      "type": "object"
+    },
+    "Fingerprints": {
+      "additionalProperties": false,
+      "properties": {
+        "suite": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Suite",
+          "type": "string"
+        },
+        "knowledge": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Knowledge",
+          "type": "string"
+        },
+        "prompt": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Prompt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "suite",
+        "knowledge",
+        "prompt"
+      ],
+      "title": "Fingerprints",
+      "type": "object"
+    },
+    "ModelConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "thinking": {
+          "const": "disabled",
+          "title": "Thinking",
+          "type": "string"
+        },
+        "structured_output": {
+          "title": "Structured Output",
+          "type": "boolean"
+        },
+        "max_output_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "context_max_messages": {
+          "exclusiveMinimum": 0,
+          "title": "Context Max Messages",
+          "type": "integer"
+        },
+        "context_token_budget": {
+          "exclusiveMinimum": 0,
+          "title": "Context Token Budget",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "provider",
+        "model",
+        "thinking",
+        "structured_output",
+        "max_output_tokens",
+        "context_max_messages",
+        "context_token_budget"
+      ],
+      "title": "ModelConfiguration",
+      "type": "object"
+    },
+    "Pricing": {
+      "additionalProperties": false,
+      "description": "Rates require explicit provenance. Synthetic rates never authorize a live gate.",
+      "properties": {
+        "version": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "unapproved",
+            "synthetic",
+            "approved"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "provider": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "input_usd_per_million": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Usd Per Million"
+        },
+        "output_usd_per_million": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Usd Per Million"
+        },
+        "reviewed_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed At"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        }
+      },
+      "required": [
+        "version",
+        "status",
+        "provider",
+        "model",
+        "source",
+        "input_usd_per_million",
+        "output_usd_per_million"
+      ],
+      "title": "Pricing",
+      "type": "object"
+    },
+    "Ratio": {
+      "additionalProperties": false,
+      "properties": {
+        "numerator": {
+          "minimum": 0,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "Ratio",
+      "type": "object"
+    },
+    "Sample": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "repetition": {
+          "exclusiveMinimum": 0,
+          "title": "Repetition",
+          "type": "integer"
+        },
+        "turn": {
+          "exclusiveMinimum": 0,
+          "title": "Turn",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "observed",
+            "suppressed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reply_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reply Hash"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/Attempt"
+          },
+          "title": "Attempts",
+          "type": "array"
+        },
+        "e2e_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "E2E Latency Ms"
+        },
+        "ingress_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ingress Latency Ms"
+        },
+        "queue_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Latency Ms"
+        },
+        "processing_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Processing Latency Ms"
+        },
+        "outbound_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outbound Latency Ms"
+        },
+        "checks": {
+          "patternProperties": {
+            "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$": {
+              "enum": [
+                "pass",
+                "fail",
+                "not_run"
+              ],
+              "type": "string"
+            }
+          },
+          "title": "Checks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "case_id",
+        "repetition",
+        "turn",
+        "status",
+        "reply_hash",
+        "attempts",
+        "e2e_latency_ms",
+        "checks"
+      ],
+      "title": "Sample",
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "run_count": {
+          "exclusiveMinimum": 0,
+          "title": "Run Count",
+          "type": "integer"
+        },
+        "completed_replies": {
+          "minimum": 0,
+          "title": "Completed Replies",
+          "type": "integer"
+        },
+        "billable_retries": {
+          "minimum": 0,
+          "title": "Billable Retries",
+          "type": "integer"
+        },
+        "token_consuming_failures": {
+          "minimum": 0,
+          "title": "Token Consuming Failures",
+          "type": "integer"
+        },
+        "unknown_billing_attempts": {
+          "minimum": 0,
+          "title": "Unknown Billing Attempts",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "model_p50_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model P50 Ms"
+        },
+        "model_p95_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model P95 Ms"
+        },
+        "e2e_p50_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "E2E P50 Ms"
+        },
+        "e2e_p95_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "E2E P95 Ms"
+        },
+        "billable_e2e_p50_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Billable E2E P50 Ms"
+        },
+        "billable_e2e_p95_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Billable E2E P95 Ms"
+        },
+        "estimated_cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimated Cost Usd"
+        },
+        "cost_per_1000_replies_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Per 1000 Replies Usd"
+        },
+        "critical_failures": {
+          "$ref": "#/$defs/Ratio"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Ratio"
+          },
+          "propertyNames": {
+            "enum": [
+              "grounding",
+              "intent",
+              "handoff",
+              "persona",
+              "context"
+            ]
+          },
+          "title": "Metrics",
+          "type": "object"
+        }
+      },
+      "required": [
+        "run_count",
+        "completed_replies",
+        "billable_retries",
+        "token_consuming_failures",
+        "unknown_billing_attempts",
+        "input_tokens",
+        "output_tokens",
+        "model_p50_ms",
+        "model_p95_ms",
+        "e2e_p50_ms",
+        "e2e_p95_ms",
+        "billable_e2e_p50_ms",
+        "billable_e2e_p95_ms",
+        "estimated_cost_usd",
+        "cost_per_1000_replies_usd",
+        "critical_failures",
+        "metrics"
+      ],
+      "title": "Summary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "suite_id": {
+      "const": "v1",
+      "title": "Suite Id",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "deterministic",
+        "live_import"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "incomplete"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "revision": {
+      "pattern": "^[a-f0-9]{7,40}$",
+      "title": "Revision",
+      "type": "string"
+    },
+    "configuration": {
+      "$ref": "#/$defs/ModelConfiguration"
+    },
+    "fingerprints": {
+      "$ref": "#/$defs/Fingerprints"
+    },
+    "repetitions": {
+      "exclusiveMinimum": 0,
+      "title": "Repetitions",
+      "type": "integer"
+    },
+    "total_cases": {
+      "exclusiveMinimum": 0,
+      "title": "Total Cases",
+      "type": "integer"
+    },
+    "contracts": {
+      "items": {
+        "$ref": "#/$defs/CaseContract"
+      },
+      "title": "Contracts",
+      "type": "array"
+    },
+    "pricing": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Pricing"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/Sample"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "rubric_version": {
+      "const": "livia-naturalness-v1",
+      "default": "livia-naturalness-v1",
+      "title": "Rubric Version",
+      "type": "string"
+    },
+    "naturalness_status": {
+      "const": "pending_human_review",
+      "default": "pending_human_review",
+      "title": "Naturalness Status",
+      "type": "string"
+    },
+    "latency_scope": {
+      "default": "offline_policy",
+      "enum": [
+        "offline_policy",
+        "inbound_persistence_to_provider_acceptance"
+      ],
+      "title": "Latency Scope",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "suite_id",
+    "mode",
+    "status",
+    "created_at",
+    "revision",
+    "configuration",
+    "fingerprints",
+    "repetitions",
+    "total_cases",
+    "contracts",
+    "pricing",
+    "samples",
+    "summary"
+  ],
+  "title": "RunRecord",
+  "type": "object"
+}

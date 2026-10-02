@@ -1,0 +1,32 @@
+version: 1
+source_type: synthetic
+cases:
+  - id: handoff-technical-risk
+    turns:
+      - customer_message: "Meu couro cabeludo está ardendo."
+        expected: {active: true, suppressed: false}
+      - customer_message: "Posso continuar?"
+        action: restart
+        expected: {active: true, suppressed: true}
+  - id: handoff-human-request
+    turns:
+      - customer_message: "Quero falar com uma pessoa."
+        expected: {active: true, suppressed: false}
+      - customer_message: "Oi novamente"
+        expected: {active: true, suppressed: true}
+  - id: handoff-serious-complaint
+    turns:
+      - customer_message: "Fui cobrada duas vezes. Quero reembolso."
+        expected: {active: true, suppressed: false}
+      - customer_message: "E agora?"
+        expected: {active: true, suppressed: true}
+  - id: handoff-explicit-release
+    turns:
+      - customer_message: "Quero falar com uma pessoa."
+        expected: {active: true, suppressed: false}
+      - customer_message: "Ainda aguardando"
+        action: restart
+        expected: {active: true, suppressed: true}
+      - customer_message: "Oi"
+        action: release
+        expected: {active: false, suppressed: false}

@@ -1,0 +1,9 @@
+{
+  "version": "pending-source-v1",
+  "status": "unapproved",
+  "provider": "provider-to-confirm",
+  "model": "model-to-confirm",
+  "source": "pending-official-pricing-verification",
+  "input_usd_per_million": null,
+  "output_usd_per_million": null
+}

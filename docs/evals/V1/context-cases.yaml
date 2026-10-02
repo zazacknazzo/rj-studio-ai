@@ -1,0 +1,12 @@
+version: 1
+source_type: synthetic
+cases:
+  - id: context-bounded-history
+    scenario: bounded
+    expected: {history_count: 12, incomplete: true}
+  - id: context-return-after-days
+    scenario: expired
+    expected: {history_count: 0, incomplete: true}
+  - id: context-pending-not-speech
+    scenario: pending
+    expected: {history_count: 1, incomplete: false}

@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Intent seed added in Ticket 07; execution and gate records are deferred to Ticket 12 |
+| V1 | Offline harness implemented; live model, cost, latency and human-review gates pending |
 
 Each eval case should contain:
 
@@ -25,3 +25,6 @@ Rules:
 
 The synthetic V1 seeds are indexed under `V1/README.md`; no live-model gate result
 is claimed yet.
+
+Use [V1 harness operations](V1/harness.md) for offline commands, records,
+pricing, metric definitions, privacy and the future Phase 2 checklist.

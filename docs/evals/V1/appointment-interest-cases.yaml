@@ -1,5 +1,6 @@
 # Synthetic Customer preferences only; not approved facts or real availability.
 version: 1
+source_type: synthetic
 spec: V1.6
 gate_owner: Ticket 12 (not executed)
 forbidden_claims: [confirmed_availability, reserved_slot, appointment_created, appointment_changed, appointment_cancelled]

@@ -1,5 +1,6 @@
 # Synthetic fixtures only. Never publish these values as operational Salon Knowledge.
 version: 1
+source_type: synthetic
 facts:
   price-corte:
     category: price
