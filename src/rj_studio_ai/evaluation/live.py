@@ -26,6 +26,8 @@ from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.evaluation.live_billing import BudgetLedger, LivePricing
 from rj_studio_ai.evaluation.openai_live import LiveAttempt, OpenAIEvalGenerator, eval_prompt
 from rj_studio_ai.evaluation.records import (
+    CaseContract,
+    CheckContract,
     Fingerprints,
     RecordModel,
     Sample,
@@ -33,7 +35,7 @@ from rj_studio_ai.evaluation.records import (
     fingerprint,
     summarize,
 )
-from rj_studio_ai.evaluation.runner import prepare_context_case, synthetic_facts, synthetic_message
+from rj_studio_ai.evaluation.runner import seed_context_history, synthetic_facts, synthetic_message
 from rj_studio_ai.evaluation.suite import load_suite
 from rj_studio_ai.grounding import finalize_reply
 from rj_studio_ai.handoff import HandoffReason, handoff_confirmation
@@ -74,6 +76,9 @@ RUBRIC = (
 
 class LiveSample(Sample):
     attempts: tuple[LiveAttempt, ...]
+    execution_kind: Literal[
+        "live_generation", "handoff_suppression", "delivery_barrier", "preflight_failure"
+    ]
 
 
 class LiveRecord(RecordModel):
@@ -88,6 +93,7 @@ class LiveRecord(RecordModel):
     pricing: LivePricing
     plan: tuple[tuple[str, int, int], ...]
     samples: tuple[LiveSample, ...]
+    contracts: tuple[CaseContract, ...]
     request_hashes: tuple[str, ...]
     latency_scope: Literal["synthetic_persistence_to_fake_provider_acceptance"] = (
         "synthetic_persistence_to_fake_provider_acceptance"
@@ -114,6 +120,9 @@ class LiveRecord(RecordModel):
         ):
             raise ValueError("live_invalid_digest")
         for sample in self.samples:
+            contract = next(c for c in self.contracts if c.case_id == sample.case_id)
+            if sample.checks.keys() != contract.checks.keys():
+                raise ValueError("live_missing_check")
             if sample.status == "completed" and not sample.attempts:
                 raise ValueError("live_missing_generation_evidence")
             if sample.attempts and (
@@ -170,13 +179,16 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
         residue = body or ""
         for text in sorted(allowed, key=len, reverse=True):
             residue = residue.replace(text, "")
-        return {
+        checks = {
             "trusted_facts": bool(body)
             and all(t in finalized.reply_text for t in contains)
             and not any(t in (body or "") for t in data["expected"]["excludes"])
             and not residue.strip(),
             "handoff_policy": bool(store.list_active_handoffs()) is data["expected"]["handoff"],
         }
+        if case.contract.case_id == "grounding-multiple-facts":
+            checks["decision_contract"] = set(decision.intents) == {"price", "hours"}
+        return checks
     if case.kind == "intent":
         return {
             "decision_contract": decision is not None
@@ -233,9 +245,22 @@ def _write(path, data):
 
 def live_summary(samples, contracts, pricing):
     summary = summarize(samples, contracts).model_dump(mode="json")
+    provider_samples = [s for s in samples if s.attempts]
+    if provider_samples:
+        quality = summarize(provider_samples, contracts).model_dump(mode="json")
+        summary["metrics"] = quality["metrics"]
+        summary["critical_failures"] = quality["critical_failures"]
+    else:
+        summary["metrics"] = {
+            c.metric: {"numerator": 0, "denominator": 0}
+            for contract in contracts
+            for c in contract.checks.values()
+        }
+        summary["critical_failures"] = {"numerator": 0, "denominator": 0}
+    summary["deterministic_guard_turns"] = len(samples) - len(provider_samples)
     attempts = [a for s in samples for a in s.attempts]
     cost = sum(pricing.cost(a.usage) for a in attempts if a.usage is not None)
-    known = all(a.usage is not None for a in attempts)
+    known = all(a.usage is not None and a.pricing_verified for a in attempts)
     completed = summary["completed_replies"]
     summary.update(
         live_calls=len(attempts),
@@ -259,7 +284,7 @@ def live_summary(samples, contracts, pricing):
         cost_per_1000_replies_usd=float(cost * 1000 / completed) if known and completed else None,
     )
     appointment_checks = [
-        s.checks["no_booking_claim"] for s in samples if "no_booking_claim" in s.checks
+        s.checks["no_booking_claim"] for s in provider_samples if "no_booking_claim" in s.checks
     ]
     summary["appointment_safety"] = {
         "numerator": appointment_checks.count("pass"),
@@ -268,7 +293,31 @@ def live_summary(samples, contracts, pricing):
     return summary
 
 
-def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, client):
+def _live_contracts(suite):
+    return replace(
+        suite,
+        cases=tuple(
+            replace(
+                case,
+                contract=CaseContract(
+                    **{
+                        **case.contract.model_dump(),
+                        "checks": {
+                            **case.contract.checks,
+                            "decision_contract": CheckContract(metric="intent"),
+                        },
+                    }
+                ),
+            )
+            if case.contract.case_id == "grounding-multiple-facts"
+            else case
+            for case in suite.cases
+        ),
+    )
+
+
+def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledger, client):
+    suite = _live_contracts(suite)
     samples, packet, hashes = [], [], []
     by_id = {c.contract.case_id: c for c in suite.cases}
     plan = tuple(
@@ -290,7 +339,7 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
             repository.load()
             context_checks = None
             if case.kind == "context":
-                context_checks, _, _ = prepare_context_case(case, store, directory)
+                seed_context_history(case, store)
             facts = synthetic_facts(case) if case.kind == "grounding" else ()
             builder = _SelectedKnowledgeContext(
                 store, repository, facts, identifier == "persona-incomplete-context"
@@ -308,6 +357,12 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
                 context = builder.build(
                     inbound_message_id=claim.inbound_message_id, current_body=message.body
                 )
+                if case.kind == "context":
+                    expected = case.data["expected"]
+                    context_checks = {
+                        "context_bounds": len(context.history) == expected["history_count"]
+                        and context.history_may_be_incomplete is expected["incomplete"]
+                    }
                 generator = OpenAIEvalGenerator(
                     api_key=api_key, client=client, ledger=ledger, phase=phase
                 )
@@ -339,13 +394,22 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
                     turn=number,
                     status=("completed" if generator.attempts else "observed")
                     if body
-                    else "suppressed",
+                    else ("observed" if case.kind == "context" else "suppressed"),
                     reply_hash=fingerprint(body) if body else None,
                     attempts=tuple(generator.attempts),
                     e2e_latency_ms=e2e_ms,
                     queue_latency_ms=0.0,
                     outbound_latency_ms=outbound_ms,
                     checks={k: "pass" if v else "fail" for k, v in checks.items()},
+                    execution_kind="live_generation"
+                    if generator.attempts
+                    else (
+                        "preflight_failure"
+                        if generator.stop_code
+                        else (
+                            "delivery_barrier" if case.kind == "context" else "handoff_suppression"
+                        )
+                    ),
                 )
                 samples.append(sample)
                 hashes.extend(generator.request_hashes)
@@ -357,8 +421,11 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
                     sample.model_dump(mode="json"),
                 )
                 critical = any(not checks[k] for k, v in case.contract.checks.items() if v.critical)
-                if generator.stop_code or critical:
-                    stop_code = generator.stop_code or "critical_failure"
+                smoke_failed = phase == "A" and not all(checks.values())
+                if generator.stop_code or critical or smoke_failed:
+                    stop_code = generator.stop_code or (
+                        "critical_failure" if critical else "smoke_check_failure"
+                    )
                     break
             if stop_code:
                 break
@@ -388,6 +455,11 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
         pricing=ledger.pricing,
         plan=plan,
         samples=tuple(samples),
+        contracts=tuple(
+            case.contract
+            for case in suite.cases
+            if case.contract.case_id in {identifier for identifier, _ in selections}
+        ),
         request_hashes=tuple(hashes),
     )
     _write(output / f"phase-{phase}.json", record.model_dump(mode="json"))
@@ -395,13 +467,14 @@ def _run_phase(suite, selections, phase, *, api_key, output, revision, ledger, c
 
 
 def execute_live(suite, *, api_key, output: Path, revision: str, transport=None):
+    suite = _live_contracts(suite)
     output.mkdir(mode=0o700)
     pricing = LivePricing.load()
     ledger = BudgetLedger(output / "spend.jsonl", pricing)
     records, packet = [], []
     try:
         with httpx.Client(transport=transport, follow_redirects=False) as client:
-            a, excerpts = _run_phase(
+            a, excerpts = run_live_phase(
                 suite,
                 [(i, 1) for i in SMOKE_CASES],
                 "A",
@@ -428,7 +501,7 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None)
                     if c.contract.case_id in repeated
                     and (rep == 2 or c.contract.case_id not in SMOKE_CASES)
                 ]
-                b, excerpts = _run_phase(
+                b, excerpts = run_live_phase(
                     suite,
                     selections,
                     "B",

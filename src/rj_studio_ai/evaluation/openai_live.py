@@ -4,7 +4,7 @@ import json
 from time import monotonic
 
 import httpx
-from pydantic import model_validator
+from pydantic import StrictBool, model_validator
 
 from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
 from rj_studio_ai.evaluation.live_billing import BudgetLedger, Usage
@@ -20,6 +20,7 @@ from rj_studio_ai.llm_decision import (
 
 class LiveAttempt(Attempt):
     usage: Usage | None
+    pricing_verified: StrictBool = True
 
     @model_validator(mode="after")
     def matching_usage(self):
@@ -143,6 +144,8 @@ class OpenAIEvalGenerator:
         usage = None
         decision = None
         error_code = None
+        data = None
+        pricing_verified = False
         try:
             response = self.client.post(
                 "https://api.openai.com/v1/responses",
@@ -158,6 +161,7 @@ class OpenAIEvalGenerator:
                 raise ValueError("live_model_mismatch")
             if data.get("service_tier") != "default":
                 raise ValueError("live_tier_mismatch")
+            pricing_verified = True
             if data.get("status") != "completed":
                 raise ValueError("live_incomplete_output")
             texts = [
@@ -177,8 +181,10 @@ class OpenAIEvalGenerator:
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             # No raw exception, headers, response body or reasoning is exported.
             error_code = "live_transport_or_response_failure"
-            if isinstance(locals().get("data"), dict):
-                if data.get("service_tier") != "default":
+            if isinstance(data, dict):
+                if data.get("model") != self.ledger.pricing.model:
+                    error_code = "live_model_mismatch"
+                elif data.get("service_tier") != "default":
                     error_code = "live_tier_mismatch"
                 elif data.get("status") != "completed":
                     error_code = "live_incomplete_output"
@@ -188,7 +194,7 @@ class OpenAIEvalGenerator:
                     error_code = "live_decision_invalid"
         latency = (monotonic() - model_started) * 1000
         try:
-            cost = self.ledger.settle(usage)
+            cost = self.ledger.settle(usage if pricing_verified else None)
         except ValueError:
             cost = None
             error_code = "live_accounting_failure"
@@ -201,6 +207,7 @@ class OpenAIEvalGenerator:
             input_tokens=usage.input_tokens if usage else None,
             output_tokens=usage.output_tokens if usage else None,
             usage=usage,
+            pricing_verified=pricing_verified,
             latency_ms=latency,
             error_code=error_code,
         )

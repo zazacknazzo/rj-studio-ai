@@ -97,3 +97,45 @@ def test_bad_usage_truncation_or_wrong_tier_stops_without_hidden_retry(tmp_path,
     assert adapter.stop_code is not None
     assert len(adapter.attempts) == 1
     ledger.close()
+
+
+def test_count_failure_submits_no_paid_request(tmp_path):
+    calls = []
+
+    def transport(request):
+        calls.append(request)
+        return httpx.Response(400, json={"error": {"message": "synthetic error"}})
+
+    adapter, ledger = generator(tmp_path, transport)
+    with pytest.raises(GenerationFailure, match="input_count_failed"):
+        adapter.generate(
+            InboundMessage("eval", "one", "synthetic", "synthetic", "Oi"),
+            context=ConversationContext((), ()),
+            remaining_budget=9,
+        )
+    assert len(calls) == 1
+    assert calls[0].url.path.endswith("input_tokens")
+    assert adapter.attempts == []
+    assert ledger.upper_bound_usd == 0
+    ledger.close()
+
+
+def test_ambiguous_timeout_has_unknown_billing_and_blocks_another_submission(tmp_path):
+    def transport(request):
+        if request.url.path.endswith("input_tokens"):
+            return httpx.Response(200, json={"input_tokens": 1000})
+        raise httpx.ReadTimeout("synthetic-timeout")
+
+    adapter, ledger = generator(tmp_path, transport)
+    with pytest.raises(GenerationFailure):
+        adapter.generate(
+            InboundMessage("eval", "one", "synthetic", "synthetic", "Oi"),
+            context=ConversationContext((), ()),
+            remaining_budget=9,
+        )
+    assert adapter.attempts[0].usage is None
+    assert adapter.attempts[0].billable is None
+    assert ledger.upper_bound_usd > 0
+    with pytest.raises(ValueError, match="unresolved_submission"):
+        ledger.reserve("A", input_bound=1, output_bound=1)
+    ledger.close()

@@ -77,7 +77,7 @@ def synthetic_message(identifier, body):
     return InboundMessage("eval", identifier, "synthetic-customer", "synthetic-channel", body)
 
 
-def prepare_context_case(case, store, directory):
+def seed_context_history(case, store):
     now = datetime.now(UTC)
     scenario = case.data["scenario"]
     count = 10 if scenario == "bounded" else 1
@@ -95,6 +95,11 @@ def prepare_context_case(case, store, directory):
             else DeliveryState.ACCEPTED_LEGACY,
             now=prior_time,
         )
+    return now
+
+
+def prepare_context_case(case, store, directory):
+    now = seed_context_history(case, store)
     current = store.admit_generation(synthetic_message("current", "Outra dúvida"), now=now)
     knowledge_path = directory / "synthetic-knowledge.yaml"
     knowledge_path.write_text("version: 1\nfacts: []\n")

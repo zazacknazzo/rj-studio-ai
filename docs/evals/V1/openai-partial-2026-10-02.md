@@ -52,7 +52,11 @@ human-review packet. Phase 1's version-1 records/offline commands remain intact.
 Phase A: ten cases in `evaluation/live.py:SMOKE_CASES`, one run each. Only after
 all pass: Phase B runs all 52 once, then repeats probabilistic grounding,
 appointment, handoff and persona cases up to three total runs across A+B.
-Suppressed turns never call the model.
+Suppressed turns never call the model. The pending-delivery context fixture is
+an explicit deterministic `delivery_barrier` guard, not a live model context
+sample. Bounded/expired history cases reach the model; neither leaves an extra
+unprocessed fixture inbound. Live quality denominators exclude no-call guards.
+Every Phase A check must pass before B, including clarification and multi-Intent.
 
 Each answer uses actual MessageResponder, claims, trusted rendering, handoff,
 intake and completion in isolated synthetic SQLite. Delivery uses only M01's
