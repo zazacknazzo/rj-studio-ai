@@ -1,0 +1,14 @@
+{
+  "version": "openai-standard-2026-10-02-v1",
+  "provider": "openai",
+  "model": "gpt-6.1-sol",
+  "service_tier": "default",
+  "reviewed_at": "2026-10-02",
+  "approved_by": "product-owner",
+  "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+  "usage_source": "https://developers.openai.com/api/docs/guides/prompt-caching",
+  "input_usd_per_million": "2",
+  "cached_input_usd_per_million": "0.10",
+  "cache_write_usd_per_million": "2.50",
+  "output_usd_per_million": "10"
+}

@@ -1,5 +1,9 @@
 # V1 eval suite
 
+Current execution amendment: [OpenAI-only partial live evaluation](openai-partial-2026-10-02.md).
+Anthropic comparison is deferred by the product owner. Ticket 12 remains
+in-progress; comparative acceptance and human review are not complete.
+
 Ticket 12 Phase 1: **harness implemented / live model gate pending**.
 `suite.yaml` indexes **52 synthetic cases**: 14 Intent, 6 persona, 12 grounding,
 13 appointment episodes, 4 durable handoff episodes and 3 context cases.

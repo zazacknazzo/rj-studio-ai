@@ -37,6 +37,11 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-02 product-owner revision: Anthropic comparison deferred. Authorized
+  OpenAI-only `gpt-6.1-sol`, Medium, standard, US$1 smoke / US$5 global cap.
+  See `docs/evals/V1/openai-partial-2026-10-02.md`. Comparative acceptance stays
+  unchecked, human review pending, ticket in-progress. No runtime provider change.
+
 - Phase 1 indexes 52 synthetic cases (45 retained plus 7 context/handoff cases),
   validates versioned records and denominators, accounts for billable retries/
   token-consuming failures, aggregates and prepares blind pairs offline.
