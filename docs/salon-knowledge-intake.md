@@ -1,34 +1,30 @@
 # Intake humano — Salon Knowledge do RJ Studio
 
-Estado: coleta em `draft`; nenhum fato aprovado ou publicado por este documento.
-Base inspecionada: Ticket 10 `7e9c64081ac5e1d15652a213f972cbc8ec1aaadb`.
+Estado: **22 facts `pending` e 8 facts `draft`**; nenhum fact aprovado/publicado.
+Base inicial: `f8e7ff695b0947c82486afe54aae14acd118713f`.
+Dados institucionais/comerciais: responsável do RJ Studio via WhatsApp em
+**02/10/2026**, conforme transcrição fornecida pelo responsável do produto.
+Correções posteriores são identificadas na fonte de cada ficha; sua data não foi informada.
 
-Este documento contém **26 fichas propostas para confirmação**, não 26 fatos
-conhecidos. Os campos de conteúdo e fonte estão em branco. Perguntas, IDs e
-termos de busca são sugestões de coleta, não afirmações sobre o salão.
-Não foram usados valores de fixtures, pesquisa externa, credenciais ou dados de
-Customers. O YAML de produção continua com `version: 1` e `facts: []`.
+O WhatsApp abaixo é o contato institucional explicitamente fornecido. Não há
+dados de Customers, fixtures, pesquisa externa ou credenciais. O YAML de runtime
+continua `version: 1` e `facts: []`.
 
-## Como preencher e aprovar
+## Estado de confiança e revisão
 
-1. Preencha cada `statement` com o texto exato que autoriza enviar ao Customer,
-   em português, e cada `source` com uma referência humana verificável: responsável,
-   documento/registro e data. Não cole conversas de Customers ou dados privados.
-2. Informe a data real da revisão em `reviewed_at` (`AAAA-MM-DD`). Deixe pendente
-   enquanto não houve revisão humana. A data de criação desta ficha não é revisão.
-3. **PO** significa você, product owner e aprovador final. **Especialista** significa
-   Joelma e/ou Rogério; eles validam conteúdo técnico antes da sua aprovação final.
-   Indicação de responsável nesta ficha não significa validação já realizada.
-4. Para desconhecido, responda “não confirmado”; para inaplicável, “não aplicável”.
-   Nenhuma dessas respostas autoriza inferir que serviço, desconto ou política
-   existe ou não existe. Retire fichas inaplicáveis do lote de publicação.
-5. Duplique fichas por serviço, profissional, preço, promoção ou regra real.
-   Substitua IDs com `a-confirmar` por IDs específicos antes da primeira publicação.
-   Depois mantenha IDs estáveis. Se duas fichas descrevem o mesmo serviço, consolide
-   os dados e flags em um fact ou divida informações sem contradição.
-6. Todas as fichas ficam `draft` aqui. Registre sua decisão humana por ID em um
-   bloco de aprovação ao final. A transferência para o YAML e eventual mudança
-   para `approved` serão uma etapa posterior, revisada; não ocorrem nesta tarefa.
+- `pending`: dados institucionais/comerciais fornecidos diretamente e correções
+  explicitamente confirmadas; aguardam aprovação final do product owner.
+- `draft` técnico: duração/resultado informados ainda exigem validação técnica.
+- `draft` provisório: propostas/inferências que não vieram da responsável do salão.
+- **Nenhuma ficha possui `approved_by`.** Todas têm `validated_by: []`.
+- `reviewed_at`: pendente de revisão humana registrada para cada ficha. A data da
+  mensagem de origem não foi usada como se fosse aprovação ou revisão técnica.
+- Responsável operacional pela aprovação: product owner; fatos técnicos precisam
+  de Joelma e/ou Rogério, sem atribuir validação já realizada a qualquer pessoa.
+
+Os textos de `statement` são propostas para revisão e preservam valores,
+qualificadores e condições da fonte. Não deduzir inclusões, disponibilidade,
+especialidades, duração adicional ou política a partir da existência de um preço.
 
 ## Contrato atual, conferido no código
 
@@ -53,7 +49,7 @@ Campos extras e chaves/IDs duplicados são rejeitados.
 | `mandatory_policy_ids` | Default `[]`; somente facts `service` podem ter referências. Cada ID precisa existir e ser categoria `policy`, mesmo no draft. Serviço aprovado só pode referenciar políticas aprovadas. |
 
 O schema não contém campos `duration`, `payment_methods`, `discount`, `expires_at`,
-`appointment` ou `availability`. Duração é descrita no `statement` do serviço;
+`appointment` ou `availability`. Duração é descrita no `statement` de um fact técnico de serviço;
 pagamento, descontos/promos, orçamento e agendamento usam `policy` nas fichas.
 Preços de serviços usam `price`. Uma orientação técnica usa categoria existente
 (por exemplo `policy`) com `fact_type: technical`; não existe categoria `technical`.
@@ -64,370 +60,427 @@ Para cada serviço, preencher adicionalmente, sem aceitar defaults por omissão:
 - `mandatory_policy_ids`: **a confirmar — IDs de políticas reais, ou lista vazia confirmada**.
 
 As fichas abaixo são Markdown de intake, **não YAML pronto para carregar**.
-`statement`, `source` e `reviewed_at` incompletos não passam pelo loader nem mesmo
-como draft; não os substitua por dados inventados para satisfazer validação.
+A data da fonte não comprova revisão/publicação. `reviewed_at` permanece em aberto
+até uma revisão humana registrada; sua ausência impede carregar essas fichas pelo
+loader, mesmo como draft/pending. Não inventar uma data para satisfazer validação.
 
-## Fichas pendentes
+## Facts comerciais/institucionais pendentes e drafts
 
-Metadados iniciais de **cada** ficha: `status: draft`, `approved_by: null`,
-`validated_by: []`, `reviewed_at: pendente de revisão humana`.
-“Responsável” é informação operacional do intake, não um novo campo YAML.
-Especialidades técnicas, duração ou descrição que contenham afirmação técnica
-precisam ser separadas/reclassificadas como `technical` e validadas por especialista.
+IDs propostos são estáveis após publicação. `topic` é metadata de busca proposta,
+sem aprovação implícita de serviço, efeito ou regra. Cada preço inclui o nome do
+serviço e suas condições; faixas relacionadas ficam juntas.
 
 ### 01. `identidade-institucional`
 
-- **fact_id proposto (`id`):** `identidade-institucional`
-- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** nome salão identidade; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Nome público e descrição institucional que podem ser usados no atendimento.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `identidade-institucional`
+- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** nome salão studio identidade beleza
+- **statement a revisar:** O nome do salão é RJ Studio de Beleza.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 02. `localizacao-publica`
+### 02. `tempo-mesmo-endereco`
 
-- **fact_id proposto (`id`):** `localizacao-publica`
-- **category:** `location` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** endereço localização chegar; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Endereço público completo e orientações de acesso confirmadas, se aplicáveis.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `tempo-mesmo-endereco`
+- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** história tempo anos endereço studio
+- **statement a revisar:** Em 02/10/2026, foi informado que o RJ Studio de Beleza está há 22 anos no mesmo endereço.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 03. `contato-publico`
+### 03. `localizacao-publica`
 
-- **fact_id proposto (`id`):** `contato-publico`
-- **category:** `channel` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** contato telefone whatsapp; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Canal público oficial de atendimento; somente contato institucional autorizado.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `localizacao-publica`
+- **category:** `location` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** endereço localização onde fica avenida doutor zuquim santana
+- **statement a revisar:** O RJ Studio de Beleza fica na Avenida Dr. Zuquim, 1854, Santana.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
 ### 04. `horarios-atendimento`
 
-- **fact_id proposto (`id`):** `horarios-atendimento`
-- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** horário funcionamento atendimento; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Dias, horários, fuso e distinção entre atendimento pelo WhatsApp e funcionamento presencial.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `horarios-atendimento`
+- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** horário funcionamento abre fecha terça quarta quinta sexta sábado
+- **statement a revisar:** O funcionamento informado é de terça a sábado, das 9h às 18h30.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 05. `horarios-excecoes`
+### 05. `contato-publico`
 
-- **fact_id proposto (`id`):** `horarios-excecoes`
-- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** feriado funcionamento horário; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Exceções confirmadas, datas de validade e quem confirma alterações; se desconhecido, registrar isso na ficha.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `contato-publico`
+- **category:** `channel` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** whatsapp telefone contato número falar salão
+- **statement a revisar:** O WhatsApp principal do RJ Studio de Beleza é (11) 98289-6366.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 06. `servico-a-confirmar`
+### 06. `precos-cortes`
 
-- **fact_id proposto (`id`):** `servico-a-confirmar`
-- **category:** `service` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por serviço; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Nome de um serviço efetivamente oferecido, descrição e limites comerciais. Replicar por serviço confirmado.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-cortes`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** corte feminino mulher masculino homem cortar
+- **statement a revisar:** Corte feminino: R$ 100,00. Corte masculino: R$ 60,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 07. `preco-servico-a-confirmar`
+### 07. `precos-escova`
 
-- **fact_id proposto (`id`):** `preco-servico-a-confirmar`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por serviço e preço; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Preço, moeda, unidade, inclusões, exclusões e condições; ou regra explícita de preço sob avaliação, se confirmada.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-escova`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** escova cabelo curto médio longo extra
+- **statement a revisar:** Escova: cabelo curto, R$ 50,00; curto a médio, R$ 60,00; longo, R$ 70,00; longo a extra longo, R$ 80,00; extra longo, R$ 90,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 08. `regra-orcamento-servico-a-confirmar`
+### 08. `precos-progressiva`
 
-- **fact_id proposto (`id`):** `regra-orcamento-servico-a-confirmar`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por serviço e orçamento; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Como o orçamento é obtido, fatores autorizados que alteram o valor e quem pode confirmá-lo.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-progressiva`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** progressiva escova alisar alisamento cabelo liso
+- **statement a revisar:** Escova progressiva: curto, R$ 180,00; médio, R$ 200,00; longo, R$ 250,00; extra longo, R$ 270,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 09. `profissional-a-confirmar`
+### 09. `precos-coloracao`
 
-- **fact_id proposto (`id`):** `profissional-a-confirmar`
-- **category:** `professional` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por profissional e especialidade; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Nome profissional autorizado para divulgação, serviços e especialidades confirmados. Replicar por profissional.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-coloracao`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** coloração coloracao raiz completa aplicação aplicar
+- **statement a revisar:** Coloração de raiz: R$ 140,00. Coloração completa: R$ 170,00. Aplicação de coloração: R$ 90,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 10. `duracao-servico-a-confirmar`
+### 10. `preco-gloss-express`
 
-- **fact_id proposto (`id`):** `duracao-servico-a-confirmar`
-- **category:** `service` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por serviço e duração; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Duração estimada conhecida, unidade, variação e ressalvas. Não preencher estimativa sem fonte humana.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO; consultar especialista se necessário.
-- **reviewed_at:** ____________________
+- **id:** `preco-gloss-express`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** gloss express
+- **statement a revisar:** Gloss Express: R$ 170,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 11. `formas-pagamento`
+### 11. `preco-botox-capilar`
 
-- **fact_id proposto (`id`):** `formas-pagamento`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** pagamento formas pagar; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Meios de pagamento realmente aceitos e restrições aplicáveis.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-botox-capilar`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** botox capilar
+- **statement a revisar:** Botox capilar: R$ 180,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 12. `condicoes-parcelamento`
+### 12. `preco-tonalizacao`
 
-- **fact_id proposto (`id`):** `condicoes-parcelamento`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** parcelamento parcelas pagamento; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Existência ou ausência confirmada de parcelamento; limites, taxas e condições, quando houver.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-tonalizacao`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** tonalização tonalizar
+- **statement a revisar:** Tonalização: R$ 150,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 13. `politica-descontos`
+### 13. `preco-reconstrucao-capilar`
 
-- **fact_id proposto (`id`):** `politica-descontos`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** desconto descontos negociar; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Existência ou ausência confirmada de desconto; autorização, elegibilidade e limites. Não autoriza negociação automática.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-reconstrucao-capilar`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** reconstrução capilar
+- **statement a revisar:** Reconstrução capilar: R$ 220,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 14. `promocao-a-confirmar`
+### 14. `preco-cauterizacao`
 
-- **fact_id proposto (`id`):** `promocao-a-confirmar`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** promoção promoções oferta; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Promoção confirmada ou ausência confirmada; vigência, público, serviços, valores e condições completas.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-cauterizacao`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** cauterização
+- **statement a revisar:** Cauterização: R$ 180,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 15. `politica-atrasos`
+### 15. `preco-limpeza-cor`
 
-- **fact_id proposto (`id`):** `politica-atrasos`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** atraso tolerância chegada; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Regra real para atraso, tolerância e encaminhamento, se existente.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-limpeza-cor`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** limpeza cor
+- **statement a revisar:** Limpeza de cor: a partir de R$ 300,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 16. `politica-sinal-reembolso`
+### 16. `preco-mechas-reflexo`
 
-- **fact_id proposto (`id`):** `politica-sinal-reembolso`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** sinal adiantamento reembolso devolução; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Existência ou ausência confirmada de sinal, cobrança antecipada, reembolso e condições.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `preco-mechas-reflexo`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** mechas reflexo luzes orçamento
+- **statement a revisar:** Mechas ou reflexo custam a partir de R$ 500,00. O valor varia conforme comprimento, quantidade de cabelo, quantidade de mechas, cor e modelo de mechas.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 17. `politica-agendamento`
+### 17. `precos-mega-hair`
 
-- **fact_id proposto (`id`):** `politica-agendamento`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** agendar agendamento reservar; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Como solicitar atendimento e quem confirma a reserva. Não registrar disponibilidade atual nem prometer criação automática.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-mega-hair`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** mega hair megahair alongamento ponto americano fita adesiva queratina
+- **statement a revisar:** Mega hair: ponto americano, a partir de R$ 400,00; fita adesiva, a partir de R$ 500,00; queratina, a partir de R$ 500,00. O valor varia conforme a quantidade.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a QUERATINA; data dessa confirmação não informada.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 18. `politica-alteracao`
+### 18. `precos-unhas`
 
-- **fact_id proposto (`id`):** `politica-alteracao`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** alterar remarcar reagendar; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Processo, antecedência e condições reais para alteração/remarcação; responsável pela confirmação humana.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-unhas`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** unhas manicure pedicure gel esmaltação blindagem
+- **statement a revisar:** Manicure: R$ 42,00. Pedicure: R$ 48,00. Unha de gel: R$ 150,00. Esmaltação em gel: R$ 70,00. Blindagem: R$ 100,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 19. `politica-cancelamento`
+### 19. `precos-sobrancelhas`
 
-- **fact_id proposto (`id`):** `politica-cancelamento`
-- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** cancelar cancelamento; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Processo, antecedência, cobranças ou isenções confirmadas e responsável pela confirmação humana.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `precos-sobrancelhas`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** sobrancelha sobrancelhas design desenho henna fio despigmentação
+- **statement a revisar:** Design de sobrancelha: R$ 50,00. Design de sobrancelha com henna: R$ 80,00. Sobrancelha fio a fio: R$ 400,00. Despigmentação de sobrancelhas: R$ 250,00 por sessão.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a HENNA; data dessa confirmação não informada.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
 
-### 20. `avaliacao-servico-a-confirmar`
+### 20. `precos-penteados`
 
-- **fact_id proposto (`id`):** `avaliacao-servico-a-confirmar`
+- **id:** `precos-penteados`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** penteado penteados social noiva
+- **statement a revisar:** Penteado social: R$ 200,00. Penteado de noiva: R$ 350,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
+
+### 21. `precos-maquiagem`
+
+- **id:** `precos-maquiagem`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** maquiagem maquiar social noiva
+- **statement a revisar:** Maquiagem social: R$ 200,00. Maquiagem de noiva: R$ 350,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
+
+### 22. `precos-depilacao`
+
+- **id:** `precos-depilacao`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **topic:** depilação depilar virilha simples íntima buço axila meia perna completa
+- **statement a revisar:** Depilação: virilha simples, R$ 70,00; virilha íntima, R$ 90,00; buço, R$ 35,00; axila, R$ 40,00; meia perna, R$ 50,00; perna completa, R$ 80,00.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner.
+
+### 23. `tecnica-botox-capilar`
+
+- **id:** `tecnica-botox-capilar`
 - **category:** `service` · **fact_type:** `technical` · **status:** `draft`
-- **topic proposto:** a definir pelo serviço que exige avaliação; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Serviço que exige avaliação individual, motivo seguro para informar e limites do atendimento automático. Confirmar a flag de consulta humana.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** Especialista + PO.
-- **reviewed_at:** ____________________
+- **topic:** botox capilar execução tempo duração resultado hábitos
+- **statement a revisar:** Informação técnica a validar: o tempo de execução informado para botox capilar é de aproximadamente 2 horas; o resultado informado pode durar até 60 dias. A duração varia conforme hábitos do cabelo e grau de exigência da cliente.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** Joelma e/ou Rogério, seguida de aprovação final do product owner.
 
-### 21. `orientacao-preparo-a-confirmar`
+### 24. `tecnica-progressiva`
 
-- **fact_id proposto (`id`):** `orientacao-preparo-a-confirmar`
-- **category:** `policy` · **fact_type:** `technical` · **status:** `draft`
-- **topic proposto:** a definir por serviço e preparo; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Orientação de preparo que o especialista autoriza informar de forma geral; condições e limites de aplicação.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** Especialista + PO.
-- **reviewed_at:** ____________________
+- **id:** `tecnica-progressiva`
+- **category:** `service` · **fact_type:** `technical` · **status:** `draft`
+- **topic:** progressiva escova execução tempo duração resultado hábitos
+- **statement a revisar:** Informação técnica a validar: o tempo de execução informado para escova progressiva é de aproximadamente 2 horas; a duração pretendida informada é de até 90 dias. A duração varia conforme hábitos do cabelo e grau de exigência da cliente.
+- **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: a duração pretendida na mensagem original foi até 90 dias; data dessa confirmação não informada.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** Joelma e/ou Rogério, seguida de aprovação final do product owner.
 
-### 22. `orientacao-cuidados-a-confirmar`
+### 25. `horarios-segunda-domingo-provisorio`
 
-- **fact_id proposto (`id`):** `orientacao-cuidados-a-confirmar`
-- **category:** `policy` · **fact_type:** `technical` · **status:** `draft`
-- **topic proposto:** a definir por serviço e cuidados; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Cuidados gerais seguros aprovados, condições e situações em que é necessária avaliação individual.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** Especialista + PO.
-- **reviewed_at:** ____________________
+- **id:** `horarios-segunda-domingo-provisorio`
+- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** segunda domingo funcionamento
+- **statement a revisar:** PROVISÓRIO: considerar que não há funcionamento regular na segunda-feira e no domingo, por inferência do horário informado de terça a sábado. Isso não constitui confirmação de fechamento.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-### 23. `limites-resultados-a-confirmar`
+### 26. `horarios-excecoes`
 
-- **fact_id proposto (`id`):** `limites-resultados-a-confirmar`
-- **category:** `policy` · **fact_type:** `technical` · **status:** `draft`
-- **topic proposto:** a definir por serviço e resultado; confirmar os termos relevantes.
-- **Conteúdo solicitado:** O que pode ser afirmado sobre resultados e quais limites precisam acompanhar a informação, sem garantia inventada.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** Especialista + PO.
-- **reviewed_at:** ____________________
+- **id:** `horarios-excecoes`
+- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** feriados feriado funcionamento
+- **statement a revisar:** PROVISÓRIO: confirmar o funcionamento em feriados com a equipe; não prometer abertura nem fechamento.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-### 24. `handoff-tecnico-a-confirmar`
+### 27. `classificacao-comprimento-provisoria`
 
-- **fact_id proposto (`id`):** `handoff-tecnico-a-confirmar`
-- **category:** `handoff_condition` · **fact_type:** `technical` · **status:** `draft`
-- **topic proposto:** a definir por gatilho técnico específico; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Situação técnica específica que exige profissional humano; texto seguro, sem diagnóstico nem recomendação personalizada inventada.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** Especialista + PO.
-- **reviewed_at:** ____________________
+- **id:** `classificacao-comprimento-provisoria`
+- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** comprimento curto médio longo extra cabelo avaliação
+- **statement a revisar:** PROVISÓRIO: a IA não deve definir sozinha se um cabelo é curto, médio, longo ou extra longo, nem criar faixas em centímetros. Quando a classificação afetar o preço, solicitar avaliação/foto ou confirmação da equipe.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-### 25. `handoff-operacional-a-confirmar`
+### 28. `avaliacao-mechas-provisoria`
 
-- **fact_id proposto (`id`):** `handoff-operacional-a-confirmar`
-- **category:** `handoff_condition` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por gatilho operacional específico; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Situação operacional/comercial específica que exige humano, com gatilho inequívoco e responsabilidade confirmada.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `avaliacao-mechas-provisoria`
+- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** mechas reflexo luzes avaliação orçamento
+- **statement a revisar:** PROVISÓRIO: exigir avaliação antes de confirmar o preço final de mechas/reflexo. Preservar o preço informado a partir de R$ 500,00.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-### 26. `handoff-excecao-a-confirmar`
+### 29. `avaliacao-mega-hair-provisoria`
 
-- **fact_id proposto (`id`):** `handoff-excecao-a-confirmar`
-- **category:** `handoff_condition` · **fact_type:** `operational_commercial` · **status:** `draft`
-- **topic proposto:** a definir por exceção específica; confirmar os termos relevantes.
-- **Conteúdo solicitado:** Outra exceção concreta aprovada pelo responsável que exige humano; não usar uma condição genérica selecionada em toda conversa.
-- **statement a aprovar:** ____________________
-- **source humana:** ____________________
-- **Responsável pela validação:** PO.
-- **reviewed_at:** ____________________
+- **id:** `avaliacao-mega-hair-provisoria`
+- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** mega hair megahair quantidade avaliação orçamento
+- **statement a revisar:** PROVISÓRIO: exigir avaliação antes de confirmar o preço final de mega hair. Preservar os valores a partir de; não calcular a quantidade automaticamente.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-## Uso pelo Reply AST e limites de publicação
+### 30. `aplicacao-coloracao-limites-provisorios`
 
-Uma parte `{"kind": "fact", "knowledge_ref": "id-do-fato"}` referencia o `id`.
-O mesmo ID deve estar declarado em `LLMDecision.knowledge_refs` e pertencer ao
-conjunto **aprovado e selecionado para aquela resposta**. O renderer insere o
-`statement` integral; modelo e Customer não podem mudar seu valor, moeda,
-condições ou negação. `reply_text` e `critical_claims` do modelo não autorizam fatos.
+- **id:** `aplicacao-coloracao-limites-provisorios`
+- **category:** `policy` · **fact_type:** `operational_commercial` · **status:** `draft`
+- **topic:** aplicação coloração produto incluso incluído fornecido cliente
+- **statement a revisar:** PROVISÓRIO: para aplicação de coloração, o preço informado é R$ 90,00; não inferir se o produto está incluído ou se a cliente fornece a coloração.
+- **source:** Proposta provisória fornecida pelo responsável do produto neste intake. Não veio diretamente da responsável do salão; depende de confirmação humana. O preço citado foi fornecido pela responsável do RJ Studio via WhatsApp em 02/10/2026; a regra sobre não inferir inclusões é provisória.
+- **validated_by:** `[]`
+- **reviewed_at:** pendente de revisão humana registrada.
+- **Responsável pela validação:** product owner; regras provisórias também exigem confirmação da responsável do salão.
 
-O modelo pode combinar partes fact e frases institucionais. Escreva statements
-curtos e autossuficientes, com nome do serviço/profissional e condições no próprio
-texto. A resposta final tem teto de 800 caracteres; o schema do fact não impõe
-esse teto, mas o renderer rejeita statements/respostas que excedem seus limites.
+## Dados ainda não fornecidos — manter em aberto
 
-A seleção atual compara termos de `topic` com a consulta (normalização sem
-acentos, tokens de pelo menos 3 caracteres), ordena por ID e respeita orçamento.
-Não há busca semântica, stemming ou garantia de escolher todas as fichas relevantes.
-Use nomes específicos e variantes de pergunta confirmadas; evite palavra genérica
-que selecione políticas de outro serviço. Políticas obrigatórias acompanham o
-serviço selecionado ou todo o conjunto é omitido por falta de orçamento.
+Estas fichas de coleta **não entram nos 30 facts preenchidos acima**. Continuam
+como campos vazios de intake, sem afirmar presença/ausência de política ou serviço.
+Seu estado inicial continua `draft`; não têm fonte, data de revisão ou aprovador.
 
-Um `handoff_condition` selecionado **sempre** propõe handoff. Seu statement não
-é uma condição executável: “se valor exceder X” não cria comparação numérica.
-Não publicar gatilhos amplos ou condicionais que exigem lógica inexistente.
-Serviço com `requires_human_consultation: true` selecionado também exige handoff;
-nesse caminho a aplicação pode enviar só a confirmação segura, não seus fatos.
+| ID proposto da ficha | Categoria/tipo propostos | Informação humana necessária |
+| --- | --- | --- |
+| `profissional-a-confirmar` | `professional` / operacional | Nomes autorizados, serviços e especialidades confirmadas; nenhum nome de validador implica que atende determinado serviço. |
+| `formas-pagamento` | `policy` / operacional | Meios aceitos e restrições. |
+| `condicoes-parcelamento` | `policy` / operacional | Existência de parcelamento, parcelas, taxas e limites. |
+| `politica-descontos` | `policy` / operacional | Descontos autorizados, elegibilidade e limites, ou ausência explicitamente confirmada. |
+| `promocao-a-confirmar` | `policy` / operacional | Promoções reais, vigência e condições, ou ausência confirmada. |
+| `politica-atrasos` | `policy` / operacional | Tolerância e procedimento real. |
+| `politica-sinal-reembolso` | `policy` / operacional | Sinal, reembolso e respectivas condições. |
+| `politica-agendamento` | `policy` / operacional | Como solicitar e quem confirma o agendamento. |
+| `politica-alteracao` | `policy` / operacional | Procedimento e condições de alteração/remarcação. |
+| `politica-cancelamento` | `policy` / operacional | Procedimento e condições de cancelamento. |
+| `avaliacao-servico-a-confirmar` | `service` / técnico | Serviços que realmente exigem avaliação; flag de consulta e IDs de políticas, após confirmação. |
+| `orientacao-preparo-a-confirmar` | `policy` / técnico | Preparo seguro e limites, após validação técnica. |
+| `orientacao-cuidados-a-confirmar` | `policy` / técnico | Cuidados seguros e limites, após validação técnica. |
+| `handoff-tecnico-a-confirmar` | `handoff_condition` / técnico | Gatilhos técnicos específicos aprovados. |
+| `handoff-operacional-a-confirmar` | `handoff_condition` / operacional | Gatilhos operacionais/comerciais específicos aprovados. |
+| `handoff-excecao-a-confirmar` | `handoff_condition` / operacional | Outras exceções específicas confirmadas. |
 
-Preços e regras devem carregar todas as condições na mesma statement quando
-necessário: somente o vínculo em um fact `service` força `mandatory_policy_ids`.
-Um fact `price` selecionado isoladamente não carrega automaticamente outra política.
-O Intent de promoção/desconto exige fact renderizado de categoria `policy`.
+## Ambiguidades e gaps para fechar antes da publicação
 
-Não cadastrar disponibilidade atual, agendamentos de Customers ou promessas de
-criação/alteração/cancelamento automático. A ficha de agendamento descreve apenas
-o procedimento humano aprovado. Serviços, profissionais e condições não
-confirmados continuam indisponíveis para respostas factuais.
+- Endereço: cidade, UF, CEP e orientações de acesso não foram informados; não
+  completar por dedução. “Santana” e o número informado foram preservados.
+- Horário: não inferir fuso, horário específico do WhatsApp, atendimento regular
+  na segunda/domingo ou exceções de feriado.
+- Os 22 anos são uma informação de 02/10/2026, sem data de início comprovada;
+  não converter em ano de fundação nem atualizar automaticamente.
+- Faixas de comprimento não têm definição objetiva confirmada. Não criar
+  centímetros nem classificar o cabelo automaticamente.
+- Aplicação de coloração: inclusões/produto fornecido continuam desconhecidos.
+- Mechas/reflexo e mega hair preservam os fatores de variação informados. Avaliação
+  obrigatória é proposta `draft`, não política comercial confirmada. Unidade de
+  quantidade do mega hair não foi informada; não calcular fios/gramas.
+- Despigmentação de sobrancelhas: R$ 250,00 **por sessão**; número de sessões e
+  resultado não foram informados.
+- Botox/progressiva: aproximadamente 2 horas e até 60/90 dias são informações
+  técnicas `draft`. “Hábitos do cabelo” e “grau de exigência da cliente” exigem
+  esclarecimento profissional antes de uso. Não tratar duração como garantia.
+- Falta `reviewed_at` humano. O schema exige data inclusive em `draft`/`pending`;
+  este Markdown permite registrar a lacuna sem alterar o schema ou fabricar revisão.
+- Flags `requires_human_consultation` e `mandatory_policy_ids` dos facts técnicos
+  de serviço não foram confirmadas. Omissão/default não é autorização de atendimento
+  sem avaliação. Não criar vínculo obrigatório com políticas provisórias.
+- Os preços estão corretamente em categoria `price`. O catálogo descritivo de
+  `service` para respostas de informação de serviço ainda precisa ser composto e
+  revisado a partir desses mesmos dados comerciais, sem criar descrição técnica.
+  O renderer exige categoria `service` para esse Intent; preço isolado não a supre.
+- Topics usam o nome e variantes específicas. A seleção lexical atual é por
+  qualquer termo em comum, sem ranking semântico: termos como cabelo, escova,
+  social e noiva ainda podem selecionar mais de um grupo. Preço em pergunta genérica
+  não identifica sozinho o serviço. Revisar seleção antes de publicar, sem alterar
+  código nesta tarefa. Topics não tornam uma inferência em fato confiável.
+- Um `handoff_condition` selecionado sempre aciona encaminhamento; não cadastrar
+  condições numéricas/genéricas como se o texto executasse comparação.
+- A proposta de solicitar foto é só um `draft` operacional. Não habilita análise
+  de fotos nem implementa multimodal. Vigência/expiração de promoções também não
+  é automatizada pelo schema.
 
-## Gaps que a revisão humana precisa fechar
+## Reply AST e critérios para publicação posterior
 
-- O YAML atual tem **zero facts**; ainda faltam conteúdo, fontes, revisão e aprovação.
-- A granularidade final depende do catálogo humano; as 26 fichas são o lote inicial,
-  não uma afirmação de que existem 26 fatos publicáveis.
-- O schema valida estrutura e metadados, mas não comprova identidade do aprovador,
-  origem, atualidade, coerência comercial ou validação técnica. Isso depende da revisão.
-- Promoções/exceções não expiram automaticamente. Confirmar quem revisará/removerá
-  conteúdo ao fim da vigência antes de publicá-lo; uma data no texto não desativa o fact.
-- Valores, condições e limites técnicos precisam estar completos no texto aprovado;
-  o renderer preserva também um erro humano que tenha sido aprovado.
-- Handoff condicional, disponibilidade em tempo real e execução de agendamento não
-  são implementados pela inclusão de YAML. Não foi identificado bug de schema que
-  exija mudança de código para este intake.
+Uma parte `{"kind": "fact", "knowledge_ref": "id-do-fato"}` usa o `id` da ficha.
+O mesmo ID deve constar em `knowledge_refs` e pertencer ao conjunto aprovado e
+selecionado. O renderer insere a `statement` inteira; modelo/Customer não alteram
+valores, moeda, condições ou negação. `reply_text` e `critical_claims` do modelo
+não autorizam fatos. Statements completos devem caber na resposta de 800 caracteres.
 
-## Registro de decisão humana — preencher depois
+Somente facts `service` podem vincular `mandatory_policy_ids`; um `price` isolado
+não carrega política automaticamente. Por isso, condições comerciais confirmadas
+já acompanham seus preços. Regras provisórias permanecem separadas. Disponibilidade
+atual, reserva, agenda e alterações automáticas não são criadas por este documento.
 
-Para cada ficha preenchida, responder:
-
-- ID:
-- Texto integral final autorizado (`statement`):
-- Fonte humana (`source`):
-- Data real de revisão (`reviewed_at`):
-- Se técnico: quem validou e qual registro comprova (`validated_by` somente após validar):
-- Decisão do PO: aprovar para futura publicação / ajustar / não publicar:
-- Nome do aprovador final, somente se aprovação concedida:
-- Se serviço: flag de consulta e IDs de políticas confirmados:
-
-Uma resposta em bloco pode aprovar vários IDs se identificar a revisão exata e
-os respectivos textos/fontes. Campos em branco não contam como aprovação.
-Aprovação final pelo PO não substitui a validação técnica exigida pelo schema.
+Próximo registro humano, por ID: texto final, fonte, data real de revisão,
+confirmação de regras provisórias, validação técnica quando exigida e decisão
+final do product owner. Qualquer futura aprovação/publicação será uma etapa
+separada. **Nesta revisão há zero facts aprovados e zero facts no runtime.**
 
 Referências: [contrato Knowledge](salon-knowledge.md),
 [trusted rendering](structured-decision.md),
