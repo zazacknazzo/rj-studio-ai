@@ -13,6 +13,8 @@ from pydantic import model_validator
 from rj_studio_ai.evaluation.records import Count, RecordModel
 
 PRICING_PATH = Path("docs/evals/V1/pricing.openai-2026-10-02.json")
+# Eval-only ceiling authorized by the product owner; production stays unchanged.
+LIVE_MAX_OUTPUT_TOKENS = 512
 
 
 class Usage(RecordModel):
@@ -145,7 +147,7 @@ class BudgetLedger:
             raise ValueError("unresolved_submission")
         if phase not in self.charged or type(input_bound) is not int or input_bound < 1:
             raise ValueError("invalid_reservation")
-        if type(output_bound) is not int or not 1 <= output_bound <= 200:
+        if type(output_bound) is not int or not 1 <= output_bound <= LIVE_MAX_OUTPUT_TOKENS:
             raise ValueError("invalid_reservation")
         cost = (
             input_bound * self.pricing.cache_write_usd_per_million

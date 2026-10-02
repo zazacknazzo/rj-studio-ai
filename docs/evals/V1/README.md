@@ -1,6 +1,7 @@
 # V1 eval suite
 
-Current execution amendment: [OpenAI-only partial live evaluation](openai-partial-2026-10-02.md).
+Current execution amendment: [512-token OpenAI evaluation](openai-smoke-512-2026-10-02.md).
+Historical diagnostic run: [200-token partial evaluation](openai-partial-2026-10-02.md).
 Anthropic comparison is deferred by the product owner. Ticket 12 remains
 in-progress; comparative acceptance and human review are not complete.
 

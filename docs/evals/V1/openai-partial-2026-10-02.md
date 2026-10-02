@@ -126,3 +126,15 @@ WhatsApp message was used; no credential was displayed or committed.
 Validation: 15 new billing/adapter/SQLite runner tests; independent Standards
 and Spec reviews approved after fixing context-orphan, smoke-gate and Intent
 coverage findings. Full test/check results are recorded with the ticket.
+
+## Historical accounting correction — product-owner clarification
+
+The preceding table and version-2 private artifacts describe persisted logical
+AI Replies, including one local safe fallback. They are retained as historical
+evidence, not reused by the [new 512-token run](openai-smoke-512-2026-10-02.md).
+For **completed model replies**, the correct denominator is **8**, not 9:
+US$0.0239327 × 1,000 / 8 = **US$2.9915875**. The ninth call remains a paid
+generation failure; its system safe fallback is separate. All nine attempts
+remain in the cost and latency populations. The persona result is **0 evaluable,
+0 pass, 0 fail, 1 not-evaluable**, rather than an assessed persona failure.
+This correction does not make the blocked run pass or authorize Phase B.

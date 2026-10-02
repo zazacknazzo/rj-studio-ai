@@ -23,7 +23,7 @@ from rj_studio_ai.conversation_context import (
     ConversationContextLimits,
 )
 from rj_studio_ai.delivery import OutboundDeliveryRunner
-from rj_studio_ai.evaluation.live_billing import BudgetLedger, LivePricing
+from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, LivePricing
 from rj_studio_ai.evaluation.openai_live import LiveAttempt, OpenAIEvalGenerator, eval_prompt
 from rj_studio_ai.evaluation.records import (
     CaseContract,
@@ -76,13 +76,26 @@ RUBRIC = (
 
 class LiveSample(Sample):
     attempts: tuple[LiveAttempt, ...]
+    reply_origin: Literal["model", "system_safe_fallback", "none"]
     execution_kind: Literal[
         "live_generation", "handoff_suppression", "delivery_barrier", "preflight_failure"
     ]
 
+    @model_validator(mode="after")
+    def matching_reply_origin(self):
+        if self.reply_origin == "model" and (
+            self.status != "completed"
+            or not self.attempts
+            or self.attempts[-1].outcome != "success"
+        ):
+            raise ValueError("live_invalid_model_reply")
+        if (self.reply_origin == "none") != (self.reply_hash is None):
+            raise ValueError("live_invalid_reply_origin")
+        return self
+
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -244,10 +257,13 @@ def _write(path, data):
 
 
 def live_summary(samples, contracts, pricing):
-    summary = summarize(samples, contracts).model_dump(mode="json")
+    run_count = len({s.repetition for s in samples}) or 1
+    summary = summarize(samples, contracts, run_count=run_count).model_dump(mode="json")
     provider_samples = [s for s in samples if s.attempts]
     if provider_samples:
-        quality = summarize(provider_samples, contracts).model_dump(mode="json")
+        quality = summarize(provider_samples, contracts, run_count=run_count).model_dump(
+            mode="json"
+        )
         summary["metrics"] = quality["metrics"]
         summary["critical_failures"] = quality["critical_failures"]
     else:
@@ -258,11 +274,47 @@ def live_summary(samples, contracts, pricing):
         }
         summary["critical_failures"] = {"numerator": 0, "denominator": 0}
     summary["deterministic_guard_turns"] = len(samples) - len(provider_samples)
+    summary["critical_not_evaluable"] = sum(
+        s.checks[key] == "not_run"
+        for s in provider_samples
+        for contract in contracts
+        if contract.case_id == s.case_id
+        for key, check in contract.checks.items()
+        if check.critical
+    )
+    # Unavailable output is a generation failure, not an evaluated quality failure.
+    for metric, ratio in summary["metrics"].items():
+        unevaluable = sum(
+            s.checks[key] == "not_run"
+            for s in provider_samples
+            for contract in contracts
+            if contract.case_id == s.case_id
+            for key, check in contract.checks.items()
+            if check.metric == metric
+        )
+        ratio["denominator"] -= unevaluable
+    persona_checks = [s.checks["persona_surface"] for s in samples if "persona_surface" in s.checks]
+    summary["persona"] = {
+        "evaluable": persona_checks.count("pass") + persona_checks.count("fail"),
+        "pass": persona_checks.count("pass"),
+        "fail": persona_checks.count("fail"),
+        "not_evaluable": persona_checks.count("not_run"),
+    }
     attempts = [a for s in samples for a in s.attempts]
     cost = sum(pricing.cost(a.usage) for a in attempts if a.usage is not None)
     known = all(a.usage is not None and a.pricing_verified for a in attempts)
-    completed = summary["completed_replies"]
+    completed = sum(s.reply_origin == "model" for s in samples)
     summary.update(
+        completed_logical_replies=summary["completed_replies"],
+        completed_replies=completed,
+        completed_model_replies=completed,
+        system_safe_fallbacks=sum(s.reply_origin == "system_safe_fallback" for s in samples),
+        generation_failures=sum(
+            s.execution_kind == "preflight_failure"
+            or bool(s.attempts and s.attempts[-1].outcome == "failure")
+            for s in samples
+        ),
+        cost_denominator="completed_model_replies",
         live_calls=len(attempts),
         retries=sum(a.number > 1 for a in attempts),
         paid_failures=sum(
@@ -284,7 +336,9 @@ def live_summary(samples, contracts, pricing):
         cost_per_1000_replies_usd=float(cost * 1000 / completed) if known and completed else None,
     )
     appointment_checks = [
-        s.checks["no_booking_claim"] for s in provider_samples if "no_booking_claim" in s.checks
+        s.checks["no_booking_claim"]
+        for s in provider_samples
+        if "no_booking_claim" in s.checks and s.checks["no_booking_claim"] != "not_run"
     ]
     summary["appointment_safety"] = {
         "numerator": appointment_checks.count("pass"),
@@ -387,7 +441,15 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 outbound_ms = (perf_counter() - outbound_started) * 1000
                 e2e_ms = (perf_counter() - started) * 1000
                 decision = generator.decisions[-1] if generator.decisions else None
-                checks = _score(case, turn, decision, context, body, store, claim, context_checks)
+                if generator.stop_code:
+                    checks = {key: "not_run" for key in case.contract.checks}
+                else:
+                    checks = {
+                        key: "pass" if passed else "fail"
+                        for key, passed in _score(
+                            case, turn, decision, context, body, store, claim, context_checks
+                        ).items()
+                    }
                 sample = LiveSample(
                     case_id=identifier,
                     repetition=repetition,
@@ -396,11 +458,18 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     if body
                     else ("observed" if case.kind == "context" else "suppressed"),
                     reply_hash=fingerprint(body) if body else None,
+                    reply_origin=(
+                        "model"
+                        if decision is not None and generator.stop_code is None
+                        else "system_safe_fallback"
+                    )
+                    if body
+                    else "none",
                     attempts=tuple(generator.attempts),
                     e2e_latency_ms=e2e_ms,
                     queue_latency_ms=0.0,
                     outbound_latency_ms=outbound_ms,
-                    checks={k: "pass" if v else "fail" for k, v in checks.items()},
+                    checks=checks,
                     execution_kind="live_generation"
                     if generator.attempts
                     else (
@@ -420,8 +489,10 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     output / f"{phase}-{len(samples):03}-sample.json",
                     sample.model_dump(mode="json"),
                 )
-                critical = any(not checks[k] for k, v in case.contract.checks.items() if v.critical)
-                smoke_failed = phase == "A" and not all(checks.values())
+                critical = any(
+                    checks[k] != "pass" for k, v in case.contract.checks.items() if v.critical
+                )
+                smoke_failed = phase == "A" and any(value != "pass" for value in checks.values())
                 if generator.stop_code or critical or smoke_failed:
                     stop_code = generator.stop_code or (
                         "critical_failure" if critical else "smoke_check_failure"
@@ -442,7 +513,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
             "model": "gpt-6.1-sol",
             "reasoning_effort": "medium",
             "service_tier": "default",
-            "max_output_tokens": 200,
+            "max_output_tokens": LIVE_MAX_OUTPUT_TOKENS,
             "context_max_messages": 12,
             "context_token_budget": 4000,
             "repetitions_by_case": selections,
@@ -520,6 +591,10 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None)
             "phase_b_executed": len(records) > 1,
             "phase_b_status": records[1].status if len(records) > 1 else "not_executed",
             "summary": live_summary(samples, tuple(c.contract for c in suite.cases), pricing),
+            "phase_summaries": {
+                phase: live_summary(record.samples, record.contracts, pricing) if record else None
+                for phase, record in (("A", a), ("B", records[1] if len(records) > 1 else None))
+            },
             "budget_upper_bound_usd": float(ledger.upper_bound_usd),
             "phase_a_cap_usd": 1,
             "global_cap_usd": 5,

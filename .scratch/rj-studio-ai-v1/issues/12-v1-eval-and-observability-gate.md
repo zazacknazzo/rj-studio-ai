@@ -37,6 +37,11 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- Product-owner correction: repeat all ten smoke cases with medium reasoning,
+  standard tier and output limit 512; model replies and local safe fallbacks
+  have separate denominators. Historical run unchanged; no persona score for
+  incomplete generation. See `docs/evals/V1/openai-smoke-512-2026-10-02.md`.
+
 - OpenAI-only partial live gate executed 2026-10-02: Phase A stopped at case
   `persona-incomplete-context` after 9/10 calls (`incomplete`, 200 output tokens);
   B not executed. Usage/accounting valid: US$0.0239327 total, one paid failure,

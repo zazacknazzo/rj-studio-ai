@@ -78,3 +78,11 @@ def test_wrong_pricing_and_impossible_usage_are_rejected():
             output_tokens=10,
             reasoning_tokens=0,
         )
+
+
+def test_authorized_output_ceiling_is_reserved_and_cannot_silently_increase(tmp_path):
+    ledger = BudgetLedger(tmp_path / "spend.jsonl", LivePricing.load())
+    with pytest.raises(ValueError, match="invalid_reservation"):
+        ledger.reserve("A", input_bound=1000, output_bound=513)
+    assert ledger.reserve("A", input_bound=1000, output_bound=512) == Decimal("0.00762")
+    ledger.close()

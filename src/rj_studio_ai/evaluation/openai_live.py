@@ -7,15 +7,11 @@ import httpx
 from pydantic import StrictBool, model_validator
 
 from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
-from rj_studio_ai.evaluation.live_billing import BudgetLedger, Usage
+from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, Usage
 from rj_studio_ai.evaluation.records import Attempt, check_privacy, fingerprint
 from rj_studio_ai.generation import GeneratedReply, GenerationFailure, GenerationMetric
 from rj_studio_ai.livia_persona import LiviaPersona, reply_plan_instructions
-from rj_studio_ai.llm_decision import (
-    MAX_OUTPUT_TOKENS,
-    decision_json_schema,
-    validate_llm_decision,
-)
+from rj_studio_ai.llm_decision import decision_json_schema, validate_llm_decision
 
 
 class LiveAttempt(Attempt):
@@ -99,7 +95,7 @@ class OpenAIEvalGenerator:
             },
             "store": False,
             "service_tier": "default",
-            "max_output_tokens": MAX_OUTPUT_TOKENS,
+            "max_output_tokens": LIVE_MAX_OUTPUT_TOKENS,
         }
         check_privacy(payload)
         headers = {"Authorization": "Bearer " + self._api_key}
@@ -123,7 +119,7 @@ class OpenAIEvalGenerator:
             if remaining < 1:
                 raise ValueError("preflight_deadline")
             self.ledger.reserve(
-                self.phase, input_bound=input_count + 1024, output_bound=MAX_OUTPUT_TOKENS
+                self.phase, input_bound=input_count + 1024, output_bound=LIVE_MAX_OUTPUT_TOKENS
             )
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
             self.stop_code = (
@@ -217,7 +213,7 @@ class OpenAIEvalGenerator:
         metric = GenerationMetric(
             provider="openai",
             model="gpt-6.1-sol",
-            configuration="effort=medium;tier=default;max_output_tokens=200",
+            configuration=f"effort=medium;tier=default;max_output_tokens={LIVE_MAX_OUTPUT_TOKENS}",
             latency_ms=round(latency),
             input_tokens=attempt.input_tokens,
             output_tokens=attempt.output_tokens,
