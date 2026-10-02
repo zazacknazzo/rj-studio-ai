@@ -5,6 +5,9 @@ It currently has no real approved facts. Add only institutional information that
 the RJ Studio operator has reviewed; never add Customer data, credentials, or
 assumptions.
 
+Human collection starts with [the draft intake](salon-knowledge-intake.md).
+Its 26 blank fact worksheets are not runtime YAML or publication approval.
+
 Each `facts` item needs a stable lowercase `id`, `category`, Portuguese `topic`,
 `status`, `fact_type`, `statement`, `source`, and `reviewed_at`. An approved
 fact also needs `approved_by`.
@@ -45,4 +48,5 @@ An approved `handoff_condition` that is selected by its `topic` always proposes
 human review. Use narrow trigger topics: statements are not executable
 conditional expressions, and numeric thresholds are not interpreted. Required
 consultation for a Service uses its explicit `requires_human_consultation`
-field. Durable handoff activation remains Ticket 10.
+field. Durable handoff activation is implemented by Ticket 10; operational commands
+are documented in [Human Handoff operations](human-handoff.md).
