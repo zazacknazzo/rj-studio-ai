@@ -6,8 +6,9 @@ the RJ Studio operator has reviewed; never add Customer data, credentials, or
 assumptions.
 
 Human collection starts with [the draft intake](salon-knowledge-intake.md).
-It contains source-attributed pending commercial facts, technical/provisional
-drafts, and remaining blank worksheets. It is not runtime YAML or publication approval.
+It records 22 commercial/institutional facts approved by the product owner,
+eight technical/provisional drafts, and remaining blank worksheets. The approved
+intake has not yet been transferred to runtime YAML.
 
 Each `facts` item needs a stable lowercase `id`, `category`, Portuguese `topic`,
 `status`, `fact_type`, `statement`, `source`, and `reviewed_at`. An approved

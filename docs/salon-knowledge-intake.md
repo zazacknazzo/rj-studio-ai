@@ -1,7 +1,8 @@
 # Intake humano — Salon Knowledge do RJ Studio
 
-Estado: **22 facts `pending` e 8 facts `draft`**; nenhum fact aprovado/publicado.
+Estado: **22 facts `approved` no intake e 8 facts `draft`**; publicação no runtime pendente.
 Base inicial: `f8e7ff695b0947c82486afe54aae14acd118713f`.
+Conteúdo aprovado pelo product owner: commit `0b017cdb0d8fbd5c03e25854cab318a7b6fded8d`.
 Dados institucionais/comerciais: responsável do RJ Studio via WhatsApp em
 **02/10/2026**, conforme transcrição fornecida pelo responsável do produto.
 Correções posteriores são identificadas na fonte de cada ficha; sua data não foi informada.
@@ -12,17 +13,19 @@ continua `version: 1` e `facts: []`.
 
 ## Estado de confiança e revisão
 
-- `pending`: dados institucionais/comerciais fornecidos diretamente e correções
-  explicitamente confirmadas; aguardam aprovação final do product owner.
+- `approved` no intake: os 22 dados institucionais/comerciais antes `pending`
+  foram aprovados explicitamente pelo product owner em 02/10/2026. A aprovação
+  corresponde aos textos/fontes do commit indicado; ainda não foram publicados no YAML.
 - `draft` técnico: duração/resultado informados ainda exigem validação técnica.
 - `draft` provisório: propostas/inferências que não vieram da responsável do salão.
-- **Nenhuma ficha possui `approved_by`.** Todas têm `validated_by: []`.
-- `reviewed_at`: pendente de revisão humana registrada para cada ficha. A data da
-  mensagem de origem não foi usada como se fosse aprovação ou revisão técnica.
+- Os 22 facts aprovados recebem `approved_by: Responsável do produto (aprovação neste chat)`
+  e `reviewed_at: 2026-10-02`, conforme aprovação humana atual.
+- Os oito drafts continuam sem `approved_by`, com revisão/validação ainda pendentes.
+  Todas as fichas mantêm `validated_by: []`; nenhuma validação técnica foi inferida.
 - Responsável operacional pela aprovação: product owner; fatos técnicos precisam
   de Joelma e/ou Rogério, sem atribuir validação já realizada a qualquer pessoa.
 
-Os textos de `statement` são propostas para revisão e preservam valores,
+Os textos de `statement` preservam a versão aprovada ou o draft identificado, com valores,
 qualificadores e condições da fonte. Não deduzir inclusões, disponibilidade,
 especialidades, duração adicional ou política a partir da existência de um preço.
 
@@ -60,11 +63,12 @@ Para cada serviço, preencher adicionalmente, sem aceitar defaults por omissão:
 - `mandatory_policy_ids`: **a confirmar — IDs de políticas reais, ou lista vazia confirmada**.
 
 As fichas abaixo são Markdown de intake, **não YAML pronto para carregar**.
-A data da fonte não comprova revisão/publicação. `reviewed_at` permanece em aberto
-até uma revisão humana registrada; sua ausência impede carregar essas fichas pelo
-loader, mesmo como draft/pending. Não inventar uma data para satisfazer validação.
+A data da fonte não comprova revisão/publicação. Os 22 facts aprovados têm a
+data da aprovação atual; os oito drafts ainda não têm revisão humana registrada
+em `reviewed_at`. A lacuna impede carregar esses drafts pelo loader mesmo como
+draft. Não inventar uma data para satisfazer validação.
 
-## Facts comerciais/institucionais pendentes e drafts
+## Facts comerciais/institucionais aprovados no intake e drafts
 
 IDs propostos são estáveis após publicação. `topic` é metadata de busca proposta,
 sem aprovação implícita de serviço, efeito ou regra. Cada preço inclui o nome do
@@ -73,243 +77,265 @@ serviço e suas condições; faixas relacionadas ficam juntas.
 ### 01. `identidade-institucional`
 
 - **id:** `identidade-institucional`
-- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** nome salão studio identidade beleza
-- **statement a revisar:** O nome do salão é RJ Studio de Beleza.
+- **statement aprovado:** O nome do salão é RJ Studio de Beleza.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 02. `tempo-mesmo-endereco`
 
 - **id:** `tempo-mesmo-endereco`
-- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `identity` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** história tempo anos endereço studio
-- **statement a revisar:** Em 02/10/2026, foi informado que o RJ Studio de Beleza está há 22 anos no mesmo endereço.
+- **statement aprovado:** Em 02/10/2026, foi informado que o RJ Studio de Beleza está há 22 anos no mesmo endereço.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 03. `localizacao-publica`
 
 - **id:** `localizacao-publica`
-- **category:** `location` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `location` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** endereço localização onde fica avenida doutor zuquim santana
-- **statement a revisar:** O RJ Studio de Beleza fica na Avenida Dr. Zuquim, 1854, Santana.
+- **statement aprovado:** O RJ Studio de Beleza fica na Avenida Dr. Zuquim, 1854, Santana.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 04. `horarios-atendimento`
 
 - **id:** `horarios-atendimento`
-- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `hours` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** horário funcionamento abre fecha terça quarta quinta sexta sábado
-- **statement a revisar:** O funcionamento informado é de terça a sábado, das 9h às 18h30.
+- **statement aprovado:** O funcionamento informado é de terça a sábado, das 9h às 18h30.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 05. `contato-publico`
 
 - **id:** `contato-publico`
-- **category:** `channel` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `channel` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** whatsapp telefone contato número falar salão
-- **statement a revisar:** O WhatsApp principal do RJ Studio de Beleza é (11) 98289-6366.
+- **statement aprovado:** O WhatsApp principal do RJ Studio de Beleza é (11) 98289-6366.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 06. `precos-cortes`
 
 - **id:** `precos-cortes`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** corte feminino mulher masculino homem cortar
-- **statement a revisar:** Corte feminino: R$ 100,00. Corte masculino: R$ 60,00.
+- **statement aprovado:** Corte feminino: R$ 100,00. Corte masculino: R$ 60,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 07. `precos-escova`
 
 - **id:** `precos-escova`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** escova cabelo curto médio longo extra
-- **statement a revisar:** Escova: cabelo curto, R$ 50,00; curto a médio, R$ 60,00; longo, R$ 70,00; longo a extra longo, R$ 80,00; extra longo, R$ 90,00.
+- **statement aprovado:** Escova: cabelo curto, R$ 50,00; curto a médio, R$ 60,00; longo, R$ 70,00; longo a extra longo, R$ 80,00; extra longo, R$ 90,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 08. `precos-progressiva`
 
 - **id:** `precos-progressiva`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** progressiva escova alisar alisamento cabelo liso
-- **statement a revisar:** Escova progressiva: curto, R$ 180,00; médio, R$ 200,00; longo, R$ 250,00; extra longo, R$ 270,00.
+- **statement aprovado:** Escova progressiva: curto, R$ 180,00; médio, R$ 200,00; longo, R$ 250,00; extra longo, R$ 270,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 09. `precos-coloracao`
 
 - **id:** `precos-coloracao`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** coloração coloracao raiz completa aplicação aplicar
-- **statement a revisar:** Coloração de raiz: R$ 140,00. Coloração completa: R$ 170,00. Aplicação de coloração: R$ 90,00.
+- **statement aprovado:** Coloração de raiz: R$ 140,00. Coloração completa: R$ 170,00. Aplicação de coloração: R$ 90,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 10. `preco-gloss-express`
 
 - **id:** `preco-gloss-express`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** gloss express
-- **statement a revisar:** Gloss Express: R$ 170,00.
+- **statement aprovado:** Gloss Express: R$ 170,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 11. `preco-botox-capilar`
 
 - **id:** `preco-botox-capilar`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** botox capilar
-- **statement a revisar:** Botox capilar: R$ 180,00.
+- **statement aprovado:** Botox capilar: R$ 180,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 12. `preco-tonalizacao`
 
 - **id:** `preco-tonalizacao`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** tonalização tonalizar
-- **statement a revisar:** Tonalização: R$ 150,00.
+- **statement aprovado:** Tonalização: R$ 150,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 13. `preco-reconstrucao-capilar`
 
 - **id:** `preco-reconstrucao-capilar`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** reconstrução capilar
-- **statement a revisar:** Reconstrução capilar: R$ 220,00.
+- **statement aprovado:** Reconstrução capilar: R$ 220,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 14. `preco-cauterizacao`
 
 - **id:** `preco-cauterizacao`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** cauterização
-- **statement a revisar:** Cauterização: R$ 180,00.
+- **statement aprovado:** Cauterização: R$ 180,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 15. `preco-limpeza-cor`
 
 - **id:** `preco-limpeza-cor`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** limpeza cor
-- **statement a revisar:** Limpeza de cor: a partir de R$ 300,00.
+- **statement aprovado:** Limpeza de cor: a partir de R$ 300,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 16. `preco-mechas-reflexo`
 
 - **id:** `preco-mechas-reflexo`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** mechas reflexo luzes orçamento
-- **statement a revisar:** Mechas ou reflexo custam a partir de R$ 500,00. O valor varia conforme comprimento, quantidade de cabelo, quantidade de mechas, cor e modelo de mechas.
+- **statement aprovado:** Mechas ou reflexo custam a partir de R$ 500,00. O valor varia conforme comprimento, quantidade de cabelo, quantidade de mechas, cor e modelo de mechas.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 17. `precos-mega-hair`
 
 - **id:** `precos-mega-hair`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** mega hair megahair alongamento ponto americano fita adesiva queratina
-- **statement a revisar:** Mega hair: ponto americano, a partir de R$ 400,00; fita adesiva, a partir de R$ 500,00; queratina, a partir de R$ 500,00. O valor varia conforme a quantidade.
+- **statement aprovado:** Mega hair: ponto americano, a partir de R$ 400,00; fita adesiva, a partir de R$ 500,00; queratina, a partir de R$ 500,00. O valor varia conforme a quantidade.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a QUERATINA; data dessa confirmação não informada.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 18. `precos-unhas`
 
 - **id:** `precos-unhas`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** unhas manicure pedicure gel esmaltação blindagem
-- **statement a revisar:** Manicure: R$ 42,00. Pedicure: R$ 48,00. Unha de gel: R$ 150,00. Esmaltação em gel: R$ 70,00. Blindagem: R$ 100,00.
+- **statement aprovado:** Manicure: R$ 42,00. Pedicure: R$ 48,00. Unha de gel: R$ 150,00. Esmaltação em gel: R$ 70,00. Blindagem: R$ 100,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 19. `precos-sobrancelhas`
 
 - **id:** `precos-sobrancelhas`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** sobrancelha sobrancelhas design desenho henna fio despigmentação
-- **statement a revisar:** Design de sobrancelha: R$ 50,00. Design de sobrancelha com henna: R$ 80,00. Sobrancelha fio a fio: R$ 400,00. Despigmentação de sobrancelhas: R$ 250,00 por sessão.
+- **statement aprovado:** Design de sobrancelha: R$ 50,00. Design de sobrancelha com henna: R$ 80,00. Sobrancelha fio a fio: R$ 400,00. Despigmentação de sobrancelhas: R$ 250,00 por sessão.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026. Confirmação posterior pelo responsável do produto: o termo original corresponde a HENNA; data dessa confirmação não informada.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 20. `precos-penteados`
 
 - **id:** `precos-penteados`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** penteado penteados social noiva
-- **statement a revisar:** Penteado social: R$ 200,00. Penteado de noiva: R$ 350,00.
+- **statement aprovado:** Penteado social: R$ 200,00. Penteado de noiva: R$ 350,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 21. `precos-maquiagem`
 
 - **id:** `precos-maquiagem`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** maquiagem maquiar social noiva
-- **statement a revisar:** Maquiagem social: R$ 200,00. Maquiagem de noiva: R$ 350,00.
+- **statement aprovado:** Maquiagem social: R$ 200,00. Maquiagem de noiva: R$ 350,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 22. `precos-depilacao`
 
 - **id:** `precos-depilacao`
-- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `pending`
+- **category:** `price` · **fact_type:** `operational_commercial` · **status:** `approved`
 - **topic:** depilação depilar virilha simples íntima buço axila meia perna completa
-- **statement a revisar:** Depilação: virilha simples, R$ 70,00; virilha íntima, R$ 90,00; buço, R$ 35,00; axila, R$ 40,00; meia perna, R$ 50,00; perna completa, R$ 80,00.
+- **statement aprovado:** Depilação: virilha simples, R$ 70,00; virilha íntima, R$ 90,00; buço, R$ 35,00; axila, R$ 40,00; meia perna, R$ 50,00; perna completa, R$ 80,00.
 - **source:** Informação fornecida pela responsável do RJ Studio via WhatsApp em 02/10/2026.
 - **validated_by:** `[]`
-- **reviewed_at:** pendente de revisão humana registrada.
+- **reviewed_at:** `2026-10-02`
+- **approved_by:** `Responsável do produto (aprovação neste chat)`
 - **Responsável pela validação:** product owner.
 
 ### 23. `tecnica-botox-capilar`
@@ -444,8 +470,9 @@ Seu estado inicial continua `draft`; não têm fonte, data de revisão ou aprova
 - Botox/progressiva: aproximadamente 2 horas e até 60/90 dias são informações
   técnicas `draft`. “Hábitos do cabelo” e “grau de exigência da cliente” exigem
   esclarecimento profissional antes de uso. Não tratar duração como garantia.
-- Falta `reviewed_at` humano. O schema exige data inclusive em `draft`/`pending`;
-  este Markdown permite registrar a lacuna sem alterar o schema ou fabricar revisão.
+- Os oito drafts ainda não têm `reviewed_at` humano. O schema exige data inclusive
+  em `draft`; este Markdown registra a lacuna. Os 22 facts aprovados têm a data
+  da aprovação atual; isso não constitui validação dos drafts.
 - Flags `requires_human_consultation` e `mandatory_policy_ids` dos facts técnicos
   de serviço não foram confirmadas. Omissão/default não é autorização de atendimento
   sem avaliação. Não criar vínculo obrigatório com políticas provisórias.
@@ -477,10 +504,22 @@ não carrega política automaticamente. Por isso, condições comerciais confirm
 já acompanham seus preços. Regras provisórias permanecem separadas. Disponibilidade
 atual, reserva, agenda e alterações automáticas não são criadas por este documento.
 
-Próximo registro humano, por ID: texto final, fonte, data real de revisão,
-confirmação de regras provisórias, validação técnica quando exigida e decisão
-final do product owner. Qualquer futura aprovação/publicação será uma etapa
-separada. **Nesta revisão há zero facts aprovados e zero facts no runtime.**
+Próximos registros humanos dos drafts, por ID: texto final, fonte, data real de
+revisão, confirmação de regras provisórias, validação técnica quando exigida e
+decisão final do product owner. A publicação dos 22 facts já aprovados no YAML
+continua como etapa separada. **Há 22 facts aprovados no intake, oito drafts e
+zero facts no runtime.**
+
+## Registro de aprovação humana — 02/10/2026
+
+O product owner declarou neste chat: “Aprovo os 22 facts pending do intake do
+RJ Studio no commit 0b017cdb. Os 8 facts draft devem continuar draft.”
+
+A aprovação abrange exclusivamente as fichas 01–22 (IDs, statements e sources)
+do commit `0b017cdb0d8fbd5c03e25854cab318a7b6fded8d`. Os respectivos metadados
+de status, aprovador e revisão foram registrados; os textos e fontes não foram
+alterados. Fichas 23–30 e as fichas de coleta vazias continuam sem aprovação.
+Não foi atribuída validação técnica nem realizada publicação no runtime.
 
 Referências: [contrato Knowledge](salon-knowledge.md),
 [trusted rendering](structured-decision.md),
