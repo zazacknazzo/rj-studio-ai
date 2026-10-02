@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 
-from rj_studio_ai.domain import InboundMessage
+from rj_studio_ai.domain import AIReply, InboundMessage
 from rj_studio_ai.llm_decision import Intent, LLMDecision, UncertaintyLevel
 
 if TYPE_CHECKING:
@@ -26,6 +26,9 @@ class GenerationMetric:
 class GeneratedReply:
     decision: LLMDecision
     metric: GenerationMetric | None = None
+    # Only deterministic application configuration/test fixtures may set this.
+    # LLM adapters return an untrusted decision and leave this unset.
+    trusted_reply: AIReply | None = None
 
     @property
     def reply_body(self) -> str:
@@ -38,7 +41,7 @@ class GeneratedReply:
         *,
         metric: GenerationMetric | None = None,
     ) -> "GeneratedReply":
-        """Construct the deterministic V0/V1 test fallback as a typed proposal."""
+        """Construct trusted deterministic config/test text; never use for LLM output."""
         return cls(
             decision=LLMDecision(
                 intents=(Intent.OTHER,),
@@ -50,6 +53,7 @@ class GeneratedReply:
                 handoff_reason=None,
             ),
             metric=metric,
+            trusted_reply=AIReply(body=reply_text),
         )
 
 

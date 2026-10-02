@@ -147,6 +147,7 @@ def _decision_json(reply_text: str = "Olá! Como posso ajudar?") -> str:
         {
             "intents": ["greeting"],
             "reply_text": reply_text,
+            "reply_parts": [{"kind": "phrase", "phrase": "help"}],
             "uncertainty": "low",
             "knowledge_refs": [],
             "critical_claims": [],
@@ -212,6 +213,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     assert set(schema["properties"]) == {
         "intents",
         "reply_text",
+        "reply_parts",
         "uncertainty",
         "knowledge_refs",
         "critical_claims",
@@ -228,6 +230,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     assert "Você é Lívia, a atendente virtual do RJ Studio." in system
     assert "R$" not in system
     assert "disponibilidade" not in system
+    assert "reply_parts" in system
     assert request["messages"] == [{"role": "user", "content": "Olá"}]
     assert request["timeout"] == 4.5
 
@@ -503,6 +506,39 @@ def test_anthropic_adapter_does_not_mask_a_successful_reply_with_cleanup_error()
     assert result.reply_body == "Olá! Como posso ajudar?"
 
 
+def test_anthropic_output_remains_untrusted_and_supports_typed_fact_parts() -> None:
+    fact = SalonKnowledgeFact(
+        id="price-corte",
+        category="price",
+        topic="corte",
+        status="approved",
+        fact_type="operational_commercial",
+        statement="O corte custa R$ 120,00.",
+        source="synthetic",
+        reviewed_at=date(2026, 10, 2),
+        approved_by="synthetic operator",
+    )
+    payload = json.loads(_decision_json("O corte custa R$ 1,00."))
+    payload.update(
+        intents=["price", "service_information"],
+        knowledge_refs=["price-corte"],
+        reply_parts=[{"kind": "fact", "knowledge_ref": "price-corte"}],
+    )
+    client = RecordingClient()
+    client.messages.create = lambda **_: SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=json.dumps(payload))],
+        usage=SimpleNamespace(input_tokens=50, output_tokens=60),
+    )
+
+    result = _generator(client).generate(
+        _message(), context=ConversationContext(history=(), knowledge=(fact,)), remaining_budget=4.5
+    )
+
+    assert result.trusted_reply is None
+    assert result.decision.reply_parts[0].knowledge_ref == "price-corte"
+    assert result.decision.intents == ("price", "service_information")
+
+
 def test_invalid_sdk_response_retries_safely_and_records_failure_metrics(tmp_path) -> None:
     database_path = tmp_path / "invalid-sdk-response.db"
     generator = _generator(
@@ -565,7 +601,7 @@ def test_anthropic_retry_uses_the_remaining_webhook_deadline(tmp_path) -> None:
 
     reply = responder.handle(_message(), deadline=deadline)
 
-    assert reply.body == "Resposta"
+    assert reply.body == "Como posso te ajudar?"
     assert [call["timeout"] for call in client.messages.calls] == [7.0, 6.9]
 
 
@@ -673,7 +709,7 @@ def test_valid_multi_intent_decision_survives_webhook_and_replay(tmp_path) -> No
 
     assert first.status_code == replay.status_code == 200
     assert first.text == replay.text
-    assert "Qual período você prefere?" in first.text
+    assert "Ainda não tenho essa informação aprovada" in first.text
     assert "disponível" not in first.text
     assert len(client.messages.calls) == 1
     lifecycle = SqliteConversationStore(database_path).get_generation(
@@ -682,5 +718,5 @@ def test_valid_multi_intent_decision_survives_webhook_and_replay(tmp_path) -> No
     assert lifecycle is not None
     assert (
         lifecycle.reply_body
-        == "Posso confirmar os valores com a equipe. Qual período você prefere?"
+        == "Ainda não tenho essa informação aprovada. Pode detalhar sua dúvida?"
     )

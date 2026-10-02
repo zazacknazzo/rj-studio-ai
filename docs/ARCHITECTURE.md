@@ -1,7 +1,7 @@
 # Architecture
 
 This document distinguishes the implemented baseline from the approved target.
-The runtime baseline is V1 through Ticket 08 plus Messaging Migrations 01–06.
+The runtime baseline is V1 through Ticket 09 plus Messaging Migrations 01–06.
 ADR 0006 owns the messaging migration. Twilio remains available and Meta
 WhatsApp Cloud API is the next E2E target.
 
@@ -22,6 +22,7 @@ SQLite → lifespan Processing Executor → ordered generation claim
   → bounded Conversation Context + approved Salon Knowledge
   → deterministic or Anthropic generation outside SQLite transaction
   → validated LLMDecision and privacy-safe metrics
+  → trusted reply parts rendered from selected approved facts and institutional phrases
   → one transaction persists AIReply, pending OutboundDelivery, and completed processing
 
 SQLite → lifespan Outbound Executor → provider-filtered delivery claim
@@ -44,6 +45,15 @@ to `legacy` while any nonterminal generation or unresolved proactive delivery
 remains at startup; those rows must be drained or recovered before rollback.
 This startup gate avoids changing readiness during an ordinary legacy webhook
 that temporarily owns a generation claim.
+
+Ticket 09 finalizes untrusted LLM proposals in `grounding.py`. Free model prose
+cannot reach the AI Reply; approved statements are inserted unchanged and
+mandatory policies are enforced independently of model references. Persona
+limits and identity transparency apply to the rendered result. Deterministic
+fixed replies remain explicitly trusted for V0 compatibility. See
+[structured decision](structured-decision.md) and ADR 0007 for this contract.
+Human-review proposals are not durable Human Handoff yet: Ticket 10 must add
+activation, suppression, and release before customer piloting.
 
 The SQLite model contains one Outbound Delivery per AI Reply and minimal
 Delivery Attempt evidence. Proactive generation completion atomically creates
@@ -248,6 +258,7 @@ distributed workers, and horizontal scaling remain out of scope.
 | `processing.py` | Deterministic one-step runner and lifespan Processing Executor |
 | `conversation_context.py` | Bounded context filtered by delivery visibility |
 | `generation.py` and `providers/anthropic.py` | LLM seam and Anthropic adapter, unchanged in purpose |
+| `grounding.py` | Trusted reply composition and deterministic human-review overrides before completion |
 | `persistence.py` | Durable inbound, processing claims, outbox/claims, monotonic status merge, early-status inbox, ordering, and redacted inspection |
 | `delivery.py` | Deterministic runner plus lifespan-managed durable outbound polling |
 | `providers/twilio.py` | Twilio inbound adapter and REST outbound sender |

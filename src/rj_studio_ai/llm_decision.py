@@ -1,7 +1,7 @@
 """Validated, provider-neutral proposal returned by an LLM generation."""
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -53,13 +53,42 @@ class CriticalFactType(StrEnum):
 
 
 class CriticalFactualClaim(BaseModel):
-    """One factual value proposed by the model; Ticket 09 will enforce it."""
+    """One proposed factual value; trusted rendering replaces it from approved data."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     fact_type: CriticalFactType
     value: StrictStr = Field(min_length=1, max_length=800)
     knowledge_ref: StrictStr = Field(min_length=3, pattern=r"^[a-z0-9][a-z0-9-]*$")
+
+
+class ReplyPhrase(StrEnum):
+    GREETING = "greeting"
+    FORMAL_GREETING = "formal_greeting"
+    INTRODUCTION = "introduction"
+    HELP = "help"
+    INFORMATION = "information"
+    SERVICE_QUESTION = "service_question"
+    DETAIL_QUESTION = "detail_question"
+    CLARIFICATION = "clarification"
+    IDENTITY = "identity"
+
+
+class PhraseReplyPart(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["phrase"]
+    phrase: ReplyPhrase
+
+
+class FactReplyPart(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["fact"]
+    knowledge_ref: StrictStr = Field(min_length=3, pattern=r"^[a-z0-9][a-z0-9-]*$")
+
+
+ReplyPart = PhraseReplyPart | FactReplyPart
 
 
 class LLMDecision(BaseModel):
@@ -69,6 +98,9 @@ class LLMDecision(BaseModel):
 
     intents: tuple[Intent, ...] = Field(min_length=1)
     reply_text: StrictStr = Field(min_length=1, max_length=MAX_REPLY_TEXT_CHARACTERS)
+    # Empty only for older proposals and deterministic fixed replies. Free text
+    # is never used to render a probabilistic decision, even when parts are empty.
+    reply_parts: tuple[ReplyPart, ...] = Field(default=(), max_length=8)
     uncertainty: UncertaintyLevel
     knowledge_refs: tuple[StrictStr, ...]
     critical_claims: tuple[CriticalFactualClaim, ...]
@@ -118,12 +150,22 @@ def validate_llm_decision(
             raise StructuredDecisionValidationError(
                 "Critical factual claim must declare its knowledge reference"
             )
+    for part in decision.reply_parts:
+        if isinstance(part, FactReplyPart) and part.knowledge_ref not in declared_references:
+            raise StructuredDecisionValidationError(
+                "Fact reply part must declare its knowledge reference"
+            )
     return decision
 
 
 def decision_json_schema() -> dict[str, Any]:
     """Return the provider-agnostic JSON schema for structured output adapters."""
-    return LLMDecision.model_json_schema()
+    schema = LLMDecision.model_json_schema()
+    # The Python contract still reads legacy proposals, but all new provider
+    # requests require the typed rendering plan explicitly (possibly empty).
+    schema["properties"]["reply_parts"].pop("default", None)
+    schema["required"] = list(schema["properties"])
+    return schema
 
 
 def _is_knowledge_id(value: str) -> bool:

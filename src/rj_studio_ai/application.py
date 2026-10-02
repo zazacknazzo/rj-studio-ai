@@ -15,6 +15,9 @@ from rj_studio_ai.generation import (
     ReplyGenerator,
     TransientGenerationError,
 )
+from rj_studio_ai.grounding import finalize_reply
+from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
+from rj_studio_ai.llm_decision import ReplyPhrase
 from rj_studio_ai.persistence import (
     DeliveryState,
     GenerationClaimResult,
@@ -89,7 +92,7 @@ class MessageResponder:
                 if lifecycle.acquired:
                     return self._complete_owned_reply(
                         lifecycle,
-                        self._safe_failure_reply,
+                        self._safe_failure_for(canonical_message),
                         deadline,
                     )
             elif not lifecycle.acquired:
@@ -135,7 +138,9 @@ class MessageResponder:
         if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
             lifecycle = self._claim_exhausted_finalization(lifecycle, deadline)
             if lifecycle.acquired:
-                return self._complete_owned_reply(lifecycle, self._safe_failure_reply, deadline)
+                return self._complete_owned_reply(
+                    lifecycle, self._safe_failure_for(canonical_message), deadline
+                )
             return None
         if not lifecycle.acquired:
             return None
@@ -166,14 +171,22 @@ class MessageResponder:
         try:
             context = self._build_context(claim, message, deadline)
         except ConversationContextTooLarge:
-            return self._complete_owned_reply(claim, self._safe_failure_reply, deadline)
+            return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
         try:
             generated = self._generator.generate(
                 message,
                 context=context,
                 remaining_budget=deadline.work_budget(),
             )
-            reply_body = generated.reply_body
+            if generated.trusted_reply is not None:
+                reply_body = generated.trusted_reply.body
+            else:
+                finalized = finalize_reply(
+                    generated.decision,
+                    customer_message=message.body,
+                    context=context,
+                )
+                reply_body = finalized.reply_text
             if not isinstance(reply_body, str) or not reply_body.strip():
                 raise TransientGenerationError("invalid_generation_result", generated.metric)
             if deadline.work_budget() <= 0.0:
@@ -187,7 +200,7 @@ class MessageResponder:
         except GenerationFailure as error:
             self._record_metric(claim, error.metric, deadline)
             if safe_permanent_failure:
-                return self._complete_owned_reply(claim, self._safe_failure_reply, deadline)
+                return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
             self._release_for_retryable_failure(claim, deadline)
             raise RetryableWebhookError("Generation provider is unavailable") from error
 
@@ -206,6 +219,11 @@ class MessageResponder:
             current_body=message.body,
             lock_timeout=deadline.work_budget(),
         )
+
+    def _safe_failure_for(self, message: InboundMessage) -> str:
+        if LiviaPersona().requires_identity_transparency(message.body):
+            return REPLY_PHRASES[ReplyPhrase.IDENTITY]
+        return self._safe_failure_reply
 
     def _record_metric(
         self,
@@ -249,7 +267,7 @@ class MessageResponder:
         if claim.owner_token is None:
             raise RetryableWebhookError("Generation claim owner is unavailable") from error
         if claim.attempt_count >= 2:
-            return self._complete_owned_reply(claim, self._safe_failure_reply, deadline)
+            return self._complete_owned_reply(claim, self._safe_failure_for(message), deadline)
 
         released = self._store.mark_generation_retryable(
             inbound_message_id=claim.inbound_message_id,

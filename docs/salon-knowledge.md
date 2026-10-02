@@ -39,6 +39,10 @@ running the focused tests:
 ```
 
 Startup validates the configured `SALON_KNOWLEDGE_PATH`. The Anthropic adapter
-does not load YAML directly. Ticket 05 only establishes trusted source and
-selection; it does not yet make factual claims or enforce grounding in AI
-Replies.
+does not load YAML directly. Ticket 09 renders selected approved statements
+unchanged before reply/outbox completion; see [structured decision](structured-decision.md).
+An approved `handoff_condition` that is selected by its `topic` always proposes
+human review. Use narrow trigger topics: statements are not executable
+conditional expressions, and numeric thresholds are not interpreted. Required
+consultation for a Service uses its explicit `requires_human_consultation`
+field. Durable handoff activation remains Ticket 10.

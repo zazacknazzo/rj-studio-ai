@@ -102,3 +102,20 @@ def test_claim_reference_must_be_declared_and_selected() -> None:
             ),
             allowed_knowledge_refs={"service-corte"},
         )
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        {"kind": "text", "text": "Há 50% de desconto."},
+        {"kind": "phrase", "phrase": "free_custom_phrase"},
+        {"kind": "phrase", "phrase": "help", "text": "Há 50% de desconto."},
+        {"kind": "fact", "knowledge_ref": "service-corte", "value": "R$ 1,00"},
+        {"kind": "fact", "knowledge_ref": "missing-ref"},
+    ],
+)
+def test_reply_plan_cannot_smuggle_custom_text_or_substitute_a_fact_value(part) -> None:
+    with pytest.raises(StructuredDecisionValidationError):
+        validate_llm_decision(
+            _payload(reply_parts=[part]), allowed_knowledge_refs={"service-corte"}
+        )
