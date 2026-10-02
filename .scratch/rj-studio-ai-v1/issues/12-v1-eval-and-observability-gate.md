@@ -41,6 +41,12 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
   standard tier and output limit 512; model replies and local safe fallbacks
   have separate denominators. Historical run unchanged; no persona score for
   incomplete generation. See `docs/evals/V1/openai-smoke-512-2026-10-02.md`.
+  Executed at `dcb6fdc`: 10 calls/valid decisions, no incomplete/paid failures,
+  US$0.0296662. Multi-fact final response triggered unexpected handoff; two
+  critical checks failed (2/18). B not executed; no further paid call after
+  stop. 573 tests and all required checks passed; both review axes approved
+  after the preflight fallback-count fix. Human/operational gates pending;
+  ticket remains in-progress, comparison deferred.
 
 - OpenAI-only partial live gate executed 2026-10-02: Phase A stopped at case
   `persona-incomplete-context` after 9/10 calls (`incomplete`, 200 output tokens);
