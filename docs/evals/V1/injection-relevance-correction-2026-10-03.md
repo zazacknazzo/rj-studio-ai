@@ -79,7 +79,15 @@ compileall, pip check and diff check passed. Nineteen new regression executions
 plus the extra fixture variant cover the amended contract. The one existing
 dependency deprecation warning remains. Review closure is recorded below.
 
-Independent Product/spec, Safety/grounding and Standards reviews are pending
-closure before this correction is delivered. Ticket 12 stays **in-progress**;
-Phase B blocked; future live coverage, naturalness and real operational evidence
-remain pending. No new paid/model call or credential access/change occurred.
+Independent reviews closed at `762f8e03161842d03af6a752132c09d0ce55fd3b`:
+Product/spec **0 findings**, Standards **0 findings**, Safety/grounding **two
+findings corrected and closed**, no remaining material findings. Independent
+local probes confirmed unknown IDs rejected, unused declarations allowed, and
+displayed unrelated facts rejected even without the fixture's text exclusions.
+All **78 historical artifact files** remain byte-identical. No core Python,
+provider, Knowledge, prompt or configuration file changed.
+
+Ticket 12 stays **in-progress**; Phase B blocked; future live coverage,
+naturalness and real operational evidence remain pending. No new paid/model
+call, live smoke, credential access/change or main merge occurred. Branch
+publication before edits was verified on origin at the baseline SHA above.
