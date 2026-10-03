@@ -40,8 +40,9 @@ a pure deterministic reason-marker probe distinguishes the model branch from
 an earlier trusted policy even when both have the same reason label. Its result
 is never returned, sent or persisted. No second model is called.
 
-Final rendered IDs are taken from the actual finalized AST and checked against
-the persisted reply. Later intake overrides can produce a trusted persisted
+Final rendered IDs are taken from finalized trusted references that appear in
+the actual finalized text and persisted reply, including mandatory policies
+added by the finalizer outside the proposed AST. Later intake overrides can produce a trusted persisted
 handoff code with `finalizer_handoff=false`. `whether_safe_fallback_was_used`
 includes deterministic safety overrides as well as generation-failure fallback;
 it does **not** change the separate model-reply/cost accounting definitions.
@@ -52,7 +53,7 @@ application process. A diagnostic success cannot approve the full smoke or B.
 ## Authorized single-case command
 
 ```bash
-.venv/bin/python -m rj_studio_ai.evaluation.live --allow-paid --case grounding-multiple-facts --output work/evals/openai-multiple-facts-diagnostic-2026-10-02-01
+.venv/bin/python -m rj_studio_ai.evaluation.live --allow-paid --case grounding-multiple-facts --output work/evals/openai-multiple-facts-diagnostic-2026-10-03-01
 ```
 
 `--case` selects exactly one fixture once and enforces US$0.20 for both phase

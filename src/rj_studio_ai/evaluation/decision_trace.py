@@ -9,7 +9,7 @@ from pydantic import StrictBool, model_validator
 from rj_studio_ai import application
 from rj_studio_ai.evaluation.records import Identifier, RecordModel, check_privacy
 from rj_studio_ai.handoff import HandoffReason, safe_handoff_reason
-from rj_studio_ai.llm_decision import FactReplyPart, Intent
+from rj_studio_ai.llm_decision import Intent
 
 
 class DecisionTrace(RecordModel):
@@ -103,10 +103,12 @@ class DecisionTraceCapture:
             }
         )
         facts = {f.id: f.statement for f in context.knowledge}
+        # The finalizer adds mandatory policies to rendered references, without
+        # modifying the proposed AST. Observe those too, then check persisted text.
         self._render_candidates = {
-            part.knowledge_ref: facts[part.knowledge_ref]
-            for part in result.reply_parts
-            if isinstance(part, FactReplyPart)
+            reference: facts[reference]
+            for reference in result.knowledge_refs
+            if reference in facts and facts[reference] in result.reply_text
         }
 
     def finish(self, body, *, safe_fallback, persisted_handoff_reason=None):

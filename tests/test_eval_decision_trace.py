@@ -123,6 +123,42 @@ def test_trace_lists_only_facts_actually_rendered_and_restores_finalizer():
     assert application.finalize_reply is original
 
 
+def test_trace_includes_policy_added_by_finalizer_without_changing_its_result():
+    base = multi_fact_context().knowledge[0]
+    policy = type(base).model_validate(
+        {
+            **base.model_dump(),
+            "id": "policy-corte",
+            "category": "policy",
+            "statement": "Política sintética.",
+        }
+    )
+    service = type(base).model_validate(
+        {
+            **base.model_dump(),
+            "id": "service-corte",
+            "category": "service",
+            "statement": "Serviço sintético de corte.",
+            "mandatory_policy_ids": ("policy-corte",),
+        }
+    )
+    context = ConversationContext((), (service, policy))
+    decision = fixture_decision(
+        intents=["service_information"],
+        knowledge_refs=["service-corte"],
+        reply_parts=[{"kind": "fact", "knowledge_ref": "service-corte"}],
+    )
+    baseline = application.finalize_reply(
+        decision, customer_message="Preço e horário?", context=context
+    )
+    trace, finalized = trace_at_finalizer(decision, context)
+    assert finalized == baseline
+    assert finalized.handoff is False
+    assert policy.statement in finalized.reply_text
+    assert trace.reply_part_fact_refs == ("service-corte",)
+    assert trace.final_rendered_fact_ids == ("service-corte", "policy-corte")
+
+
 def test_trace_sanitizes_untrusted_ids_reasons_and_drops_prose_and_reasoning():
     capture = DecisionTraceCapture()
     capture.propose(
