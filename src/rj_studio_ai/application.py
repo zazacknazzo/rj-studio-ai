@@ -132,6 +132,7 @@ class MessageResponder:
         *,
         monotonic_clock: Callable[[], float] = monotonic,
         preclaimed: GenerationClaimResult | None = None,
+        execution_deadline: ExecutionDeadline | None = None,
     ) -> AIReply | None:
         """Process already-durable work once, without waiting for a predecessor."""
         lifecycle = preclaimed or self._store.claim_generation(message)
@@ -140,7 +141,7 @@ class MessageResponder:
         if lifecycle.blocked_by_predecessor:
             return None
         canonical_message = replace(message, body=lifecycle.inbound_body)
-        deadline = ExecutionDeadline.start(clock=monotonic_clock)
+        deadline = execution_deadline or ExecutionDeadline.start(clock=monotonic_clock)
         if lifecycle.state is GenerationState.RETRYABLE and lifecycle.attempt_count >= 2:
             lifecycle = self._claim_exhausted_finalization(lifecycle, deadline)
             if lifecycle.acquired:

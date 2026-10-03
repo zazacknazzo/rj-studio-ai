@@ -17,6 +17,7 @@ Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$")
 Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 Metric = Literal["grounding", "intent", "handoff", "persona", "context"]
 Verdict = Literal["pass", "fail", "not_run"]
+PRODUCT_E2E_LATENCY_LIMIT_MS = 8000
 
 
 def check_privacy(value: object) -> None:
@@ -381,7 +382,11 @@ class RunRecord(RecordModel):
         )
         latency = "pending_evidence"
         if complete_latency and self.summary.billable_e2e_p95_ms is not None:
-            latency = "pass" if self.summary.billable_e2e_p95_ms <= 8000 else "fail"
+            latency = (
+                "pass"
+                if self.summary.billable_e2e_p95_ms <= PRODUCT_E2E_LATENCY_LIMIT_MS
+                else "fail"
+            )
         cost = "pending_pricing"
         if (
             self.pricing is not None

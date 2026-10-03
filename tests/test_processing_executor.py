@@ -5,7 +5,8 @@ from threading import Event, Lock, Thread
 
 import pytest
 
-from rj_studio_ai.application import MessageResponder
+from rj_studio_ai.application import MessageResponder, RetryableWebhookError
+from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.domain import DeliveryStatus, DeliveryStatusReceived, InboundMessage
 from rj_studio_ai.generation import (
@@ -261,6 +262,71 @@ def test_processing_attempts_share_one_budget_after_claim(tmp_path: Path) -> Non
     assert generator.budgets[0] == 9.0
     assert generator.budgets[1] < generator.budgets[0]
     assert generator.budgets[1] > 0
+
+
+def test_explicit_observation_deadline_allows_a_twelve_second_generation(tmp_path: Path) -> None:
+    store = SqliteConversationStore(tmp_path / "observation.db")
+    store.initialize()
+    message = _message("observation")
+    inbound = store.admit_generation(message)
+    clock = _FakeClock()
+    budgets = []
+
+    class SlowGenerator:
+        def generate(self, message, *, context, remaining_budget):
+            budgets.append(remaining_budget)
+            clock.sleep(12)
+            return GeneratedReply.from_reply_text("Resposta sintética lenta")
+
+    responder = MessageResponder(
+        store=store,
+        generator=SlowGenerator(),
+        safe_failure_reply="Resposta segura",
+        completion_delivery_state=DeliveryState.PENDING,
+    )
+    reply = responder.process_persisted(
+        message,
+        execution_deadline=ExecutionDeadline.start(clock=clock, total_seconds=30),
+    )
+
+    assert reply.body == "Resposta sintética lenta"
+    assert budgets == [29.0]
+    assert clock.value == 12.0
+    assert store.get_delivery_for_inbound(inbound.inbound_message_id).state is DeliveryState.PENDING
+
+
+@pytest.mark.parametrize("generation_seconds", [2, 12])
+def test_production_without_override_retains_ten_second_deadline_and_one_second_margin(
+    tmp_path: Path, generation_seconds: float
+) -> None:
+    store = SqliteConversationStore(tmp_path / "default-deadline.db")
+    store.initialize()
+    message = _message("default-deadline")
+    inbound = store.admit_generation(message)
+    clock = _FakeClock()
+    budgets = []
+
+    class TimedGenerator:
+        def generate(self, message, *, context, remaining_budget):
+            budgets.append(remaining_budget)
+            clock.sleep(generation_seconds)
+            return GeneratedReply.from_reply_text("Resposta sintética")
+
+    responder = MessageResponder(
+        store=store,
+        generator=TimedGenerator(),
+        safe_failure_reply="Resposta segura",
+        completion_delivery_state=DeliveryState.PENDING,
+    )
+    if generation_seconds == 12:
+        with pytest.raises(RetryableWebhookError, match="No budget remains"):
+            responder.process_persisted(message, monotonic_clock=clock)
+        assert store.get_delivery_for_inbound(inbound.inbound_message_id) is None
+    else:
+        reply = responder.process_persisted(message, monotonic_clock=clock)
+        assert reply.body == "Resposta sintética"
+        assert store.get_delivery_for_inbound(inbound.inbound_message_id) is not None
+    assert budgets == [9.0]
 
 
 class _PermanentFailureGenerator:

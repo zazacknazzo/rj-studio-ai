@@ -24,6 +24,9 @@ from rj_studio_ai.llm_decision import (
     validate_llm_decision,
 )
 
+LIVE_CONNECT_TIMEOUT_SECONDS = 5.0
+LIVE_INPUT_COUNT_TIMEOUT_SECONDS = 5.0
+
 
 class LiveAttempt(Attempt):
     usage: Usage | None
@@ -122,7 +125,10 @@ class OpenAIEvalGenerator:
                 "https://api.openai.com/v1/responses/input_tokens",
                 headers=headers,
                 json=count_payload,
-                timeout=max(0.001, remaining_budget),
+                timeout=httpx.Timeout(
+                    max(0.001, min(LIVE_INPUT_COUNT_TIMEOUT_SECONDS, remaining_budget)),
+                    connect=max(0.001, min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining_budget)),
+                ),
             )
             if count_response.status_code != 200:
                 raise ValueError("input_count_failed")
@@ -163,7 +169,12 @@ class OpenAIEvalGenerator:
                 "https://api.openai.com/v1/responses",
                 headers=headers,
                 json=payload,
-                timeout=remaining,
+                timeout=httpx.Timeout(
+                    remaining,
+                    connect=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                    write=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                    pool=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                ),
             )
             diagnostics = diagnostics.model_copy(
                 update={
@@ -189,6 +200,8 @@ class OpenAIEvalGenerator:
             if data.get("service_tier") != "default":
                 raise ValueError("live_tier_mismatch")
             pricing_verified = True
+            if monotonic() - started >= remaining_budget:
+                raise ValueError("live_observation_timeout")
             if data.get("status") != "completed":
                 raise ValueError("live_incomplete_output")
             texts = [
@@ -237,10 +250,13 @@ class OpenAIEvalGenerator:
             )
             diagnostics = diagnostics.model_copy(update={"transport_error_code": code})
             error_code = "live_" + code
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError) as error:
             # No raw exception, headers, response body or reasoning is exported.
             error_code = "live_transport_or_response_failure"
-            if isinstance(data, dict):
+            if str(error) == "live_observation_timeout":
+                error_code = "live_observation_timeout"
+                decision = None
+            elif isinstance(data, dict):
                 if data.get("model") != self.ledger.pricing.model:
                     error_code = "live_model_mismatch"
                 elif data.get("service_tier") != "default":

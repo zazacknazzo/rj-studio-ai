@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Literal
 
 import httpx
@@ -23,11 +23,19 @@ from rj_studio_ai.conversation_context import (
     ConversationContextBuilder,
     ConversationContextLimits,
 )
+from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.evaluation.decision_trace import DecisionTrace, capture_finalizer
 from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, LivePricing
-from rj_studio_ai.evaluation.openai_live import LiveAttempt, OpenAIEvalGenerator, eval_prompt
+from rj_studio_ai.evaluation.openai_live import (
+    LIVE_CONNECT_TIMEOUT_SECONDS,
+    LIVE_INPUT_COUNT_TIMEOUT_SECONDS,
+    LiveAttempt,
+    OpenAIEvalGenerator,
+    eval_prompt,
+)
 from rj_studio_ai.evaluation.records import (
+    PRODUCT_E2E_LATENCY_LIMIT_MS,
     CaseContract,
     CheckContract,
     Fingerprints,
@@ -52,6 +60,8 @@ from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.base import ProviderAcceptance
 from rj_studio_ai.providers.fake import DeterministicFakeOutboundSender
 from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
+
+LIVE_OBSERVATION_DEADLINE_SECONDS = 30.0
 
 SMOKE_CASES = (
     "grounding-divergent-price",
@@ -418,6 +428,9 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 message = synthetic_message(f"live-{number}", customer_body)
                 # Admission starts the measured E2E; setup/fixture seeding is outside it.
                 started = perf_counter()
+                observation_deadline = ExecutionDeadline.start(
+                    clock=monotonic, total_seconds=LIVE_OBSERVATION_DEADLINE_SECONDS
+                )
                 claim = store.admit_generation(message)
                 context = builder.build(
                     inbound_message_id=claim.inbound_message_id, current_body=message.body
@@ -439,7 +452,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         context_builder=builder,
                         safe_failure_reply="Falha sintética",
                         completion_delivery_state=DeliveryState.PENDING,
-                    ).process_persisted(message)
+                    ).process_persisted(message, execution_deadline=observation_deadline)
                 body = reply.body if reply else None
                 outbound_started = perf_counter()
                 if body:
@@ -534,6 +547,10 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
             "reasoning_effort": "medium",
             "service_tier": "default",
             "max_output_tokens": LIVE_MAX_OUTPUT_TOKENS,
+            "observation_deadline_seconds": LIVE_OBSERVATION_DEADLINE_SECONDS,
+            "finalization_margin_seconds": ExecutionDeadline.DEFAULT_FINALIZATION_MARGIN_SECONDS,
+            "http_connect_timeout_seconds": LIVE_CONNECT_TIMEOUT_SECONDS,
+            "input_count_timeout_seconds": LIVE_INPUT_COUNT_TIMEOUT_SECONDS,
             "context_max_messages": 12,
             "context_token_budget": 4000,
             "repetitions_by_case": selections,
@@ -555,6 +572,13 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
     )
     _write(output / f"phase-{phase}.json", record.model_dump(mode="json"))
     return record, packet
+
+
+def _measured_latency_gate(summary):
+    p95 = summary["billable_e2e_p95_ms"]
+    if p95 is None or summary["unknown_billing_attempts"]:
+        return "pending_evidence"
+    return "pass" if p95 <= PRODUCT_E2E_LATENCY_LIMIT_MS else "fail"
 
 
 def execute_live(
@@ -592,7 +616,13 @@ def execute_live(
             )
             records.append(a)
             packet.extend(excerpts)
-            if a.status == "completed" and case_id is None and not smoke_only:
+            a_summary = live_summary(a.samples, a.contracts, pricing)
+            if (
+                a.status == "completed"
+                and _measured_latency_gate(a_summary) == "pass"
+                and case_id is None
+                and not smoke_only
+            ):
                 repeated = {
                     c.contract.case_id
                     for c in suite.cases
@@ -620,6 +650,7 @@ def execute_live(
                 records.append(b)
                 packet.extend(excerpts)
         samples = [s for record in records for s in record.samples]
+        summary = live_summary(samples, tuple(c.contract for c in suite.cases), pricing)
         report = {
             "execution_scope": "single_case_diagnostic"
             if case_id is not None
@@ -630,7 +661,7 @@ def execute_live(
             "phase_a_stop_code": a.stop_code,
             "phase_b_executed": len(records) > 1,
             "phase_b_status": records[1].status if len(records) > 1 else "not_executed",
-            "summary": live_summary(samples, tuple(c.contract for c in suite.cases), pricing),
+            "summary": summary,
             "phase_summaries": {
                 phase: live_summary(record.samples, record.contracts, pricing) if record else None
                 for phase, record in (("A", a), ("B", records[1] if len(records) > 1 else None))
@@ -639,6 +670,8 @@ def execute_live(
             "phase_a_cap_usd": float(ledger.phase_a_cap),
             "global_cap_usd": float(ledger.global_cap),
             "latency_scope": "synthetic_persistence_to_fake_provider_acceptance",
+            "latency_threshold_ms": PRODUCT_E2E_LATENCY_LIMIT_MS,
+            "measured_latency_gate": _measured_latency_gate(summary),
             "operational_latency_gate": "pending_real_provider_evidence",
             "cross_provider_comparison": "deferred_by_product_owner",
             "naturalness_status": "pending_human_review",

@@ -1,0 +1,171 @@
+import json
+from pathlib import Path
+
+import httpx
+import pytest
+
+from rj_studio_ai.evaluation import live, openai_live
+from rj_studio_ai.evaluation.suite import fixture_decision, load_suite
+
+
+class Clock:
+    value = 0.0
+
+    def __call__(self):
+        return self.value
+
+    def advance(self, seconds):
+        self.value += seconds
+
+
+def run_observed_case(
+    tmp_path, monkeypatch, *, model_seconds, preflight_seconds=1, honor_read_timeout=True
+):
+    clock = Clock()
+    monkeypatch.setattr(live, "monotonic", clock, raising=False)
+    monkeypatch.setattr(live, "perf_counter", clock)
+    monkeypatch.setattr(openai_live, "monotonic", clock)
+    suite = load_suite(Path("docs/evals/V1"))
+    case = next(c for c in suite.cases if c.contract.case_id == "grounding-multiple-facts")
+    proposal = fixture_decision(**case.data["proposal"])
+    requests = []
+
+    def transport(request):
+        requests.append(request)
+        timeout = request.extensions["timeout"]
+        if request.url.path.endswith("input_tokens"):
+            clock.advance(min(preflight_seconds, timeout["read"]))
+            if preflight_seconds > timeout["read"]:
+                raise httpx.ReadTimeout("synthetic preflight timeout")
+            return httpx.Response(200, json={"input_tokens": 1000})
+        clock.advance(min(model_seconds, timeout["read"]) if honor_read_timeout else model_seconds)
+        if honor_read_timeout and model_seconds > timeout["read"]:
+            raise httpx.ReadTimeout("synthetic observation timeout")
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-6.1-sol",
+                "service_tier": "default",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": proposal.model_dump_json()}],
+                    }
+                ],
+                "usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 100,
+                    "total_tokens": 1100,
+                    "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                    "output_tokens_details": {"reasoning_tokens": 40},
+                },
+            },
+        )
+
+    output = tmp_path / "observation"
+    report = live.execute_live(
+        suite,
+        api_key="synthetic-value",
+        output=output,
+        revision="80ada33",
+        case_id="grounding-multiple-facts",
+        transport=httpx.MockTransport(transport),
+    )
+    record = json.loads((output / "phase-A.json").read_text())
+    return report, record, requests
+
+
+def test_twelve_second_reply_preserves_usage_but_fails_eight_second_gate(tmp_path, monkeypatch):
+    report, record, requests = run_observed_case(tmp_path, monkeypatch, model_seconds=12)
+    assert report["phase_a_status"] == "completed"
+    assert report["phase_a_stop_code"] is None
+    assert report["phase_b_executed"] is False
+    summary = report["summary"]
+    assert summary["completed_model_replies"] == 1
+    assert summary["paid_failures"] == summary["retries"] == 0
+    assert summary["input_tokens"] == 1000
+    assert summary["output_tokens"] == 100
+    assert summary["model_p95_ms"] == 12000
+    assert summary["billable_e2e_p95_ms"] == 13000  # Counting remains inside E2E.
+    assert report["latency_threshold_ms"] == 8000
+    assert report["measured_latency_gate"] == "fail"
+    assert report["operational_latency_gate"] == "pending_real_provider_evidence"
+    sample = record["samples"][0]
+    assert sample["attempts"][0]["response_diagnostics"]["response_status"] == "completed"
+    assert sample["attempts"][0]["usage"]["reasoning_tokens"] == 40
+    assert all(value == "pass" for value in sample["checks"].values())
+    assert record["configuration"]["observation_deadline_seconds"] == 30
+    assert len(requests) == 2
+    assert requests[0].extensions["timeout"]["read"] == 5
+    assert requests[1].extensions["timeout"]["connect"] == 5
+    assert requests[1].extensions["timeout"]["read"] == 28
+
+
+@pytest.mark.parametrize(("model_seconds", "gate"), [(7, "pass"), (7.001, "fail")])
+def test_observation_budget_does_not_move_inclusive_eight_second_gate(
+    tmp_path, monkeypatch, model_seconds, gate
+):
+    report, _, _ = run_observed_case(tmp_path, monkeypatch, model_seconds=model_seconds)
+    assert report["phase_a_status"] == "completed"
+    assert report["measured_latency_gate"] == gate
+    assert report["latency_threshold_ms"] == 8000
+    assert report["summary"]["billable_e2e_p95_ms"] == (model_seconds + 1) * 1000
+
+
+def test_read_timeout_beyond_observation_has_no_retry_and_unknown_cost(tmp_path, monkeypatch):
+    report, record, requests = run_observed_case(tmp_path, monkeypatch, model_seconds=35)
+    assert report["phase_a_status"] == "blocked"
+    assert report["phase_a_stop_code"] == "live_read_timeout"
+    assert report["phase_b_executed"] is False
+    assert report["measured_latency_gate"] == "pending_evidence"
+    summary = report["summary"]
+    assert summary["live_calls"] == 1
+    assert summary["retries"] == summary["completed_model_replies"] == 0
+    assert summary["estimated_cost_usd"] is None
+    assert 0 < report["budget_upper_bound_usd"] <= 0.20
+    assert len(requests) == 2
+    attempt = record["samples"][0]["attempts"][0]
+    assert attempt["usage"] is None
+    assert attempt["response_diagnostics"]["transport_error_code"] == "read_timeout"
+    assert attempt["response_diagnostics"]["http_success"] is None
+
+
+def test_late_complete_response_fails_closed_but_retains_observed_usage(tmp_path, monkeypatch):
+    report, record, requests = run_observed_case(
+        tmp_path, monkeypatch, model_seconds=31, honor_read_timeout=False
+    )
+    assert report["phase_a_status"] == "blocked"
+    assert report["phase_a_stop_code"] == "live_observation_timeout"
+    assert report["phase_b_executed"] is False
+    summary = report["summary"]
+    assert summary["live_calls"] == summary["paid_failures"] == 1
+    assert summary["completed_model_replies"] == summary["retries"] == 0
+    assert summary["system_safe_fallbacks"] == 1
+    assert summary["input_tokens"] == 1000
+    assert summary["estimated_cost_usd"] == 0.003
+    assert report["measured_latency_gate"] == "fail"
+    attempt = record["samples"][0]["attempts"][0]
+    assert attempt["response_diagnostics"]["response_status"] == "completed"
+    assert attempt["response_diagnostics"]["total_tokens"] == 1100
+    assert len(requests) == 2
+
+
+def test_preflight_is_bounded_separately_and_submits_no_generation_on_timeout(
+    tmp_path, monkeypatch
+):
+    report, _, requests = run_observed_case(
+        tmp_path, monkeypatch, model_seconds=1, preflight_seconds=6
+    )
+    assert report["phase_a_stop_code"] == "live_preflight_failure"
+    assert report["summary"]["live_calls"] == 0
+    assert report["summary"]["retries"] == 0
+    assert report["budget_upper_bound_usd"] == 0
+    assert report["phase_b_executed"] is False
+    assert len(requests) == 1
+    assert requests[0].extensions["timeout"] == {
+        "connect": 5.0,
+        "read": 5.0,
+        "write": 5.0,
+        "pool": 5.0,
+    }

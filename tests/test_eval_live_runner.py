@@ -4,6 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from rj_studio_ai.evaluation import live, openai_live
 from rj_studio_ai.evaluation.live import (
     SMOKE_CASES,
     LiveRecord,
@@ -18,7 +19,20 @@ from rj_studio_ai.evaluation.records import CaseContract, CheckContract, fingerp
 from rj_studio_ai.evaluation.suite import fixture_decision, load_suite
 
 
-def test_passing_ten_case_smoke_stops_before_phase_b_with_one_dollar_cap(tmp_path):
+@pytest.mark.parametrize("model_seconds", [0, 12])
+def test_passing_ten_case_smoke_requires_scope_and_latency_gate_before_phase_b(
+    tmp_path, monkeypatch, model_seconds
+):
+    class Clock:
+        value = 0.0
+
+        def __call__(self):
+            return self.value
+
+    clock = Clock()
+    monkeypatch.setattr(live, "monotonic", clock)
+    monkeypatch.setattr(live, "perf_counter", clock)
+    monkeypatch.setattr(openai_live, "monotonic", clock)
     suite = load_suite(Path("docs/evals/V1"))
     by_id = {c.contract.case_id: c for c in suite.cases}
     proposals = []
@@ -45,6 +59,7 @@ def test_passing_ten_case_smoke_stops_before_phase_b_with_one_dollar_cap(tmp_pat
             return httpx.Response(200, json={"input_tokens": 1000})
         decision = proposals[len(calls)]
         calls.append(request)
+        clock.value += model_seconds
         return httpx.Response(
             200,
             json={
@@ -73,12 +88,14 @@ def test_passing_ten_case_smoke_stops_before_phase_b_with_one_dollar_cap(tmp_pat
         output=tmp_path / "smoke",
         revision="2002de4",
         transport=httpx.MockTransport(transport),
-        smoke_only=True,
+        smoke_only=model_seconds == 0,
     )
     assert report["phase_a_status"] == "completed"
     assert report["phase_b_executed"] is False
-    assert report["execution_scope"] == "smoke_only"
-    assert report["global_cap_usd"] == report["phase_a_cap_usd"] == 1
+    assert report["execution_scope"] == ("smoke_only" if model_seconds == 0 else "smoke_and_suite")
+    assert report["global_cap_usd"] == (1 if model_seconds == 0 else 5)
+    assert report["phase_a_cap_usd"] == 1
+    assert report["measured_latency_gate"] == ("pass" if model_seconds == 0 else "fail")
     assert report["summary"]["live_calls"] == len(calls) == 10
     assert report["summary"]["retries"] == 0
     assert report["ticket_status"] == "in-progress"
