@@ -95,5 +95,48 @@ ignored record is required; historical files must not be overwritten.
 
 ## Live result
 
-Pending. No paid call performed for this diagnosis yet. Ticket 12 remains
-in-progress; a probe success alone cannot approve its complete gate.
+Executed **2026-10-03 13:39:01 UTC**, instrumentation revision
+`d56d764fbeb0a5b0cab3c9aa97284df64c24a6dc`. Private, ignored artifacts:
+`work/evals/openai-usage-diagnostic-2026-10-03-01/`.
+
+**Classification for this instrumented attempt: F — OTHER, HTTPX ReadTimeout.**
+The controlled transport code is `read_timeout` and the preserved attempt error
+is `live_read_timeout`. No usable HTTPX Response returned to the adapter, so no
+JSON parsing or Usage validation occurred. This does not prove that the provider
+omitted usage, did not process the request, or did not charge for it.
+
+| Metadata | Observed value |
+| --- | --- |
+| response_status / HTTP status / http_success | null / null / null, unobserved |
+| usage_present and all token-presence fields | null, unobserved |
+| usage_validation_error_code | null, validation never ran |
+| transport_error_code | read_timeout |
+| SDK version | not-installed; HTTPX 0.28.1 |
+| Exact usage / cost | unknown / indeterminate |
+| Conservative reservation | **US$0.0112425**, below US$0.20 cap |
+| Generation submissions / retries | 1 / 0 |
+| Valid model replies / separate system safe fallbacks | 0 / 1 |
+| Model attempt / synthetic E2E | 7,589.53 / 9,038.42 ms |
+| Grounding-multiple-facts | **not evaluable**; no model decision |
+| Critical gate failures | 2/2, both not evaluable, not observed hallucinations |
+| Full smoke / Phase B | not executed / not executed |
+
+The budget journal settled with usage=null, preserving the reservation and
+blocking more work; no fabricated zero, token count or cost. The actual charge
+is unknown. No output/hidden reasoning/raw provider payload was retained in the
+new diagnostics. Model configuration and request hash, as well as suite,
+Knowledge and prompt/schema fingerprints, match the preceding retest exactly.
+All 41 historical evidence files remain byte-for-byte unchanged.
+
+The instrumented timeout proves a real path previously mislabeled as missing
+usage, and its regression captures that masking bug. **It cannot retroactively
+prove the original run was also a timeout**, because that run discarded its
+primary error and HTTP/Response provenance. Network versus provider-side latency
+or another underlying cause of this read timeout is not established by the
+available evidence. SDK mapping is excluded; no SDK install/update occurred.
+
+Stopped after this single authorized probe. No retry, ten-case smoke, B,
+Anthropic, Meta/WhatsApp, real Customer or secret output. No change to multi-intent
+instructions, finalizer/grounding/handoff, model/effort/output limit, pricing
+rates/formula or production runtime. Ticket 12 remains **in-progress** and its
+live and human gates are not approved.

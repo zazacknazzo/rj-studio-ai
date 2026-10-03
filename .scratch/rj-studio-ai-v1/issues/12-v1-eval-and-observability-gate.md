@@ -37,6 +37,15 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 usage provenance instrumented at d56d764. 634 tests / all checks
+  pass; both independent review axes have no findings. The single authorized
+  probe proved HTTPX read_timeout (class F), not API USAGE_ABSENT: no usable
+  Response returned, no usage validation. Original failure remains unrecoverable
+  because its primary error was overwritten. Exact cost unknown, reservation
+  US$0.0112425; no retries, full smoke or B. Multi-intent correction and runtime
+  unchanged. See docs/evals/V1/usage-diagnostic-2026-10-03.md.
+  Ticket remains in-progress; grounding-multiple-facts is not evaluable.
+
 - 2026-10-03 shared reply-plan instruction correction committed at 1faf390;
   both adapters use the same rule, no finalizer/schema/Knowledge changes.
   600 tests and checks pass; both review axes have no findings. One authorized

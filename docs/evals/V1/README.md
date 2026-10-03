@@ -1,5 +1,7 @@
 # V1 eval suite
 
+Latest diagnosis: [Responses usage provenance](usage-diagnostic-2026-10-03.md).
+
 Latest authorized step: [shared multi-intent instruction and controlled retest](multi-intent-instruction-correction-2026-10-03.md).
 
 Targeted follow-up: [multi-fact handoff diagnosis](multiple-facts-diagnostic-2026-10-02.md).
