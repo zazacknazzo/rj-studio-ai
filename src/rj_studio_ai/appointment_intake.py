@@ -88,7 +88,7 @@ def _declines_rescheduling(text: str) -> bool:
         re.search(
             r"nao (?:(?:quero|vou|prefiro) )?"
             r"(?:remarcar|reagendar|(?:tentar )?outro (?:dia|horario))|"
-            r"sem (?:remarcacao|reagendamento)|(?:somente|apenas|so) cancelar",
+            r"sem (?:remarcacao|reagendamento)|(?:somente|apenas|so|prefiro) cancelar",
             text,
         )
     )
@@ -106,9 +106,12 @@ def plan_appointment_intake(
         re.search(r"\bnao (?:quero|vou|desejo|preciso) cancelar\b", text)
     )
     rescheduling = bool(re.search(r"\b(remarcar|reagendar|remarcacao|reagendamento)\b", text))
-    if (rescheduling or re.search(r"\boutro (?:dia|horario)\b", text)) and (
-        re.search(r"\b(prefiro|em vez|ao inves)\b", text) and not _declines_rescheduling(text)
-    ):
+    # Resolve the chosen verb, not any occurrence of the rejected alternative.
+    chosen = re.search(r"\bprefiro (cancelar|remarcar|reagendar|outro dia|outro horario)\b", text)
+    if chosen and not _declines_rescheduling(text):
+        cancelling = chosen.group(1) == "cancelar"
+        rescheduling = not cancelling
+    elif rescheduling and re.search(r"\b(?:em vez|ao inves) de cancelar\b", text):
         cancelling = False
     change = Intent.APPOINTMENT_CHANGE in decision.intents or appointment_change_requested(
         customer_message

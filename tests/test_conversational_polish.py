@@ -328,7 +328,13 @@ def test_cancellation_can_switch_to_bounded_reschedule_without_repeating_recover
 
 
 @pytest.mark.parametrize(
-    "body", ["Quero cancelar mesmo meu agendamento", "Quero só cancelar meu agendamento"]
+    "body",
+    [
+        "Quero cancelar mesmo meu agendamento",
+        "Quero só cancelar meu agendamento",
+        "Prefiro cancelar em vez de remarcar",
+        "Prefiro cancelar ao invés de remarcar",
+    ],
 )
 def test_firm_cancellation_skips_recovery(tmp_path, body):
     from test_appointment_intake import AppointmentModel, message, respond
@@ -545,3 +551,23 @@ def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path, cho
     intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
     assert intake.request_kind == "reschedule"
     assert intake.preferred_day is None and intake.preferred_time == "de manhã"
+
+
+@pytest.mark.parametrize(
+    "choice", ["Prefiro cancelar em vez de remarcar", "Prefiro cancelar ao invés de remarcar"]
+)
+def test_chosen_cancellation_does_not_mistake_rejected_reschedule_for_the_choice(tmp_path, choice):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "comparative.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    respond(store, model, message(body="Quero cancelar meu agendamento"))
+    reply = respond(store, model, message("interest-2", choice))
+    active = store.list_active_handoffs()[0]
+    intake = store.get_appointment_intake(conversation_id=active.conversation_id)
+    assert intake.request_kind == "cancellation" and intake.clarification_count == 1
+    assert "?" not in reply.body

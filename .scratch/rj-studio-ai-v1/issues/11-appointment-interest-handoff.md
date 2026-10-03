@@ -6,6 +6,14 @@
 
 **Status:** done
 
+## Product amendment (2026-10-03)
+
+The acceptance criteria below record the originally completed Ticket 11.
+The approved `docs/specs/V1-conversational-polish.md` now supersedes day-or-period /
+two-question and direct cancellation/reschedule behavior: service + day + period,
+three-question bound, one durable recovery offer, new preference collection.
+Scheduling execution remains excluded. See `docs/appointment-interest.md`.
+
 ## Context
 
 V1 handles appointment interest only as conversational intake. Scheduling, availability, confirmation, changes, and cancellations remain outside its scope.
