@@ -37,6 +37,13 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 authorized single-case diagnosis reproduced multi-fact failure: both
+  facts selected, price/hours Intents correct, but model omitted factual parts and
+  refs. Classification MODEL_PLAN_INCOMPLETE; finalizer correctly imposed
+  missing_critical_fact handoff. One paid call, US$0.0049335, no retries/B.
+  See docs/evals/V1/multiple-facts-diagnostic-2026-10-02.md. 585 tests/checks pass;
+  prompt correction proposed only. Ticket remains in-progress.
+
 - Product-owner correction: repeat all ten smoke cases with medium reasoning,
   standard tier and output limit 512; model replies and local safe fallbacks
   have separate denominators. Historical run unchanged; no persona score for

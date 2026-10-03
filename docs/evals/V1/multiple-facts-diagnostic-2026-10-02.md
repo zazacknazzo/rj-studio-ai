@@ -63,5 +63,75 @@ no-automatic-retry behavior remain unchanged. No Anthropic, Meta or WhatsApp.
 
 ## Result
 
-Pending required checks, independent review and the one authorized execution.
-No prompt/schema/model change or speculative production fix is authorized.
+Executed **2026-10-03 11:04:32 UTC**, revision
+`ee85b3da1634f482c63dc5c543e0c765552563d6`. Private, ignored evidence:
+`work/evals/openai-multiple-facts-diagnostic-2026-10-03-01/`.
+
+**Classification: B — MODEL_PLAN_INCOMPLETE.**
+
+| Observed stage | Sanitized evidence |
+| --- | --- |
+| Actual selection | `price-corte`, `hours-corte` |
+| Model Intents | `price`, `hours` |
+| Model knowledge references | empty |
+| Proposed part kinds / factual references | one `phrase` / empty |
+| Proposed handoff / normalized reason | `false` / absent |
+| Actual finalizer | handoff `true`, `missing_critical_fact` |
+| Deterministic override | `missing_critical_fact` |
+| Facts rendered in persisted reply | none |
+| Persisted reply | verified equal to controlled handoff confirmation |
+| Trace safety outcome | `whether_safe_fallback_was_used=true` |
+
+The model had both approved synthetic facts and identified both requests, but
+omitted their factual AST parts and references. The finalizer's required-category
+check therefore rejected the incomplete plan. This is not model-requested
+handoff, missing Knowledge, malformed output, truncation, or a scoring mismatch.
+The deterministic rule correctly enforces Ticket 09; weakening it is not warranted.
+
+Request hash and suite/Knowledge/prompt/schema fingerprints match the historical
+failed sample exactly. The same failure is reproduced with its origin now visible.
+The historical proposal was not retained, so its exact internal path cannot be
+recovered retroactively; attribution above describes the new identical-input run.
+All 29 historical evidence files remain byte-for-byte unchanged.
+
+### Accounting and gates
+
+- One paid generation, one complete/schema-valid model decision, zero retries,
+  paid generation failures or separate generation-failure fallbacks.
+- Input 1,326 tokens: 0 cached-read, 1,323 cache-write; output 162, including
+  78 reasoning tokens. Only token counts are retained, never reasoning text.
+- Settled estimated cost **US$0.0049335**, below the **US$0.20** hard cap;
+  cost per 1,000 completed model replies **US$4.9335**, denominator 1.
+- Model latency 6,323.46 ms; synthetic persistence-to-fake-acceptance E2E
+  7,478.10 ms. One sample is not a useful population percentile or provider gate.
+- Two failed critical checks out of two: grounding 0/1, handoff 0/1;
+  Intent 1/1. Persona and appointment dimensions have no cases in this diagnostic.
+- A complete proposal rejected by a trusted policy remains a completed model
+  decision for accounting; the trace's safety-outcome flag is distinct from a
+  paid generation failure or separately counted system generation fallback.
+- Phase B was **not executed**. Ticket 12 remains **in-progress**; cross-provider
+  comparison deferred and human/operational review pending.
+
+### Checks and independent review
+
+585 full-suite tests passed; the 12 trace tests also passed independently.
+Ruff check, format check (151 files), compileall, pip check and diff checks passed.
+One existing Starlette/AnyIO deprecation warning remains.
+
+Standards: no actionable findings. Spec: one missing trace entry for a mandatory
+policy rendered outside the proposed AST; fixed in the eval observer with a
+red-to-green regression and independently confirmed resolved. Production
+rendering, persistence, messaging, model configuration and prompts are unchanged.
+
+### Proposed next change — not implemented
+
+Add a small provider-neutral instruction to the existing reply-plan instructions:
+for every detected factual Intent that has a relevant approved selected fact,
+include its factual `reply_part` and declare its reference; handle each Intent in
+the same plan. Clarification/handoff remain available when facts are missing or
+trusted policy requires them. Do not infer a universal no-handoff rule from fact
+count or hardcode a case. Keep the existing schema, trusted renderer and guards.
+
+This is a proposal for product-owner review, not a prompt change or authorization
+for another paid run. No further call, Phase B, Anthropic, Meta, WhatsApp or real
+Customer was used; no secret was displayed.
