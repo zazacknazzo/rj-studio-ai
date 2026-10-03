@@ -4,8 +4,11 @@ Current product round: [approved Conversational Polish](../../specs/V1-conversat
 Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress; the newly authorized B1/B2 execution is a
 separate live gate, using fresh records and one shared US$5 budget.
+Latest execution: [fresh Phase B — stopped B1](openai-phase-b-2026-10-03.md).
+B1 stopped at case 27 on a deterministic-proposal/live-oracle mismatch; raw
+critical failures remain 2/13. B2 not executed; no rescore or code correction.
 Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
-Latest result: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
+Closure evidence: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
 Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms
 passes the unchanged 8s gate for this run. No additional numerical ratings or
 retrospective average. Qualitative human approval and functional pass release

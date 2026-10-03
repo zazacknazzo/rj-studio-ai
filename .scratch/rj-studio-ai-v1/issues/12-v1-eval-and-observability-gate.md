@@ -21,6 +21,12 @@ at US$1. OpenAI-only configuration/scoring frozen; no production feature change.
 Cross-provider comparison deferred and real-provider evidence pending.
 This milestone does not complete Ticket 12.
 
+Fresh authorized B1 is now stopped at `grounding-invalid-reference`; the frozen
+live scorer reused an injected-proposal expectation without the live attack.
+B2 not executed; no oracle/prompt/runtime change or retrospective rescore.
+OpenAI-only gate remains blocked. See
+`docs/evals/V1/openai-phase-b-2026-10-03.md` for original metrics and diagnosis.
+
 ## Current product-owner decision (2026-10-03)
 
 Conversational Polish human review is APPROVED qualitatively for naturalness,

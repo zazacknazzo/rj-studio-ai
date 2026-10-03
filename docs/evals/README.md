@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | OpenAI ten-case smoke and qualitative human review passed; Phase B and real-provider gates pending |
+| V1 | Polish complete/approved; fresh B1 stopped on live-oracle mismatch; B2 and real-provider gates pending |
 
 Each eval case should contain:
 
