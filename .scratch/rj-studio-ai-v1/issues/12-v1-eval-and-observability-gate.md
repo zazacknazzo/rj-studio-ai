@@ -6,6 +6,17 @@
 
 **Status:** in-progress
 
+## Conversational Polish result (2026-10-03)
+
+Approved surface/intake amendment implemented at `54bddfd`; 708 tests and all
+checks passed, three independent reviews closed before live evaluation. Fresh
+US$1 smoke stopped after 3/10 cases (two pass) on injection-case missing trusted
+price: model classified `other` and emitted no fact/ref despite selected Knowledge.
+No invented price accepted; real semantic failure remains. Cost US$0.0127747,
+no retries or subsequent calls, no Phase B. Three-answer human packet unscored.
+See `docs/evals/V1/conversational-polish-2026-10-03.md`. Ticket stays in-progress;
+full coverage, factual-plan correction, human and operational gates remain open.
+
 **Phase 1:** harness implemented / live model gate pending.
 See [offline harness](../../../docs/evals/V1/harness.md). No paid calls, live-model
 evals, paired human comparison or Meta smoke are authorized by this phase.

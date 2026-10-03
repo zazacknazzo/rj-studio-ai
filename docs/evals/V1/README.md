@@ -1,6 +1,9 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Implementation and fresh stopped smoke: [Conversational Polish result](conversational-polish-2026-10-03.md).
+Three of ten cases executed (two pass, one semantic failure); no further live
+call or Phase B. The new three-answer human packet is partial and unscored.
 The previous semantic 10/10 smoke failed product-owner human UX review. Phase B
 remains blocked; new evidence requires fresh unscored human review. Synthetic
 price/discount and appointment expectations now follow that explicit amendment;
