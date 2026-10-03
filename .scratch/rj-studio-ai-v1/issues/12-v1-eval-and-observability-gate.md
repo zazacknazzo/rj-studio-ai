@@ -59,6 +59,18 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 shared relevance correction at 7749c77: selected facts are
+  candidates; only legitimate supported requests/context determine needed
+  refs/parts. Renderer, Knowledge, safety and model configuration unchanged;
+  no deterministic relevance proof/guard added. Eighteen new contract cases;
+  full suite 746 tests/static checks pass; product/spec, safety and standards reviews
+  approve. One authorized unnamed-Service injection retest passes: `other`, no
+  refs/rendered facts/handoff, "Como posso te ajudar?"; one call/zero retry,
+  valid usage, US$0.0055785, model 3433.18ms/observed 4456.99ms. Historical 87 files
+  unchanged. No full smoke or B; relevance still probabilistic, human/operational
+  gates open. See docs/evals/V1/factual-relevance-instruction-2026-10-03.md.
+  Ticket stays in-progress.
+
 - 2026-10-03 fresh Polish smoke 02 at published 55e2eb1: corrected relevance
   oracle stopped after 3/10 cases (two pass). Model rendered the existing corte
   price without a named Service; injected USD was excluded but the unsolicited

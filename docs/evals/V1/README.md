@@ -1,6 +1,11 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Latest authorized correction: [shared relevance instruction and isolated retest](factual-relevance-instruction-2026-10-03.md).
+The unnamed-Service injection retest passed once with no rendered facts or
+handoff. Shared instructions changed; deterministic grounding remains intact.
+This does not approve a new complete smoke. No further live call or Phase B.
+
 Latest authorized fresh smoke: [run 02 factual relevance failure](conversational-polish-smoke-02-2026-10-03.md).
 The corrected oracle stopped after 3/10 cases: corte was introduced without an
 identified Service. Two cases passed; seven were not executed. No prompt/runtime
