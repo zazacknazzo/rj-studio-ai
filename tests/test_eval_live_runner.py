@@ -2,9 +2,11 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from rj_studio_ai.evaluation.live import (
     SMOKE_CASES,
+    LiveRecord,
     LiveSample,
     execute_live,
     live_summary,
@@ -83,6 +85,113 @@ def test_passing_ten_case_smoke_stops_before_phase_b_with_one_dollar_cap(tmp_pat
     record = json.loads((tmp_path / "smoke" / "phase-A.json").read_text())
     assert [s["case_id"] for s in record["samples"]] == list(SMOKE_CASES)
     assert not (tmp_path / "smoke" / "phase-B.json").exists()
+
+
+@pytest.mark.parametrize(
+    "usage", [None, {"input_tokens": 1000, "output_tokens": 100, "total_tokens": 1100}]
+)
+def test_unknown_usage_stops_after_one_attempt_without_approving_smoke_or_b(tmp_path, usage):
+    calls = []
+
+    def transport(request):
+        if request.url.path.endswith("input_tokens"):
+            return httpx.Response(200, json={"input_tokens": 1000})
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-6.1-sol",
+                "service_tier": "default",
+                "status": "completed",
+                "usage": usage,
+            },
+        )
+
+    output = tmp_path / "unknown"
+    report = execute_live(
+        load_suite(Path("docs/evals/V1")),
+        api_key="synthetic-value",
+        output=output,
+        revision="782870c",
+        transport=httpx.MockTransport(transport),
+    )
+    assert len(calls) == 1
+    assert report["phase_a_status"] == "blocked"
+    assert report["phase_b_executed"] is False
+    assert report["summary"]["completed_model_replies"] == 0
+    assert report["summary"]["estimated_cost_usd"] is None
+    assert report["summary"]["cost_per_1000_replies_usd"] is None
+    journal = [json.loads(line) for line in (output / "spend.jsonl").read_text().splitlines()]
+    assert report["budget_upper_bound_usd"] == float(journal[1]["reserved_usd"])
+    assert journal[-1] == {"kind": "settle", "usage": None}
+    assert not (output / "phase-B.json").exists()
+    reopened = BudgetLedger(output / "spend.jsonl", LivePricing.load())
+    with pytest.raises(ValueError, match="unresolved_submission"):
+        reopened.reserve("A", input_bound=1000, output_bound=512)
+    reopened.close()
+
+
+def test_reasoning_count_can_remain_unknown_with_complete_pricing_evidence(tmp_path):
+    case = next(
+        c
+        for c in load_suite(Path("docs/evals/V1")).cases
+        if c.contract.case_id == "grounding-multiple-facts"
+    )
+    decision = fixture_decision(**case.data["proposal"])
+
+    def transport(request):
+        if request.url.path.endswith("input_tokens"):
+            return httpx.Response(200, json={"input_tokens": 1000})
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-6.1-sol",
+                "service_tier": "default",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": decision.model_dump_json(),
+                            }
+                        ],
+                    }
+                ],
+                "usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 100,
+                    "total_tokens": 1100,
+                    "input_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 300},
+                },
+            },
+        )
+
+    output = tmp_path / "known-cost"
+    report = execute_live(
+        load_suite(Path("docs/evals/V1")),
+        api_key="synthetic-value",
+        output=output,
+        revision="782870c",
+        case_id="grounding-multiple-facts",
+        transport=httpx.MockTransport(transport),
+    )
+    assert report["phase_a_status"] == "completed"
+    assert report["phase_b_executed"] is False
+    assert report["summary"]["reasoning_tokens"] is None
+    assert report["summary"]["estimated_cost_usd"] == 0.00277
+    assert report["summary"]["completed_model_replies"] == 1
+    record = json.loads((output / "phase-A.json").read_text())
+    attempt = record["samples"][0]["attempts"][0]
+    assert attempt["response_diagnostics"]["reasoning_tokens_present"] is False
+    assert attempt["usage"]["reasoning_tokens"] is None
+    assert record["schema_version"] == 5
+    attempt.pop("response_diagnostics")
+    with pytest.raises(ValueError, match="live_missing_response_diagnostics"):
+        LiveRecord.model_validate(record)
+    record["schema_version"] = 4
+    assert LiveRecord.model_validate(record).schema_version == 4
 
 
 def test_paid_incomplete_output_stops_smoke_keeps_failure_and_never_starts_suite(tmp_path):

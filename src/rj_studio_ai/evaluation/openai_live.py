@@ -8,8 +8,14 @@ from pydantic import StrictBool, model_validator
 
 from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
 from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
-from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, Usage
+from rj_studio_ai.evaluation.live_billing import (
+    LIVE_MAX_OUTPUT_TOKENS,
+    BudgetLedger,
+    Usage,
+    UsageValidationError,
+)
 from rj_studio_ai.evaluation.records import Attempt, check_privacy, fingerprint
+from rj_studio_ai.evaluation.response_diagnostics import ResponseDiagnostics
 from rj_studio_ai.generation import GeneratedReply, GenerationFailure, GenerationMetric
 from rj_studio_ai.livia_persona import LiviaPersona, reply_plan_instructions
 from rj_studio_ai.llm_decision import (
@@ -22,6 +28,7 @@ from rj_studio_ai.llm_decision import (
 class LiveAttempt(Attempt):
     usage: Usage | None
     pricing_verified: StrictBool = True
+    response_diagnostics: ResponseDiagnostics | None = None
 
     @model_validator(mode="after")
     def matching_usage(self):
@@ -149,6 +156,8 @@ class OpenAIEvalGenerator:
         error_code = None
         data = None
         pricing_verified = False
+        diagnostics = ResponseDiagnostics()
+        response = None
         try:
             response = self.client.post(
                 "https://api.openai.com/v1/responses",
@@ -156,10 +165,25 @@ class OpenAIEvalGenerator:
                 json=payload,
                 timeout=remaining,
             )
+            diagnostics = diagnostics.model_copy(
+                update={
+                    "http_success": response.is_success,
+                    "http_status_code": response.status_code,
+                }
+            )
             if response.status_code != 200:
                 raise ValueError("live_http_failure")
             data = response.json()
-            usage = Usage.from_response(data)
+            diagnostics = diagnostics.observe(data)
+            try:
+                usage = Usage.from_response(data)
+            except UsageValidationError as error:
+                diagnostics = diagnostics.model_copy(
+                    update={"usage_validation_error_code": error.code}
+                )
+                if isinstance(data, dict) and data.get("status") != "completed":
+                    raise ValueError("live_incomplete_output") from None
+                raise
             if data.get("model") != self.ledger.pricing.model:
                 raise ValueError("live_model_mismatch")
             if data.get("service_tier") != "default":
@@ -195,7 +219,25 @@ class OpenAIEvalGenerator:
                     else "invalid_decision"
                 )
                 raise
-        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        except UsageValidationError as error:
+            error_code = "live_" + error.code
+        except httpx.HTTPError as error:
+            code = next(
+                (
+                    code
+                    for kind, code in (
+                        (httpx.ReadTimeout, "read_timeout"),
+                        (httpx.ConnectTimeout, "connect_timeout"),
+                        (httpx.WriteTimeout, "write_timeout"),
+                        (httpx.PoolTimeout, "pool_timeout"),
+                    )
+                    if isinstance(error, kind)
+                ),
+                "transport_error",
+            )
+            diagnostics = diagnostics.model_copy(update={"transport_error_code": code})
+            error_code = "live_" + code
+        except (ValueError, KeyError, TypeError):
             # No raw exception, headers, response body or reasoning is exported.
             error_code = "live_transport_or_response_failure"
             if isinstance(data, dict):
@@ -209,14 +251,18 @@ class OpenAIEvalGenerator:
                     error_code = "live_usage_missing_or_invalid"
                 else:
                     error_code = "live_decision_invalid"
+            elif response is not None:
+                error_code = (
+                    "live_http_failure"
+                    if response.status_code != 200
+                    else "live_response_json_invalid"
+                )
         latency = (monotonic() - model_started) * 1000
         try:
             cost = self.ledger.settle(usage if pricing_verified else None)
         except ValueError:
             cost = None
             error_code = "live_accounting_failure"
-        if usage is None:
-            error_code = "live_usage_missing_or_invalid"
         attempt = LiveAttempt(
             number=len(self.attempts) + 1,
             outcome="failure" if error_code else "success",
@@ -225,6 +271,7 @@ class OpenAIEvalGenerator:
             output_tokens=usage.output_tokens if usage else None,
             usage=usage,
             pricing_verified=pricing_verified,
+            response_diagnostics=diagnostics,
             latency_ms=latency,
             error_code=error_code,
         )

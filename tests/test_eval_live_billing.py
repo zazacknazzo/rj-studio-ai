@@ -2,7 +2,12 @@ from decimal import Decimal
 
 import pytest
 
-from rj_studio_ai.evaluation.live_billing import BudgetLedger, LivePricing, Usage
+from rj_studio_ai.evaluation.live_billing import (
+    BudgetLedger,
+    LivePricing,
+    Usage,
+    UsageValidationError,
+)
 
 
 def test_cached_and_cache_write_tokens_are_charged_once():
@@ -86,3 +91,60 @@ def test_authorized_output_ceiling_is_reserved_and_cannot_silently_increase(tmp_
         ledger.reserve("A", input_bound=1000, output_bound=513)
     assert ledger.reserve("A", input_bound=1000, output_bound=512) == Decimal("0.00762")
     ledger.close()
+
+
+@pytest.mark.parametrize("output_details", [None, {}, {"reasoning_tokens": None}])
+def test_missing_reasoning_breakdown_is_unknown_and_does_not_change_exact_pricing(output_details):
+    usage = Usage.from_response(
+        {
+            "usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "total_tokens": 1100,
+                "input_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 300},
+                "output_tokens_details": output_details,
+            }
+        }
+    )
+    assert usage.reasoning_tokens is None
+    assert usage.output_tokens == 100
+    assert LivePricing.load().cost(usage) == Decimal("0.002770")
+
+
+@pytest.mark.parametrize(
+    ("changes", "code"),
+    [
+        ({"input_tokens": None}, "usage_input_tokens_missing"),
+        ({"output_tokens": None}, "usage_output_tokens_missing"),
+        ({"total_tokens": None}, "usage_total_tokens_missing"),
+        ({"input_tokens_details": None}, "usage_cache_breakdown_missing"),
+        ({"input_tokens_details": {"cache_write_tokens": 0}}, "usage_cached_tokens_missing"),
+        ({"input_tokens_details": {"cached_tokens": 0}}, "usage_cache_write_tokens_missing"),
+        ({"input_tokens_details": []}, "usage_invalid_shape"),
+        ({"output_tokens_details": []}, "usage_invalid_shape"),
+        ({"input_tokens": True}, "usage_count_invalid"),
+        ({"input_tokens": "1000"}, "usage_count_invalid"),
+        ({"output_tokens": -1}, "usage_count_invalid"),
+        ({"total_tokens": 1099}, "usage_total_mismatch"),
+        (
+            {"input_tokens_details": {"cached_tokens": 700, "cache_write_tokens": 400}},
+            "usage_input_breakdown",
+        ),
+        ({"output_tokens_details": {"reasoning_tokens": 101}}, "usage_output_breakdown"),
+    ],
+)
+def test_required_accounting_fields_and_invariants_have_controlled_failure_codes(changes, code):
+    data = {
+        "usage": {
+            "input_tokens": 1000,
+            "output_tokens": 100,
+            "total_tokens": 1100,
+            "input_tokens_details": {"cached_tokens": 200, "cache_write_tokens": 300},
+            "output_tokens_details": {"reasoning_tokens": 40},
+            **changes,
+        }
+    }
+    with pytest.raises(UsageValidationError) as error:
+        Usage.from_response(data)
+    assert error.value.code == code
+    assert str(error.value) == code

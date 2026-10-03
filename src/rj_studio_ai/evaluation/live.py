@@ -98,7 +98,7 @@ class LiveSample(Sample):
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3, 4] = 4
+    schema_version: Literal[3, 4, 5] = 5
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -136,8 +136,12 @@ class LiveRecord(RecordModel):
         ):
             raise ValueError("live_invalid_digest")
         for sample in self.samples:
-            if self.schema_version == 4 and sample.decision_trace is None:
+            if self.schema_version >= 4 and sample.decision_trace is None:
                 raise ValueError("live_missing_decision_trace")
+            if self.schema_version == 5 and any(
+                attempt.response_diagnostics is None for attempt in sample.attempts
+            ):
+                raise ValueError("live_missing_response_diagnostics")
             contract = next(c for c in self.contracts if c.case_id == sample.case_id)
             if sample.checks.keys() != contract.checks.keys():
                 raise ValueError("live_missing_check")
@@ -337,7 +341,7 @@ def live_summary(samples, contracts, pricing):
         if known
         else None,
         reasoning_tokens=sum(a.usage.reasoning_tokens for a in attempts if a.usage is not None)
-        if known
+        if known and all(a.usage.reasoning_tokens is not None for a in attempts)
         else None,
         estimated_cost_usd=float(cost) if known else None,
         cost_per_1000_replies_usd=float(cost * 1000 / completed) if known and completed else None,
