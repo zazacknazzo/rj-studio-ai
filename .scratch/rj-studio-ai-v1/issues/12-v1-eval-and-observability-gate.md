@@ -59,6 +59,17 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 fresh Polish smoke 03 at published 643a943: 8/10 cases executed,
+  seven pass. Cancellation model proposed immediate handoff and omitted the
+  approved alternate-day offer; critical 2/15, grounding 7/8, handoff 6/7,
+  appointment safety 1/2. No false booking/availability claim. Injection
+  relevance passed. Eight calls/zero retries/valid usage, US$0.0189102;
+  observed p95 8055.01ms fails 8s gate. Case 7's slow valid response continued
+  to Case 8, which triggered semantic stop. Two cases unexecuted, eight-answer
+  human form unscored, no runtime/prompt/oracle changes. See
+  docs/evals/V1/conversational-polish-smoke-03-2026-10-03.md.
+  No subsequent paid call or B; Ticket stays in-progress.
+
 - 2026-10-03 shared relevance correction at 7749c77: selected facts are
   candidates; only legitimate supported requests/context determine needed
   refs/parts. Renderer, Knowledge, safety and model configuration unchanged;

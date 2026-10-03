@@ -1,12 +1,19 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Latest authorized fresh smoke: [run 03 cancellation recovery failure](conversational-polish-smoke-03-2026-10-03.md).
+Eight of ten cases ran, seven passed; model-requested immediate handoff omitted
+the cancellation recovery offer. Injection relevance passed. No prompt/runtime
+change or subsequent call; observed p95 8,055.01ms fails the unchanged 8s gate.
+The new eight-answer human form is partial and unscored. Ticket 12 in-progress;
+Phase B not executed.
+
 Latest authorized correction: [shared relevance instruction and isolated retest](factual-relevance-instruction-2026-10-03.md).
 The unnamed-Service injection retest passed once with no rendered facts or
 handoff. Shared instructions changed; deterministic grounding remains intact.
 This does not approve a new complete smoke. No further live call or Phase B.
 
-Latest authorized fresh smoke: [run 02 factual relevance failure](conversational-polish-smoke-02-2026-10-03.md).
+Previous fresh smoke: [run 02 factual relevance failure](conversational-polish-smoke-02-2026-10-03.md).
 The corrected oracle stopped after 3/10 cases: corte was introduced without an
 identified Service. Two cases passed; seven were not executed. No prompt/runtime
 change followed; the new three-answer human packet is partial and unscored.
