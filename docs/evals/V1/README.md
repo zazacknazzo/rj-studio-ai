@@ -1,6 +1,9 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
+Ticket 12 remains in-progress; the newly authorized B1/B2 execution is a
+separate live gate, using fresh records and one shared US$5 budget.
 Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
 Latest result: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
 Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms

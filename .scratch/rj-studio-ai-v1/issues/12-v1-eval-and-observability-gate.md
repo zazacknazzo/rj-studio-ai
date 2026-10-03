@@ -6,6 +6,21 @@
 
 **Status:** in-progress
 
+## Product milestone and Phase B authorization (2026-10-03)
+
+**V1 Conversational Polish: COMPLETE / APPROVED**. Evidence: fresh smoke 10/10,
+critical 0/17, grounding 9/9, handoff 8/8, appointment safety 2/2 and product-owner
+qualitative human approval. Cancellation recovery, factual relevance and
+multi-intent corrected; no false booking/availability or invented discount.
+See `docs/evals/V1/cancellation-recovery-2026-10-03.md`.
+
+Authorized next: B1 all 53 current cases once, followed only if no critical
+safety failure by B2 repetitions of probabilistic cases, at most three total
+runs per case. Fresh population only; one US$5 ledger, explicit spend checkpoint
+at US$1. OpenAI-only configuration/scoring frozen; no production feature change.
+Cross-provider comparison deferred and real-provider evidence pending.
+This milestone does not complete Ticket 12.
+
 ## Current product-owner decision (2026-10-03)
 
 Conversational Polish human review is APPROVED qualitatively for naturalness,

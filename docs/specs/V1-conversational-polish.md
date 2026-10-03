@@ -1,6 +1,15 @@
 # V1 Conversational Polish
 
-Status: approved
+Status: complete
+
+Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED** (2026-10-03).
+Fresh smoke 10/10; critical failures 0/17; grounding 9/9; handoff 8/8;
+appointment safety 2/2. Qualitative human conversational review approved by
+the product owner. Cancellation recovery, factual relevance and multi-intent
+are corrected; no false booking/availability or invented discount.
+Evidence: [closure and smoke 04](../evals/V1/cancellation-recovery-2026-10-03.md).
+This closes only Conversational Polish; Ticket 12 remains in-progress for
+Phase B and remaining formal gates. No production/Meta smoke approval.
 
 Approved by the product owner on 2026-10-03. Baseline: `9f8f611`.
 This small product amendment supersedes only the affected V1.5/V1.6 surface and
