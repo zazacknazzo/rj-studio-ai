@@ -1,3 +1,4 @@
+import pytest
 from test_grounded_reply import _decision, _fact
 
 from rj_studio_ai.conversation_context import ConversationContext
@@ -326,7 +327,10 @@ def test_cancellation_can_switch_to_bounded_reschedule_without_repeating_recover
     assert "?" not in last.body and "confirmar" in last.body
 
 
-def test_firm_cancellation_skips_recovery(tmp_path):
+@pytest.mark.parametrize(
+    "body", ["Quero cancelar mesmo meu agendamento", "Quero só cancelar meu agendamento"]
+)
+def test_firm_cancellation_skips_recovery(tmp_path, body):
     from test_appointment_intake import AppointmentModel, message, respond
 
     from rj_studio_ai.persistence import SqliteConversationStore
@@ -334,7 +338,7 @@ def test_firm_cancellation_skips_recovery(tmp_path):
     store = SqliteConversationStore(tmp_path / "firm.db")
     store.initialize()
     model = AppointmentModel()
-    reply = respond(store, model, message(body="Quero cancelar mesmo meu agendamento"))
+    reply = respond(store, model, message(body=body))
     assert "?" not in reply.body and store.list_active_handoffs()
     active = store.list_active_handoffs()[0]
     assert (
@@ -515,7 +519,14 @@ def test_exact_clock_time_is_useful_and_no_catalog_question_duplicates_intake(tm
         assert "?" not in result.reply_text and _fact().statement in result.reply_text
 
 
-def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path):
+@pytest.mark.parametrize(
+    "choice",
+    [
+        "Não quero cancelar, prefiro remarcar de manhã",
+        "Ao invés de cancelar, prefiro remarcar de manhã",
+    ],
+)
+def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path, choice):
     from test_appointment_intake import AppointmentModel, message, respond
 
     from rj_studio_ai.persistence import SqliteConversationStore
@@ -528,9 +539,7 @@ def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path):
     model.preferences = {}
     respond(store, model, message("interest-2", "Quero cancelar meu agendamento"))
     model.preferences = {"preferred_time": "de manhã"}
-    reply = respond(
-        store, model, message("interest-3", "Não quero cancelar, prefiro remarcar de manhã")
-    )
+    reply = respond(store, model, message("interest-3", choice))
     assert "?" in reply.body and not store.list_active_handoffs()
     claim = store.get_generation(provider="meta", provider_message_id="interest-3")
     intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)

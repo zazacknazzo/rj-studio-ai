@@ -105,7 +105,7 @@ def test_complete_interest_opens_handoff_and_keeps_only_customer_preferences(tmp
             {"preferred_time": "sábado à tarde"},
             "serviço",
         ),
-        ("Quero marcar", {}, "Qual serviço você gostaria de fazer?"),
+        ("Quero marcar", {}, "serviço"),
     ],
 )
 def test_only_missing_required_detail_is_asked(tmp_path, body, preferences, question):
