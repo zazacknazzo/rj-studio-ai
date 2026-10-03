@@ -530,6 +530,9 @@ def test_exact_clock_time_is_useful_and_no_catalog_question_duplicates_intake(tm
     [
         "Não quero cancelar, prefiro remarcar de manhã",
         "Ao invés de cancelar, prefiro remarcar de manhã",
+        "Prefiro não cancelar, quero remarcar de manhã",
+        "Prefiro tentar outro dia em vez de cancelar, de manhã",
+        "Quero tentar outro dia em vez de cancelar, de manhã",
     ],
 )
 def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path, choice):

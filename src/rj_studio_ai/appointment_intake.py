@@ -103,11 +103,18 @@ def plan_appointment_intake(
     collecting = prior is not None and prior.state == "collecting"
     text = _normalized(customer_message)
     cancelling = bool(re.search(r"\b(cancelar|cancelamento)\b", text)) and not bool(
-        re.search(r"\bnao (?:quero|vou|desejo|preciso) cancelar\b", text)
+        re.search(r"\bnao (?:(?:quero|vou|desejo|preciso) )?cancelar\b", text)
     )
-    rescheduling = bool(re.search(r"\b(remarcar|reagendar|remarcacao|reagendamento)\b", text))
+    rescheduling = bool(
+        re.search(
+            r"\b(remarcar|reagendar|remarcacao|reagendamento)\b|\btentar outro (?:dia|horario)\b",
+            text,
+        )
+    )
     # Resolve the chosen verb, not any occurrence of the rejected alternative.
-    chosen = re.search(r"\bprefiro (cancelar|remarcar|reagendar|outro dia|outro horario)\b", text)
+    chosen = re.search(
+        r"\bprefiro (?:tentar )?(cancelar|remarcar|reagendar|outro dia|outro horario)\b", text
+    )
     if chosen and not _declines_rescheduling(text):
         cancelling = chosen.group(1) == "cancelar"
         rescheduling = not cancelling
