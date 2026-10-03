@@ -7,6 +7,7 @@ import os
 import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter
@@ -23,6 +24,7 @@ from rj_studio_ai.conversation_context import (
     ConversationContextLimits,
 )
 from rj_studio_ai.delivery import OutboundDeliveryRunner
+from rj_studio_ai.evaluation.decision_trace import DecisionTrace, capture_finalizer
 from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, LivePricing
 from rj_studio_ai.evaluation.openai_live import LiveAttempt, OpenAIEvalGenerator, eval_prompt
 from rj_studio_ai.evaluation.records import (
@@ -77,6 +79,7 @@ RUBRIC = (
 class LiveSample(Sample):
     attempts: tuple[LiveAttempt, ...]
     reply_origin: Literal["model", "system_safe_fallback", "none"]
+    decision_trace: DecisionTrace | None = None
     execution_kind: Literal[
         "live_generation", "handoff_suppression", "delivery_barrier", "preflight_failure"
     ]
@@ -95,7 +98,7 @@ class LiveSample(Sample):
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[3, 4] = 4
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -133,6 +136,8 @@ class LiveRecord(RecordModel):
         ):
             raise ValueError("live_invalid_digest")
         for sample in self.samples:
+            if self.schema_version == 4 and sample.decision_trace is None:
+                raise ValueError("live_missing_decision_trace")
             contract = next(c for c in self.contracts if c.case_id == sample.case_id)
             if sample.checks.keys() != contract.checks.keys():
                 raise ValueError("live_missing_check")
@@ -422,13 +427,15 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 generator = OpenAIEvalGenerator(
                     api_key=api_key, client=client, ledger=ledger, phase=phase
                 )
-                reply = MessageResponder(
-                    store=store,
-                    generator=generator,
-                    context_builder=builder,
-                    safe_failure_reply="Falha sintética",
-                    completion_delivery_state=DeliveryState.PENDING,
-                ).process_persisted(message)
+                generator.trace_capture.propose(None, context)
+                with capture_finalizer(generator.trace_capture):
+                    reply = MessageResponder(
+                        store=store,
+                        generator=generator,
+                        context_builder=builder,
+                        safe_failure_reply="Falha sintética",
+                        completion_delivery_state=DeliveryState.PENDING,
+                    ).process_persisted(message)
                 body = reply.body if reply else None
                 outbound_started = perf_counter()
                 if body:
@@ -443,6 +450,8 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 outbound_ms = (perf_counter() - outbound_started) * 1000
                 e2e_ms = (perf_counter() - started) * 1000
                 decision = generator.decisions[-1] if generator.decisions else None
+                safe_fallback = bool(body and (decision is None or generator.stop_code is not None))
+                handoffs = store.list_active_handoffs()
                 if generator.stop_code:
                     checks = {key: "not_run" for key in case.contract.checks}
                 else:
@@ -460,6 +469,11 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     if body
                     else ("observed" if case.kind == "context" else "suppressed"),
                     reply_hash=fingerprint(body) if body else None,
+                    decision_trace=generator.trace_capture.finish(
+                        body,
+                        safe_fallback=safe_fallback,
+                        persisted_handoff_reason=handoffs[0].reason_code if handoffs else None,
+                    ),
                     reply_origin=(
                         "model"
                         if decision is not None and generator.stop_code is None
@@ -539,17 +553,24 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
     return record, packet
 
 
-def execute_live(suite, *, api_key, output: Path, revision: str, transport=None):
+def execute_live(suite, *, api_key, output: Path, revision: str, transport=None, case_id=None):
     suite = _live_contracts(suite)
+    if case_id is not None and case_id not in {c.contract.case_id for c in suite.cases}:
+        raise ValueError("live_unknown_case")
     output.mkdir(mode=0o700)
     pricing = LivePricing.load()
-    ledger = BudgetLedger(output / "spend.jsonl", pricing)
+    ledger = BudgetLedger(
+        output / "spend.jsonl",
+        pricing,
+        phase_a_cap=Decimal("0.20") if case_id is not None else Decimal("1"),
+        global_cap=Decimal("0.20") if case_id is not None else Decimal("5"),
+    )
     records, packet = [], []
     try:
         with httpx.Client(transport=transport, follow_redirects=False) as client:
             a, excerpts = run_live_phase(
                 suite,
-                [(i, 1) for i in SMOKE_CASES],
+                [(case_id, 1)] if case_id is not None else [(i, 1) for i in SMOKE_CASES],
                 "A",
                 api_key=api_key,
                 output=output,
@@ -559,7 +580,7 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None)
             )
             records.append(a)
             packet.extend(excerpts)
-            if a.status == "completed":
+            if a.status == "completed" and case_id is None:
                 repeated = {
                     c.contract.case_id
                     for c in suite.cases
@@ -588,6 +609,9 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None)
                 packet.extend(excerpts)
         samples = [s for record in records for s in record.samples]
         report = {
+            "execution_scope": "single_case_diagnostic"
+            if case_id is not None
+            else "smoke_and_suite",
             "phase_a_status": a.status,
             "phase_a_stop_code": a.stop_code,
             "phase_b_executed": len(records) > 1,
@@ -598,8 +622,8 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None)
                 for phase, record in (("A", a), ("B", records[1] if len(records) > 1 else None))
             },
             "budget_upper_bound_usd": float(ledger.upper_bound_usd),
-            "phase_a_cap_usd": 1,
-            "global_cap_usd": 5,
+            "phase_a_cap_usd": float(ledger.phase_a_cap),
+            "global_cap_usd": float(ledger.global_cap),
             "latency_scope": "synthetic_persistence_to_fake_provider_acceptance",
             "operational_latency_gate": "pending_real_provider_evidence",
             "cross_provider_comparison": "deferred_by_product_owner",
@@ -632,6 +656,7 @@ def main():
     parser = argparse.ArgumentParser(description="Authorized OpenAI-only synthetic live eval")
     parser.add_argument("--allow-paid", action="store_true", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--case", help="One synthetic case once; US$0.20 cap, never starts B")
     args = parser.parse_args()
     logging.getLogger("dotenv.main").disabled = True
     key = os.environ.get("OPENAI_API_KEY") or dotenv_values(".env").get("OPENAI_API_KEY")
@@ -648,7 +673,11 @@ def main():
                 parser.exit(1, "live_model_preflight_failed\n")
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         report = execute_live(
-            load_suite(Path("docs/evals/V1")), api_key=key, output=args.output, revision=revision
+            load_suite(Path("docs/evals/V1")),
+            api_key=key,
+            output=args.output,
+            revision=revision,
+            case_id=args.case,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception:

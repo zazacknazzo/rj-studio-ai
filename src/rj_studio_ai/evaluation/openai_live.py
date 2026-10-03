@@ -7,11 +7,16 @@ import httpx
 from pydantic import StrictBool, model_validator
 
 from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
+from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
 from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, Usage
 from rj_studio_ai.evaluation.records import Attempt, check_privacy, fingerprint
 from rj_studio_ai.generation import GeneratedReply, GenerationFailure, GenerationMetric
 from rj_studio_ai.livia_persona import LiviaPersona, reply_plan_instructions
-from rj_studio_ai.llm_decision import decision_json_schema, validate_llm_decision
+from rj_studio_ai.llm_decision import (
+    StructuredDecisionValidationError,
+    decision_json_schema,
+    validate_llm_decision,
+)
 
 
 class LiveAttempt(Attempt):
@@ -61,6 +66,7 @@ class OpenAIEvalGenerator:
         self.decisions = []
         self.stop_code = None
         self.request_hashes = []
+        self.trace_capture = DecisionTraceCapture()
 
     def is_configured(self):
         return bool(self._api_key)
@@ -69,6 +75,7 @@ class OpenAIEvalGenerator:
         if self.stop_code is not None:
             raise GenerationFailure(self.stop_code)
         started = monotonic()
+        self.trace_capture.propose(None, context)
         schema = decision_json_schema()
         content = message.body
         if (
@@ -170,10 +177,24 @@ class OpenAIEvalGenerator:
             if len(texts) != 1:
                 raise ValueError("live_missing_decision")
             raw_decision = json.loads(texts[0])
+            self.trace_capture.propose(raw_decision, context)
             check_privacy(raw_decision)
-            decision = validate_llm_decision(
-                raw_decision, allowed_knowledge_refs={f.id for f in context.knowledge}
-            )
+            try:
+                decision = validate_llm_decision(
+                    raw_decision, allowed_knowledge_refs={f.id for f in context.knowledge}
+                )
+            except StructuredDecisionValidationError as error:
+                self.trace_capture.rejected(
+                    "invalid_reference"
+                    if str(error)
+                    in {
+                        "Structured decision references unavailable knowledge",
+                        "Critical factual claim must declare its knowledge reference",
+                        "Fact reply part must declare its knowledge reference",
+                    }
+                    else "invalid_decision"
+                )
+                raise
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             # No raw exception, headers, response body or reasoning is exported.
             error_code = "live_transport_or_response_failure"
