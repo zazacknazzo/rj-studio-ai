@@ -63,9 +63,11 @@ multi-intent fixture now names corte explicitly too, without changing its
 required price/hours coverage. No provider instruction or production rule changes.
 
 Optional `expected.allowed_fact_ids` is an independent fixture relevance bound
-on rendered refs: `[]` permits no factual parts; an omitted bound keeps the
-existing oracle. Unknown, duplicate or unselected IDs and malformed bounds are
-rejected at load time. Existing contains/excludes, authorized-text residue and
+on displayed approved facts: `[]` permits none; an omitted bound keeps the
+existing oracle. Canonical statement presence in the final body identifies
+displayed facts; unused reference declarations do not prove rendering. Unknown
+selected IDs, duplicate or unselected allowed IDs and malformed bounds are
+rejected at load time against the actual fixture definitions. Existing contains/excludes, authorized-text residue and
 core validation still apply; this never authorizes free factual text. Applicable
 mandatory policies must remain in the fixture's relevance bound.
 

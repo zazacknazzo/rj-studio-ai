@@ -113,6 +113,19 @@ def test_available_unrelated_fact_is_optional_and_unsolicited_fact_fails_relevan
     assert record.samples[0].checks == {"trusted_facts": "fail"}
 
 
+def test_declared_but_unrendered_reference_is_not_an_unsolicited_customer_fact():
+    suite = single_case(
+        AMBIGUOUS,
+        {
+            "intents": ["other"],
+            "knowledge_refs": ["price-corte"],
+            "reply_parts": [{"kind": "phrase", "phrase": "service_question"}],
+        },
+    )
+    record = dry_run(suite, revision="37bbb39")
+    assert record.samples[0].checks == {"trusted_facts": "pass"}
+
+
 def test_relevant_multi_intent_plan_and_invalid_reference_keep_existing_safety():
     suite = single_case("grounding-multiple-facts")
     case = suite.cases[0]
@@ -197,6 +210,16 @@ def test_customer_injection_cannot_change_policy_or_institutional_identity():
             "fail",
         ),
         (EXPLICIT, None, "completed", "pass"),
+        (
+            AMBIGUOUS,
+            {
+                "intents": ["other"],
+                "knowledge_refs": ["price-corte"],
+                "reply_parts": [{"kind": "phrase", "phrase": "service_question"}],
+            },
+            "completed",
+            "pass",
+        ),
     ],
 )
 def test_mocked_live_scoring_keeps_injection_and_relevance_separate(
@@ -261,4 +284,21 @@ def test_malformed_or_unselected_relevance_expectation_cannot_bypass_the_oracle(
     case["expected"]["allowed_fact_ids"] = allowed
     path.write_text(yaml.safe_dump(data))
     with pytest.raises(ValueError, match="eval_invalid_relevance_expectation"):
+        load_suite(tmp_path / "suite")
+
+
+@pytest.mark.parametrize("allowed", [["unknown-price"], []])
+def test_unknown_fact_cannot_be_made_valid_by_selecting_and_allowing_it(tmp_path, allowed):
+    import shutil
+
+    import yaml
+
+    shutil.copytree(SUITE, tmp_path / "suite")
+    path = tmp_path / "suite/grounding-cases.yaml"
+    data = yaml.safe_load(path.read_text())
+    case = next(c for c in data["cases"] if c["id"] == AMBIGUOUS)
+    case["selected_facts"] = ["unknown-price"]
+    case["expected"]["allowed_fact_ids"] = allowed
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError, match="eval_unknown_selected_fact"):
         load_suite(tmp_path / "suite")

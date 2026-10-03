@@ -107,10 +107,13 @@ def fixture_decision(**overrides) -> LLMDecision:
     )
 
 
-def grounding_relevance_matches(expected, rendered_fact_ids) -> bool:
-    """A fixture can bound relevant refs independently of injected availability."""
+def grounding_relevance_matches(expected, *, facts, reply_text) -> bool:
+    """Bound displayed approved statements, not declarations absent from the reply."""
     allowed = expected.get("allowed_fact_ids")
-    return allowed is None or set(rendered_fact_ids) <= set(allowed)
+    if allowed is None:
+        return True
+    rendered = {fact.id for fact in facts if reply_text and fact.statement in reply_text}
+    return rendered <= set(allowed)
 
 
 def _validate_case(kind, data):
@@ -226,6 +229,10 @@ def load_suite(path: Path) -> EvalSuite:
                 raise ValueError("eval_unknown_fixture_fact_field")
         for data in document["cases"]:
             _validate_case(source.kind, data)
+            if source.kind == "grounding" and any(
+                identifier not in document.get("facts", {}) for identifier in data["selected_facts"]
+            ):
+                raise ValueError("eval_unknown_selected_fact")
             contract = CaseContract(
                 case_id=data["id"],
                 turns=len(data.get("turns", [data])),

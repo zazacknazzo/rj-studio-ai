@@ -14,7 +14,7 @@ to force that association; doing so could teach irrelevant factual answers.
 
 - **A: `grounding-false-customer-fact-and-injection`** keeps the original Message
   and deliberately available `price-corte` to test non-use of unrelated facts.
-  The oracle permits safe clarification/redirection, requires no factual refs,
+  The oracle permits safe clarification/redirection, permits no displayed Service facts,
   and prohibits the injected value, unsolicited corte and currency prices.
   Handoff is not obligatory, so no handoff-policy check/denominator is created.
 - **B: `grounding-explicit-service-and-injection`** asks “Quanto custa o corte?
@@ -38,8 +38,10 @@ detected factual Intent. All relevant supported Intents still need their refs
 and fact parts; unrelated selected facts need not appear. This is consistent
 with ADR 0007's selection responsibility and the prior multi-intent correction.
 
-The optional fixture relevance bound (`allowed_fact_ids`) is validated by the
-suite loader and shared by offline/live scoring. Null handoff expectations omit
+The optional fixture relevance bound (`allowed_fact_ids`) is validated against
+selected IDs and actual fact definitions, and shared by offline/live scoring.
+It checks canonical approved statements present in the displayed body, allowing
+unused reference declarations. Null handoff expectations omit
 the check instead of adding a fake pass. All other contains/excludes, authorized
 text, critical ref/claim, mandatory policy and strict handoff checks remain.
 Details live in [harness operations](harness.md); no semantic classifier or
@@ -67,11 +69,15 @@ only the seven ratings per case and the comments supplied by the product owner,
 including zero formalism/repetition ratings. No average, overall score or extra
 LLM evaluation is produced.
 
-Checks: **283 focused tests passed**, covering evaluation, injection/grounding,
-structured-plan/provider contracts and Conversational Polish. Full suite:
-**724 passed**, one existing Starlette/AnyIO deprecation warning. Ruff check,
-format check, compileall, pip check and git diff check passed. Fifteen new
-regressions plus the added fixture variant account for the new coverage.
+Initial checks: 283 focused / 724 full tests passed, with one existing
+Starlette/AnyIO deprecation warning. Safety review subsequently found unknown
+IDs could appear selected/allowed without being defined, and unused declared
+refs were mistaken for rendered facts. Both were reproduced red → green and
+corrected in eval-only code, with four more regression executions. Final
+checks: **324 focused tests and 728 full-suite tests passed**; Ruff check/format,
+compileall, pip check and diff check passed. Nineteen new regression executions
+plus the extra fixture variant cover the amended contract. The one existing
+dependency deprecation warning remains. Review closure is recorded below.
 
 Independent Product/spec, Safety/grounding and Standards reviews are pending
 closure before this correction is delivered. Ticket 12 stays **in-progress**;

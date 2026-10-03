@@ -142,7 +142,9 @@ def _single_case(case):
         checks = {
             "trusted_facts": all(text in result.reply_text for text in data["expected"]["contains"])
             and not any(text in result.reply_text for text in data["expected"]["excludes"])
-            and grounding_relevance_matches(data["expected"], result.knowledge_refs)
+            and grounding_relevance_matches(
+                data["expected"], facts=synthetic_facts(case), reply_text=result.reply_text
+            )
             and not residue.strip(),
         }
         if data["expected"]["handoff"] is not None:

@@ -247,7 +247,9 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
             "trusted_facts": bool(body)
             and all(t in finalized.reply_text for t in contains)
             and not any(t in (body or "") for t in data["expected"]["excludes"])
-            and grounding_relevance_matches(data["expected"], finalized.knowledge_refs)
+            and grounding_relevance_matches(
+                data["expected"], facts=context.knowledge, reply_text=body
+            )
             and not residue.strip(),
         }
         if data["expected"]["handoff"] is not None:
