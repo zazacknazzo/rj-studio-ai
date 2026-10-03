@@ -17,7 +17,7 @@ import httpx
 from dotenv import dotenv_values
 from pydantic import model_validator
 
-from rj_studio_ai.application import MessageResponder
+from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.conversation_context import (
     ConversationContext,
     ConversationContextBuilder,
@@ -446,13 +446,22 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 )
                 generator.trace_capture.propose(None, context)
                 with capture_finalizer(generator.trace_capture):
-                    reply = MessageResponder(
-                        store=store,
-                        generator=generator,
-                        context_builder=builder,
-                        safe_failure_reply="Falha sintética",
-                        completion_delivery_state=DeliveryState.PENDING,
-                    ).process_persisted(message, execution_deadline=observation_deadline)
+                    try:
+                        reply = MessageResponder(
+                            store=store,
+                            generator=generator,
+                            context_builder=builder,
+                            safe_failure_reply="Falha sintética",
+                            completion_delivery_state=DeliveryState.PENDING,
+                        ).process_persisted(message, execution_deadline=observation_deadline)
+                    except RetryableWebhookError:
+                        # A late failure may no longer own the SQLite claim. Keep
+                        # observed billing evidence without inventing a persisted reply.
+                        if generator.stop_code is None:
+                            if observation_deadline.work_budget() > 0:
+                                raise
+                            generator.stop_code = "live_observation_timeout"
+                        reply = None
                 body = reply.body if reply else None
                 outbound_started = perf_counter()
                 if body:
@@ -484,7 +493,13 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     turn=number,
                     status=("completed" if generator.attempts else "observed")
                     if body
-                    else ("observed" if case.kind == "context" else "suppressed"),
+                    else (
+                        "failed"
+                        if generator.stop_code
+                        else "observed"
+                        if case.kind == "context"
+                        else "suppressed"
+                    ),
                     reply_hash=fingerprint(body) if body else None,
                     decision_trace=generator.trace_capture.finish(
                         body,

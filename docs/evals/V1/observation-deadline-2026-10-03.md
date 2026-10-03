@@ -33,6 +33,11 @@ webhooks, provider selection, leases, retry policy and messaging are unchanged.
   status/usage: a late response fails closed with `live_observation_timeout`,
   retaining received usage and known cost. A read timeout without a Response
   retains unknown usage/cost and the conservative reservation.
+- The eval collector preserves those attempt records even if the production
+  responder cannot persist a safe fallback after expiry/loss of its claim. Such
+  an execution is `failed` with no reply; neither a completed reply nor a fallback
+  is fabricated. Validation/finalization exhausting the work budget also produces
+  a controlled observation failure. Production ownership rejection is unchanged.
 - Model latency measures only `/responses`. E2E still starts before admission
   and includes context, token counting, generation, finalization and fake Provider
   Acceptance. Fixture setup is excluded; preflight is not excluded.
@@ -54,7 +59,11 @@ Deterministic regressions cover production defaults, explicit observation
 deadline, a complete 12-second response with usage and a failing latency gate,
 the inclusive eight-second threshold, bounded token-count preflight, timeout
 without retry/known cost, and late complete response with retained usage/cost.
-Results and the single authorized probe will be recorded below after checks.
+The independent review found two evidence-loss paths: late-response fallback
+after the real UTC lease expires, and work-budget exhaustion during decision
+validation/finalization. Both now have deterministic regressions (including
+shared monotonic/UTC clocks) and eval-only handling. Results and the single
+authorized probe will be recorded below after checks.
 
 ```bash
 .venv/bin/python -m rj_studio_ai.evaluation.live --allow-paid --case grounding-multiple-facts --output work/evals/openai-observation-deadline-2026-10-03-01

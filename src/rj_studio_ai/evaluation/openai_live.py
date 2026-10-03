@@ -200,8 +200,6 @@ class OpenAIEvalGenerator:
             if data.get("service_tier") != "default":
                 raise ValueError("live_tier_mismatch")
             pricing_verified = True
-            if monotonic() - started >= remaining_budget:
-                raise ValueError("live_observation_timeout")
             if data.get("status") != "completed":
                 raise ValueError("live_incomplete_output")
             texts = [
@@ -232,6 +230,8 @@ class OpenAIEvalGenerator:
                     else "invalid_decision"
                 )
                 raise
+            if monotonic() - started >= remaining_budget:
+                raise ValueError("live_observation_timeout")
         except UsageValidationError as error:
             error_code = "live_" + error.code
         except httpx.HTTPError as error:

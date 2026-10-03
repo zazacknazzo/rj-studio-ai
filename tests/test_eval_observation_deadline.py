@@ -1,9 +1,11 @@
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 import pytest
 
+from rj_studio_ai import application, persistence
 from rj_studio_ai.evaluation import live, openai_live
 from rj_studio_ai.evaluation.suite import fixture_decision, load_suite
 
@@ -19,12 +21,47 @@ class Clock:
 
 
 def run_observed_case(
-    tmp_path, monkeypatch, *, model_seconds, preflight_seconds=1, honor_read_timeout=True
+    tmp_path,
+    monkeypatch,
+    *,
+    model_seconds,
+    preflight_seconds=1,
+    honor_read_timeout=True,
+    advance_utc=False,
+    validation_seconds=0,
+    finalization_seconds=0,
 ):
     clock = Clock()
     monkeypatch.setattr(live, "monotonic", clock, raising=False)
     monkeypatch.setattr(live, "perf_counter", clock)
     monkeypatch.setattr(openai_live, "monotonic", clock)
+    if validation_seconds:
+        validate = openai_live.validate_llm_decision
+
+        def timed_validation(*args, **kwargs):
+            decision = validate(*args, **kwargs)
+            clock.advance(validation_seconds)
+            return decision
+
+        monkeypatch.setattr(openai_live, "validate_llm_decision", timed_validation)
+    if finalization_seconds:
+        finalize = application.finalize_reply
+
+        def timed_finalization(*args, **kwargs):
+            finalized = finalize(*args, **kwargs)
+            clock.advance(finalization_seconds)
+            return finalized
+
+        monkeypatch.setattr(application, "finalize_reply", timed_finalization)
+    if advance_utc:
+        epoch = datetime.now(UTC)
+
+        class UtcClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return (epoch + timedelta(seconds=clock.value)).astimezone(tz)
+
+        monkeypatch.setattr(persistence, "datetime", UtcClock)
     suite = load_suite(Path("docs/evals/V1"))
     case = next(c for c in suite.cases if c.contract.case_id == "grounding-multiple-facts")
     proposal = fixture_decision(**case.data["proposal"])
@@ -96,6 +133,31 @@ def test_twelve_second_reply_preserves_usage_but_fails_eight_second_gate(tmp_pat
     assert sample["attempts"][0]["usage"]["reasoning_tokens"] == 40
     assert all(value == "pass" for value in sample["checks"].values())
     assert record["configuration"]["observation_deadline_seconds"] == 30
+    assert len(requests) == 2
+
+
+@pytest.mark.parametrize("stage", ["validation", "finalization"])
+def test_post_response_budget_exhaustion_preserves_evidence_without_retry(
+    tmp_path, monkeypatch, stage
+):
+    report, record, requests = run_observed_case(
+        tmp_path,
+        monkeypatch,
+        model_seconds=27.9,
+        advance_utc=True,
+        **{stage + "_seconds": 0.2},
+    )
+    assert report["phase_a_status"] == "blocked"
+    assert report["phase_a_stop_code"] == "live_observation_timeout"
+    assert report["phase_b_executed"] is False
+    summary = report["summary"]
+    assert summary["completed_model_replies"] == summary["retries"] == 0
+    assert summary["estimated_cost_usd"] == 0.003
+    assert summary["input_tokens"] == 1000
+    assert summary["billable_e2e_p95_ms"] == pytest.approx(29100)
+    sample = record["samples"][0]
+    assert all(verdict == "not_run" for verdict in sample["checks"].values())
+    assert sample["attempts"][0]["response_diagnostics"]["response_status"] == "completed"
     assert len(requests) == 2
     assert requests[0].extensions["timeout"]["read"] == 5
     assert requests[1].extensions["timeout"]["connect"] == 5
@@ -169,3 +231,27 @@ def test_preflight_is_bounded_separately_and_submits_no_generation_on_timeout(
         "write": 5.0,
         "pool": 5.0,
     }
+
+
+def test_observation_timeout_preserves_evidence_when_generation_lease_has_expired(
+    tmp_path, monkeypatch
+):
+    report, record, requests = run_observed_case(
+        tmp_path,
+        monkeypatch,
+        model_seconds=31,
+        honor_read_timeout=False,
+        advance_utc=True,
+    )
+    assert report["phase_a_stop_code"] == "live_observation_timeout"
+    assert report["phase_a_status"] == "blocked"
+    assert report["phase_b_executed"] is False
+    assert report["summary"]["completed_model_replies"] == 0
+    assert report["summary"]["system_safe_fallbacks"] == 0
+    assert report["summary"]["estimated_cost_usd"] == 0.003
+    sample = record["samples"][0]
+    assert sample["status"] == "failed"
+    assert sample["reply_origin"] == "none"
+    assert sample["attempts"][0]["response_diagnostics"]["response_status"] == "completed"
+    assert sample["attempts"][0]["usage"]["input_tokens"] == 1000
+    assert len(requests) == 2
