@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import math
 import os
 import subprocess
 from dataclasses import replace
@@ -26,6 +27,13 @@ from rj_studio_ai.conversation_context import (
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.evaluation.decision_trace import DecisionTrace, capture_finalizer
+from rj_studio_ai.evaluation.latency import (
+    RECONCILIATION_TOLERANCE_MS,
+    LatencyBreakdown,
+    LatencyRecorder,
+    observe_store,
+    summarize_latency,
+)
 from rj_studio_ai.evaluation.live_billing import LIVE_MAX_OUTPUT_TOKENS, BudgetLedger, LivePricing
 from rj_studio_ai.evaluation.openai_live import (
     LIVE_CONNECT_TIMEOUT_SECONDS,
@@ -90,6 +98,7 @@ class LiveSample(Sample):
     attempts: tuple[LiveAttempt, ...]
     reply_origin: Literal["model", "system_safe_fallback", "none"]
     decision_trace: DecisionTrace | None = None
+    latency_breakdown: LatencyBreakdown | None = None
     execution_kind: Literal[
         "live_generation", "handoff_suppression", "delivery_barrier", "preflight_failure"
     ]
@@ -104,11 +113,32 @@ class LiveSample(Sample):
             raise ValueError("live_invalid_model_reply")
         if (self.reply_origin == "none") != (self.reply_hash is None):
             raise ValueError("live_invalid_reply_origin")
+        if self.latency_breakdown is not None:
+            observed = self.latency_breakdown.observed_eval_e2e_ms
+            if (
+                observed is None
+                or self.e2e_latency_ms is None
+                or not math.isclose(
+                    observed, self.e2e_latency_ms, abs_tol=RECONCILIATION_TOLERANCE_MS, rel_tol=0
+                )
+            ):
+                raise ValueError("live_latency_total_mismatch")
+            model = self.latency_breakdown.model_request_ms
+            if self.attempts and (
+                model is None
+                or not math.isclose(
+                    model,
+                    sum(a.latency_ms for a in self.attempts),
+                    abs_tol=RECONCILIATION_TOLERANCE_MS,
+                    rel_tol=0,
+                )
+            ):
+                raise ValueError("live_model_latency_mismatch")
         return self
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3, 4, 5] = 5
+    schema_version: Literal[3, 4, 5, 6] = 6
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -148,10 +178,12 @@ class LiveRecord(RecordModel):
         for sample in self.samples:
             if self.schema_version >= 4 and sample.decision_trace is None:
                 raise ValueError("live_missing_decision_trace")
-            if self.schema_version == 5 and any(
+            if self.schema_version >= 5 and any(
                 attempt.response_diagnostics is None for attempt in sample.attempts
             ):
                 raise ValueError("live_missing_response_diagnostics")
+            if self.schema_version >= 6 and sample.latency_breakdown is None:
+                raise ValueError("live_missing_latency_breakdown")
             contract = next(c for c in self.contracts if c.case_id == sample.case_id)
             if sample.checks.keys() != contract.checks.keys():
                 raise ValueError("live_missing_check")
@@ -365,6 +397,7 @@ def live_summary(samples, contracts, pricing):
         "numerator": appointment_checks.count("pass"),
         "denominator": len(appointment_checks),
     }
+    summary["latency_breakdown"] = summarize_latency(samples)
     return summary
 
 
@@ -426,15 +459,18 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 _episode_action(turn, store)
                 customer_body = turn.get("customer_message", "Outra dúvida")
                 message = synthetic_message(f"live-{number}", customer_body)
+                timing = LatencyRecorder(clock=perf_counter)
                 # Admission starts the measured E2E; setup/fixture seeding is outside it.
                 started = perf_counter()
                 observation_deadline = ExecutionDeadline.start(
                     clock=monotonic, total_seconds=LIVE_OBSERVATION_DEADLINE_SECONDS
                 )
-                claim = store.admit_generation(message)
-                context = builder.build(
-                    inbound_message_id=claim.inbound_message_id, current_body=message.body
-                )
+                with observe_store(store, timing):
+                    claim = store.admit_generation(message)
+                with timing.measure("eval_bookkeeping_ms"):
+                    context = builder.build(
+                        inbound_message_id=claim.inbound_message_id, current_body=message.body
+                    )
                 if case.kind == "context":
                     expected = case.data["expected"]
                     context_checks = {
@@ -442,10 +478,14 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         and context.history_may_be_incomplete is expected["incomplete"]
                     }
                 generator = OpenAIEvalGenerator(
-                    api_key=api_key, client=client, ledger=ledger, phase=phase
+                    api_key=api_key, client=client, ledger=ledger, phase=phase, timing=timing
                 )
-                generator.trace_capture.propose(None, context)
-                with capture_finalizer(generator.trace_capture):
+                with timing.measure("eval_bookkeeping_ms"):
+                    generator.trace_capture.propose(None, context)
+                with (
+                    capture_finalizer(generator.trace_capture, timing=timing),
+                    observe_store(store, timing),
+                ):
                     try:
                         reply = MessageResponder(
                             store=store,
@@ -465,14 +505,15 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 body = reply.body if reply else None
                 outbound_started = perf_counter()
                 if body:
-                    sender = DeterministicFakeOutboundSender(
-                        outcomes=[ProviderAcceptance(provider_message_id=f"fake-{number}")]
-                    )
-                    accepted = OutboundDeliveryRunner(
-                        store=store, sender=sender, timeout_seconds=1
-                    ).run_once()
-                    if accepted is None or accepted.state is not DeliveryState.ACCEPTED:
-                        raise ValueError("eval_fake_acceptance_missing")
+                    with timing.measure("fake_outbound_ms"):
+                        sender = DeterministicFakeOutboundSender(
+                            outcomes=[ProviderAcceptance(provider_message_id=f"fake-{number}")]
+                        )
+                        accepted = OutboundDeliveryRunner(
+                            store=store, sender=sender, timeout_seconds=1
+                        ).run_once()
+                        if accepted is None or accepted.state is not DeliveryState.ACCEPTED:
+                            raise ValueError("eval_fake_acceptance_missing")
                 outbound_ms = (perf_counter() - outbound_started) * 1000
                 e2e_ms = (perf_counter() - started) * 1000
                 decision = generator.decisions[-1] if generator.decisions else None
@@ -514,6 +555,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     if body
                     else "none",
                     attempts=tuple(generator.attempts),
+                    latency_breakdown=timing.finish(e2e_ms),
                     e2e_latency_ms=e2e_ms,
                     queue_latency_ms=0.0,
                     outbound_latency_ms=outbound_ms,
@@ -566,6 +608,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
             "finalization_margin_seconds": ExecutionDeadline.DEFAULT_FINALIZATION_MARGIN_SECONDS,
             "http_connect_timeout_seconds": LIVE_CONNECT_TIMEOUT_SECONDS,
             "input_count_timeout_seconds": LIVE_INPUT_COUNT_TIMEOUT_SECONDS,
+            "model_latency_scope": "responses_http_request",
             "context_max_messages": 12,
             "context_token_budget": 4000,
             "repetitions_by_case": selections,

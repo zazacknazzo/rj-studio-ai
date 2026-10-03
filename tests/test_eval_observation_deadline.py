@@ -155,6 +155,7 @@ def test_post_response_budget_exhaustion_preserves_evidence_without_retry(
     assert summary["estimated_cost_usd"] == 0.003
     assert summary["input_tokens"] == 1000
     assert summary["billable_e2e_p95_ms"] == pytest.approx(29100)
+    assert summary["model_p95_ms"] == pytest.approx(27900)
     sample = record["samples"][0]
     assert all(verdict == "not_run" for verdict in sample["checks"].values())
     assert sample["attempts"][0]["response_diagnostics"]["response_status"] == "completed"
@@ -207,6 +208,11 @@ def test_late_complete_response_fails_closed_but_retains_observed_usage(tmp_path
     assert summary["input_tokens"] == 1000
     assert summary["estimated_cost_usd"] == 0.003
     assert report["measured_latency_gate"] == "fail"
+    diagnostic = report["summary"]["latency_breakdown"]
+    assert diagnostic["diagnostic_status"] == "not_an_operational_gate"
+    assert diagnostic["components"]["production_equivalent_e2e_ms"]["p95_ms"] is None
+    assert diagnostic["components"]["production_equivalent_e2e_ms"]["missing_n"] == 1
+    assert diagnostic["components"]["input_count_ms"]["p95_ms"] == 1000
     attempt = record["samples"][0]["attempts"][0]
     assert attempt["response_diagnostics"]["response_status"] == "completed"
     assert attempt["response_diagnostics"]["total_tokens"] == 1100
@@ -255,3 +261,57 @@ def test_observation_timeout_preserves_evidence_when_generation_lease_has_expire
     assert sample["attempts"][0]["response_diagnostics"]["response_status"] == "completed"
     assert sample["attempts"][0]["usage"]["input_tokens"] == 1000
     assert len(requests) == 2
+
+
+def test_live_breakdown_reconciles_and_keeps_model_time_in_diagnostic(tmp_path, monkeypatch):
+    from rj_studio_ai.conversation_context import ConversationContextBuilder
+    from rj_studio_ai.delivery import OutboundDeliveryRunner
+    from rj_studio_ai.evaluation.live_billing import BudgetLedger
+
+    for target, method_name, seconds in (
+        (persistence.SqliteConversationStore, "admit_generation", 0.01),
+        (persistence.SqliteConversationStore, "claim_generation", 0.02),
+        (persistence.SqliteConversationStore, "record_generation_metric", 0.03),
+        (persistence.SqliteConversationStore, "complete_generation", 0.04),
+        (BudgetLedger, "reserve", 0.05),
+        (BudgetLedger, "settle", 0.07),
+        (ConversationContextBuilder, "build", 0.04),
+        (OutboundDeliveryRunner, "run_once", 0.06),
+    ):
+        method = getattr(target, method_name)
+
+        def delayed(*args, _method=method, _seconds=seconds, **kwargs):
+            result = _method(*args, **kwargs)
+            live.perf_counter.advance(_seconds)
+            return result
+
+        monkeypatch.setattr(target, method_name, delayed)
+
+    report, record, _ = run_observed_case(
+        tmp_path, monkeypatch, model_seconds=12, validation_seconds=0.2, finalization_seconds=0.3
+    )
+    timing = record["samples"][0]["latency_breakdown"]
+    for name, expected in {
+        "admission_ms": 30,
+        "input_count_ms": 1000,
+        "budget_reservation_ms": 50,
+        "model_request_ms": 12000,
+        "decision_validation_ms": 200,
+        "trusted_finalization_ms": 300,
+        "persistence_ms": 70,
+        "fake_outbound_ms": 60,
+        "eval_bookkeeping_ms": 110,
+        "unattributed_ms": 40,
+        "observed_eval_e2e_ms": 13860,
+        "production_equivalent_e2e_ms": 12700,
+    }.items():
+        assert timing[name] == pytest.approx(expected)
+    assert report["summary"]["model_p95_ms"] == 12000
+    assert report["summary"]["billable_e2e_p95_ms"] == pytest.approx(13860)
+    assert report["measured_latency_gate"] == "fail"
+    diagnostic = report["summary"]["latency_breakdown"]
+    assert diagnostic["diagnostic_status"] == "not_an_operational_gate"
+    assert diagnostic["components"]["production_equivalent_e2e_ms"]["p95_ms"] == pytest.approx(
+        12700
+    )
+    assert diagnostic["components"]["input_count_ms"]["p95_ms"] == 1000

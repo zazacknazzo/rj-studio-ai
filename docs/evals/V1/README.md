@@ -1,6 +1,8 @@
 # V1 eval suite
 
-Current authorized step: [eval observation deadline](observation-deadline-2026-10-03.md).
+Current authorized step: [latency breakdown and ten-case smoke](latency-breakdown-smoke-2026-10-03.md).
+
+Previous isolated retest: [eval observation deadline](observation-deadline-2026-10-03.md).
 
 Previous diagnosis: [Responses usage provenance](usage-diagnostic-2026-10-03.md).
 

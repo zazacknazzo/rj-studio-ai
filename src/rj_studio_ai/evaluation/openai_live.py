@@ -8,6 +8,7 @@ from pydantic import StrictBool, model_validator
 
 from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
 from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
+from rj_studio_ai.evaluation.latency import LatencyRecorder
 from rj_studio_ai.evaluation.live_billing import (
     LIVE_MAX_OUTPUT_TOKENS,
     BudgetLedger,
@@ -67,7 +68,9 @@ def eval_prompt(context):
 
 
 class OpenAIEvalGenerator:
-    def __init__(self, *, api_key: str, client: httpx.Client, ledger: BudgetLedger, phase: str):
+    def __init__(
+        self, *, api_key: str, client: httpx.Client, ledger: BudgetLedger, phase: str, timing=None
+    ):
         self._api_key = api_key
         self.client = client
         self.ledger = ledger
@@ -77,6 +80,7 @@ class OpenAIEvalGenerator:
         self.stop_code = None
         self.request_hashes = []
         self.trace_capture = DecisionTraceCapture()
+        self.timing = timing or LatencyRecorder(clock=monotonic)
 
     def is_configured(self):
         return bool(self._api_key)
@@ -85,7 +89,8 @@ class OpenAIEvalGenerator:
         if self.stop_code is not None:
             raise GenerationFailure(self.stop_code)
         started = monotonic()
-        self.trace_capture.propose(None, context)
+        with self.timing.measure("eval_bookkeeping_ms"):
+            self.trace_capture.propose(None, context)
         schema = decision_json_schema()
         content = message.body
         if (
@@ -121,26 +126,28 @@ class OpenAIEvalGenerator:
             k: payload[k] for k in ("model", "instructions", "input", "reasoning", "text")
         }
         try:
-            count_response = self.client.post(
-                "https://api.openai.com/v1/responses/input_tokens",
-                headers=headers,
-                json=count_payload,
-                timeout=httpx.Timeout(
-                    max(0.001, min(LIVE_INPUT_COUNT_TIMEOUT_SECONDS, remaining_budget)),
-                    connect=max(0.001, min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining_budget)),
-                ),
-            )
-            if count_response.status_code != 200:
-                raise ValueError("input_count_failed")
-            input_count = count_response.json()["input_tokens"]
-            if type(input_count) is not int or not 1 <= input_count <= 16_000:
-                raise ValueError("input_count_invalid")
+            with self.timing.measure("input_count_ms"):
+                count_response = self.client.post(
+                    "https://api.openai.com/v1/responses/input_tokens",
+                    headers=headers,
+                    json=count_payload,
+                    timeout=httpx.Timeout(
+                        max(0.001, min(LIVE_INPUT_COUNT_TIMEOUT_SECONDS, remaining_budget)),
+                        connect=max(0.001, min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining_budget)),
+                    ),
+                )
+                if count_response.status_code != 200:
+                    raise ValueError("input_count_failed")
+                input_count = count_response.json()["input_tokens"]
+                if type(input_count) is not int or not 1 <= input_count <= 16_000:
+                    raise ValueError("input_count_invalid")
             remaining = remaining_budget - (monotonic() - started)
             if remaining < 1:
                 raise ValueError("preflight_deadline")
-            self.ledger.reserve(
-                self.phase, input_bound=input_count + 1024, output_bound=LIVE_MAX_OUTPUT_TOKENS
-            )
+            with self.timing.measure("budget_reservation_ms"):
+                self.ledger.reserve(
+                    self.phase, input_bound=input_count + 1024, output_bound=LIVE_MAX_OUTPUT_TOKENS
+                )
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
             self.stop_code = (
                 str(error)
@@ -156,7 +163,6 @@ class OpenAIEvalGenerator:
             )
             raise GenerationFailure(self.stop_code) from None
 
-        model_started = monotonic()
         usage = None
         decision = None
         error_code = None
@@ -165,73 +171,76 @@ class OpenAIEvalGenerator:
         diagnostics = ResponseDiagnostics()
         response = None
         try:
-            response = self.client.post(
-                "https://api.openai.com/v1/responses",
-                headers=headers,
-                json=payload,
-                timeout=httpx.Timeout(
-                    remaining,
-                    connect=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
-                    write=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
-                    pool=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
-                ),
-            )
-            diagnostics = diagnostics.model_copy(
-                update={
-                    "http_success": response.is_success,
-                    "http_status_code": response.status_code,
-                }
-            )
-            if response.status_code != 200:
-                raise ValueError("live_http_failure")
-            data = response.json()
-            diagnostics = diagnostics.observe(data)
-            try:
-                usage = Usage.from_response(data)
-            except UsageValidationError as error:
+            with self.timing.measure("model_request_ms") as request_time:
+                response = self.client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=payload,
+                    timeout=httpx.Timeout(
+                        remaining,
+                        connect=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                        write=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                        pool=min(LIVE_CONNECT_TIMEOUT_SECONDS, remaining),
+                    ),
+                )
+            with self.timing.measure("decision_validation_ms"):
                 diagnostics = diagnostics.model_copy(
-                    update={"usage_validation_error_code": error.code}
-                )
-                if isinstance(data, dict) and data.get("status") != "completed":
-                    raise ValueError("live_incomplete_output") from None
-                raise
-            if data.get("model") != self.ledger.pricing.model:
-                raise ValueError("live_model_mismatch")
-            if data.get("service_tier") != "default":
-                raise ValueError("live_tier_mismatch")
-            pricing_verified = True
-            if data.get("status") != "completed":
-                raise ValueError("live_incomplete_output")
-            texts = [
-                part["text"]
-                for item in data["output"]
-                if item["type"] == "message"
-                for part in item["content"]
-                if part["type"] == "output_text"
-            ]
-            if len(texts) != 1:
-                raise ValueError("live_missing_decision")
-            raw_decision = json.loads(texts[0])
-            self.trace_capture.propose(raw_decision, context)
-            check_privacy(raw_decision)
-            try:
-                decision = validate_llm_decision(
-                    raw_decision, allowed_knowledge_refs={f.id for f in context.knowledge}
-                )
-            except StructuredDecisionValidationError as error:
-                self.trace_capture.rejected(
-                    "invalid_reference"
-                    if str(error)
-                    in {
-                        "Structured decision references unavailable knowledge",
-                        "Critical factual claim must declare its knowledge reference",
-                        "Fact reply part must declare its knowledge reference",
+                    update={
+                        "http_success": response.is_success,
+                        "http_status_code": response.status_code,
                     }
-                    else "invalid_decision"
                 )
-                raise
-            if monotonic() - started >= remaining_budget:
-                raise ValueError("live_observation_timeout")
+                if response.status_code != 200:
+                    raise ValueError("live_http_failure")
+                data = response.json()
+                diagnostics = diagnostics.observe(data)
+                try:
+                    usage = Usage.from_response(data)
+                except UsageValidationError as error:
+                    diagnostics = diagnostics.model_copy(
+                        update={"usage_validation_error_code": error.code}
+                    )
+                    if isinstance(data, dict) and data.get("status") != "completed":
+                        raise ValueError("live_incomplete_output") from None
+                    raise
+                if data.get("model") != self.ledger.pricing.model:
+                    raise ValueError("live_model_mismatch")
+                if data.get("service_tier") != "default":
+                    raise ValueError("live_tier_mismatch")
+                pricing_verified = True
+                if data.get("status") != "completed":
+                    raise ValueError("live_incomplete_output")
+                texts = [
+                    part["text"]
+                    for item in data["output"]
+                    if item["type"] == "message"
+                    for part in item["content"]
+                    if part["type"] == "output_text"
+                ]
+                if len(texts) != 1:
+                    raise ValueError("live_missing_decision")
+                raw_decision = json.loads(texts[0])
+                with self.timing.measure("eval_bookkeeping_ms"):
+                    self.trace_capture.propose(raw_decision, context)
+                check_privacy(raw_decision)
+                try:
+                    decision = validate_llm_decision(
+                        raw_decision, allowed_knowledge_refs={f.id for f in context.knowledge}
+                    )
+                except StructuredDecisionValidationError as error:
+                    self.trace_capture.rejected(
+                        "invalid_reference"
+                        if str(error)
+                        in {
+                            "Structured decision references unavailable knowledge",
+                            "Critical factual claim must declare its knowledge reference",
+                            "Fact reply part must declare its knowledge reference",
+                        }
+                        else "invalid_decision"
+                    )
+                    raise
+                if monotonic() - started >= remaining_budget:
+                    raise ValueError("live_observation_timeout")
         except UsageValidationError as error:
             error_code = "live_" + error.code
         except httpx.HTTPError as error:
@@ -273,9 +282,10 @@ class OpenAIEvalGenerator:
                     if response.status_code != 200
                     else "live_response_json_invalid"
                 )
-        latency = (monotonic() - model_started) * 1000
+        latency = request_time.elapsed_ms
         try:
-            cost = self.ledger.settle(usage if pricing_verified else None)
+            with self.timing.measure("eval_bookkeeping_ms"):
+                cost = self.ledger.settle(usage if pricing_verified else None)
         except ValueError:
             cost = None
             error_code = "live_accounting_failure"
@@ -291,9 +301,10 @@ class OpenAIEvalGenerator:
             latency_ms=latency,
             error_code=error_code,
         )
-        self.attempts.append(attempt)
-        self.request_hashes.append(fingerprint(payload))
-        self.decisions.append(decision)
+        with self.timing.measure("eval_bookkeeping_ms"):
+            self.attempts.append(attempt)
+            self.request_hashes.append(fingerprint(payload))
+            self.decisions.append(decision)
         metric = GenerationMetric(
             provider="openai",
             model="gpt-6.1-sol",
