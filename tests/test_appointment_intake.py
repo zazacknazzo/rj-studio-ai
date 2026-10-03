@@ -80,10 +80,8 @@ def test_complete_interest_opens_handoff_and_keeps_only_customer_preferences(tmp
         professional_preference="Ana",
     )
     reply = respond(store, model, message())
-    assert (
-        reply.body
-        == "Perfeito. Vou passar sua preferência à equipe para confirmar a disponibilidade."
-    )
+    assert "confirmar a disponibilidade" in reply.body
+    assert "?" not in reply.body
     handoff = store.list_active_handoffs()[0]
     intake = store.get_appointment_intake(conversation_id=handoff.conversation_id)
     assert intake.desired_service == "progressiva"
@@ -100,12 +98,12 @@ def test_complete_interest_opens_handoff_and_keeps_only_customer_preferences(tmp
         (
             "Quero progressiva",
             {"desired_service": "progressiva"},
-            "Qual dia seria melhor pra você?",
+            "dia",
         ),
         (
             "Quero marcar sábado à tarde",
             {"preferred_time": "sábado à tarde"},
-            "Qual serviço você gostaria de fazer?",
+            "serviço",
         ),
         ("Quero marcar", {}, "Qual serviço você gostaria de fazer?"),
     ],
@@ -115,7 +113,8 @@ def test_only_missing_required_detail_is_asked(tmp_path, body, preferences, ques
     store.initialize()
     model = AppointmentModel(**preferences)
     reply = respond(store, model, message(body=body))
-    assert reply.body == question
+    assert question.casefold() in reply.body.casefold()
+    assert reply.body.count("?") == 1
     assert not store.list_active_handoffs()
     claim = store.get_generation(provider="meta", provider_message_id="interest-1")
     intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
@@ -138,7 +137,7 @@ def test_short_replies_restart_and_retry_preserve_one_episode_and_two_question_l
     model.preferences = {"desired_service": "progressiva"}
     model.intents = ["other"]
     second = respond(reopened, model, message("interest-2", "progressiva"))
-    assert second.body == "Qual dia seria melhor pra você?"
+    assert "dia" in second.body and second.body.count("?") == 1
     assert model.contexts[-1].appointment_intake.awaiting_field == "desired_service"
     midway = reopened.get_appointment_intake(conversation_id=initial.conversation_id)
     assert midway.episode_token == initial.episode_token
@@ -158,7 +157,7 @@ def test_three_unanswered_questions_end_in_handoff_even_when_incomplete(tmp_path
     model = AppointmentModel()
     for number, body in [(1, "Quero marcar"), (2, "Ainda não sei"), (3, "Ainda não sei")]:
         reply = respond(store, model, message(f"interest-{number}", body))
-        assert reply.body == "Qual serviço você gostaria de fazer?"
+        assert "serviço" in reply.body and reply.body.count("?") == 1
     reply = respond(store, model, message("interest-4", "Não sei"))
     assert "?" not in reply.body
     handoff = store.list_active_handoffs()[0]

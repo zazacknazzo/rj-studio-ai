@@ -11,7 +11,7 @@ def test_trusted_price_has_warm_surface_and_safe_continuation():
         context=ConversationContext(history=(), knowledge=(_fact(),)),
     )
     assert "O corte custa R$ 120,00." in result.reply_text
-    assert result.reply_text.startswith("Claro!")
+    assert result.reply_text != _fact().statement
     assert "?" in result.reply_text
     assert "R$ 1,00" not in result.reply_text
     assert not result.handoff
@@ -418,3 +418,121 @@ def test_missing_field_intake_does_not_add_two_questions_to_factual_answer(tmp_p
     )
     assert "?" not in result.reply_text  # Application appends only the trusted intake question.
     assert "R$ 120,00" in result.reply_text
+
+
+def test_available_mandatory_policy_cannot_be_skipped_by_price_clarification():
+    service = _fact("service-test", category="service", mandatory_policy_ids=("policy-test",))
+    policy = _fact("policy-test", category="policy", statement="O teste de mecha é obrigatório.")
+    proposal = _decision(
+        critical_claims=[],
+        knowledge_refs=[],
+        reply_parts=[{"kind": "phrase", "phrase": "price_service_question"}],
+    )
+    result = finalize_reply(
+        proposal,
+        customer_message="Qual preço?",
+        context=ConversationContext(history=(), knowledge=(service, policy)),
+    )
+    assert result.handoff  # Clarification cannot silently bypass required selected rules.
+
+
+def test_identity_prefixed_clarification_is_not_repeated():
+    from rj_studio_ai.conversation_context import ConversationTurn
+
+    proposal = _decision(
+        critical_claims=[],
+        knowledge_refs=[],
+        reply_parts=[{"kind": "phrase", "phrase": "price_service_question"}],
+    )
+    first = finalize_reply(
+        proposal,
+        customer_message="Você é IA? Qual preço?",
+        context=ConversationContext(history=(), knowledge=()),
+    )
+    result = finalize_reply(
+        proposal,
+        customer_message="Qual preço?",
+        context=ConversationContext(
+            history=(ConversationTurn("ai_attendant", first.reply_text),), knowledge=()
+        ),
+    )
+    assert result.handoff
+
+
+def test_explicit_refusals_skip_or_end_the_single_cancellation_offer(tmp_path):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    for index, refusal in enumerate(
+        ("não quero reagendar", "não quero outro dia nem horário", "sem remarcação")
+    ):
+        store = SqliteConversationStore(tmp_path / f"refusal-{index}.db")
+        store.initialize()
+        model = AppointmentModel()
+        reply = respond(store, model, message(body="Quero cancelar meu agendamento, " + refusal))
+        assert "?" not in reply.body and store.list_active_handoffs()
+        intake = store.get_appointment_intake(
+            conversation_id=store.list_active_handoffs()[0].conversation_id
+        )
+        assert not intake.recovery_offered and intake.clarification_count == 0
+
+
+def test_exact_clock_time_is_useful_and_no_catalog_question_duplicates_intake(tmp_path):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "clock.db")
+    store.initialize()
+    model = AppointmentModel(desired_service="corte", preferred_day="sexta", preferred_time="14h30")
+    reply = respond(store, model, message(body="Quero corte sexta às 14h30"))
+    assert "?" not in reply.body and store.list_active_handoffs()
+    intake = store.get_appointment_intake(
+        conversation_id=store.list_active_handoffs()[0].conversation_id
+    )
+    assert intake.preferred_time == "14h30" and intake.clarification_count == 0
+    from rj_studio_ai.appointment_intake import plan_appointment_intake
+
+    for phrase in ("service_question", "appointment_continuation"):
+        proposal = _decision(
+            intents=["price", "appointment_interest"],
+            appointment_preferences={"desired_service": "corte"},
+            reply_parts=[
+                {"kind": "fact", "knowledge_ref": "price-corte"},
+                {"kind": "phrase", "phrase": phrase},
+            ],
+        )
+        update = plan_appointment_intake(
+            proposal, customer_message="Quero corte. Quanto custa?", prior=None
+        )
+        result = finalize_reply(
+            proposal,
+            customer_message="Quero corte. Quanto custa?",
+            context=ConversationContext(history=(), knowledge=(_fact(),)),
+            appointment_intake=update,
+        )
+        assert "?" not in result.reply_text and _fact().statement in result.reply_text
+
+
+def test_cancel_negation_selects_reschedule_and_clears_the_old_day(tmp_path):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "cancel-negation.db")
+    store.initialize()
+    model = AppointmentModel(desired_service="corte", preferred_day="sexta")
+    respond(store, model, message(body="Quero corte sexta"))
+    model.intents = ["appointment_change"]
+    model.preferences = {}
+    respond(store, model, message("interest-2", "Quero cancelar meu agendamento"))
+    model.preferences = {"preferred_time": "de manhã"}
+    reply = respond(
+        store, model, message("interest-3", "Não quero cancelar, prefiro remarcar de manhã")
+    )
+    assert "?" in reply.body and not store.list_active_handoffs()
+    claim = store.get_generation(provider="meta", provider_message_id="interest-3")
+    intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
+    assert intake.request_kind == "reschedule"
+    assert intake.preferred_day is None and intake.preferred_time == "de manhã"

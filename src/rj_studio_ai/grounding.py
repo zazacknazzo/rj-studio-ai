@@ -114,6 +114,10 @@ def finalize_reply(
                 parts.append(FactReplyPart(kind="fact", knowledge_ref=policy_id))
     for part in parts:
         if isinstance(part, PhraseReplyPart):
+            # The bounded intake owns its single question. Keep approved facts
+            # and acknowledgements, but never append a second catalog question.
+            if appointment_intake is not None and "?" in REPLY_PHRASES[part.phrase]:
+                continue
             rendered.append(
                 persona.phrase(
                     part.phrase, customer_message=customer_message, prior_ai_replies=prior_replies
@@ -206,6 +210,8 @@ def _commercial_clarification(
     rendered_categories: set[SalonKnowledgeCategory],
 ) -> str | None:
     """One controlled question, never an exception for an attempted factual answer."""
+    if any(fact.mandatory_policy_ids for fact in context.knowledge):
+        return None
     if rendered_categories or decision.critical_claims or decision.knowledge_refs:
         return None
     if len(decision.reply_parts) != 1 or not isinstance(decision.reply_parts[0], PhraseReplyPart):
@@ -231,6 +237,6 @@ def _commercial_clarification(
         return None
     questions = {REPLY_PHRASES[key] for key in choices}
     previous = next((t.body for t in reversed(context.history) if t.role == "ai_attendant"), "")
-    if previous in questions:
+    if any(question in previous for question in questions):
         return None
     return REPLY_PHRASES[phrase]

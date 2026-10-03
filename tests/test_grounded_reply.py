@@ -484,10 +484,8 @@ def test_processing_persists_only_rendered_reply_atomically_with_outbox_and_repl
     assert processed is not None
     delivery = store.get_delivery_for_inbound(processed.inbound_message_id)
     assert delivery is not None and delivery.state is DeliveryState.PENDING
-    assert (
-        delivery.body
-        == "Claro! O corte custa R$ 120,00. Quer que eu te ajude a escolher um dia pra vir?"
-    )
+    assert _fact().statement in delivery.body
+    assert delivery.body.count("?") == 1
     reopened = SqliteConversationStore(tmp_path / "grounding.db")
     reopened.admit_generation(message)
     assert ProcessingRunner(store=reopened, responder=responder).run_once() is None

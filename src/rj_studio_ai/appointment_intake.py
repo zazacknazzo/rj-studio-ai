@@ -83,6 +83,16 @@ def _normalized(value: str) -> str:
     )
 
 
+def _declines_rescheduling(text: str) -> bool:
+    return bool(
+        re.search(
+            r"nao (?:quero|vou|prefiro) (?:remarcar|reagendar|(?:tentar )?outro (?:dia|horario))|"
+            r"sem (?:remarcacao|reagendamento)|(?:somente|apenas) cancelar",
+            text,
+        )
+    )
+
+
 def plan_appointment_intake(
     decision: LLMDecision,
     *,
@@ -91,7 +101,9 @@ def plan_appointment_intake(
 ) -> AppointmentIntakeUpdate | None:
     collecting = prior is not None and prior.state == "collecting"
     text = _normalized(customer_message)
-    cancelling = bool(re.search(r"\b(cancelar|cancelamento)\b", text))
+    cancelling = bool(re.search(r"\b(cancelar|cancelamento)\b", text)) and not bool(
+        re.search(r"\bnao (?:quero|vou|desejo|preciso) cancelar\b", text)
+    )
     rescheduling = bool(re.search(r"\b(remarcar|reagendar|remarcacao|reagendamento)\b", text))
     change = Intent.APPOINTMENT_CHANGE in decision.intents or appointment_change_requested(
         customer_message
@@ -130,7 +142,7 @@ def plan_appointment_intake(
         r"\b(segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha)\b|\b\d{1,2}/\d{1,2}\b"
     )
     period_pattern = (
-        r"\b(manha|tarde|noite|madrugada)\b|\b\d{1,2}(?:h|:\d{2})\b|\bqualquer horario\b"
+        r"\b(manha|tarde|noite|madrugada)\b|\b\d{1,2}(?:h(?:\d{2})?|:\d{2})\b|\bqualquer horario\b"
     )
     if time is not None and re.search(day_pattern, _normalized(time)):
         day = current("preferred_day") or time
@@ -149,14 +161,12 @@ def plan_appointment_intake(
     if cancelling:
         kind = "cancellation"
         # A firm refusal/confirmation must not receive a retention offer.
-        firm = bool(
-            re.search(r"\b(mesmo|definitivo|definitivamente)\b|nao (?:quero|vou) remarcar", text)
-        )
-        if not offered and not firm and count < 3:
+        firm = bool(re.search(r"\b(mesmo|definitivo|definitivamente)\b", text))
+        if not offered and not firm and not _declines_rescheduling(text) and count < 3:
             awaiting = "cancellation_choice"
             offered = True
     elif collecting and prior.awaiting_field == "cancellation_choice":
-        if not re.search(r"nao (?:quero|vou) remarcar", text) and (
+        if not _declines_rescheduling(text) and (
             rescheduling or bool(re.search(r"\b(outro dia|outro horario|prefiro|remarcar)\b", text))
         ):
             kind = "reschedule"
