@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
-from rj_studio_ai.handoff import HandoffReason, safe_handoff_reason
+from rj_studio_ai.handoff import HandoffReason
 from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
 from rj_studio_ai.llm_decision import Intent, LLMDecision, ReplyPhrase
 
@@ -258,7 +258,7 @@ def apply_cancellation_recovery_policy(
         and update.awaiting_field == "cancellation_choice"
         and decision.handoff
         and set(decision.intents) <= {Intent.APPOINTMENT_CHANGE, Intent.GREETING, Intent.OTHER}
-        and safe_handoff_reason(decision.handoff_reason or "")
+        and decision.handoff_reason
         in {HandoffReason.MODEL_REQUEST, HandoffReason.APPOINTMENT_CHANGE}
     ):
         return decision.model_copy(update={"handoff": False, "handoff_reason": None})
@@ -290,7 +290,13 @@ APPOINTMENT_EXTRACTION_INSTRUCTIONS = (
     "e período são suficientes. Não peça profissional sem necessidade. "
     "Use service_information/professional apenas se também houver pergunta factual. "
     "Cancelamento usa appointment_change: permite uma oferta leve de remarcação, nunca "
-    "cancelamento real. Remarcação coleta nova preferência. Durante coleta incompleta, "
+    "cancelamento real. O primeiro pedido simples de cancelamento não é uma operação de agenda: "
+    "proponha handoff=false para a oferta única controlada pelo sistema, mesmo que a execução "
+    "final exija uma pessoa. Não encaminhe só por não poder cancelar de verdade. "
+    "Confirmação firme, recusa ou confirmação após a oferta não recebe nova tentativa de "
+    "recuperação; proponha handoff. Risco, reclamação, pedido humano ou política obrigatória "
+    "continuam prioritários, nunca como mero motivo genérico de cancelamento. "
+    "Remarcação coleta nova preferência. Durante coleta incompleta, "
     "handoff=false salvo risco, reclamação, pedido humano ou outra política obrigatória. "
     "O sistema controla o limite de três perguntas e o handoff final."
 )

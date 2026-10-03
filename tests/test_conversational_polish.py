@@ -85,7 +85,7 @@ def test_cancellation_offer_occurs_once_and_confirmation_survives_restart(tmp_pa
 
 @pytest.mark.parametrize(
     "reason",
-    ["model_requested_handoff", "appointment_change_requested", "Staff must handle cancellation"],
+    ["model_requested_handoff", "appointment_change_requested"],
 )
 def test_first_cancellation_recovers_before_nonspecific_model_handoff(tmp_path, reason):
     from test_appointment_intake import AppointmentModel, message, respond
@@ -142,6 +142,26 @@ def test_first_cancellation_recovers_before_nonspecific_model_handoff(tmp_path, 
         (
             "Quero cancelar meu agendamento",
             {"intents": ["appointment_change", "technical_guidance"]},
+            "model_requested_handoff",
+        ),
+        (
+            "Quero cancelar meu agendamento. Meu rosto inchou depois do produto.",
+            {"handoff_reason": "Possible allergic reaction requires urgent human review"},
+            "model_requested_handoff",
+        ),
+        (
+            "Quero cancelar meu agendamento. Preciso falar com Isaac.",
+            {"handoff_reason": "Customer explicitly requests the owner"},
+            "model_requested_handoff",
+        ),
+        (
+            "Quero cancelar meu agendamento. Estou insatisfeito com o atendimento.",
+            {"handoff_reason": "Serious complaint needs human attention"},
+            "model_requested_handoff",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"handoff_reason": "Unknown independent reason"},
             "model_requested_handoff",
         ),
         (
@@ -243,6 +263,34 @@ def test_selected_knowledge_policy_still_overrides_first_cancellation(tmp_path, 
         store.get_appointment_intake(conversation_id=active.conversation_id).clarification_count
         == 0
     )
+
+
+@pytest.mark.parametrize("provider", ["anthropic", "openai"])
+def test_cancellation_instruction_contract_reaches_both_adapters(tmp_path, provider):
+    from test_factual_reply_plan_contract import adapter_request
+
+    from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
+    from rj_studio_ai.llm_decision import decision_json_schema
+
+    proposal = _decision(
+        intents=["appointment_change"],
+        knowledge_refs=[],
+        critical_claims=[],
+        reply_parts=[{"kind": "phrase", "phrase": "acknowledgement"}],
+    )
+    generated, instructions, schema = adapter_request(
+        tmp_path,
+        provider,
+        ConversationContext(history=(), knowledge=()),
+        proposal,
+        customer_message="Quero cancelar meu agendamento",
+    )
+    assert "primeiro pedido simples" in instructions
+    assert "não é uma operação de agenda" in instructions
+    assert "risco, reclamação, pedido humano" in instructions
+    assert instructions.count(APPOINTMENT_EXTRACTION_INSTRUCTIONS) == 1
+    assert not generated.handoff
+    assert schema == decision_json_schema()
 
 
 def test_explicit_human_request_has_short_confirmation_then_suppression(tmp_path):

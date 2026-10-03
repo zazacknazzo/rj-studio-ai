@@ -57,7 +57,11 @@ Ticket 11 collection rules; messaging, factual trust and Ticket 10 remain unchan
   immediately hand off solely because the model generically proposes it. Its
   deterministic one-time recovery question takes precedence over that proposal;
   independent risk/complaint/human request, selected Knowledge policies and all
-  grounding validation still take precedence over recovery. No override applies
+  grounding validation still take precedence over recovery. Only explicit
+  generic codes `model_requested_handoff` / `appointment_change_requested`
+  qualify; unknown/free-text reasons remain fail-closed. Shared cancellation
+  instructions distinguish the recovery question from executing cancellation.
+  No override applies
   to firm cancellation, later confirmation, or other appointment requests.
 - Rescheduling, including a switch from that offer, collects the new preference
   within the SAME three-question budget (the offer counts). Already supplied
