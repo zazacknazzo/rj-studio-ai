@@ -553,8 +553,12 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
     return record, packet
 
 
-def execute_live(suite, *, api_key, output: Path, revision: str, transport=None, case_id=None):
+def execute_live(
+    suite, *, api_key, output: Path, revision: str, transport=None, case_id=None, smoke_only=False
+):
     suite = _live_contracts(suite)
+    if case_id is not None and smoke_only:
+        raise ValueError("live_conflicting_execution_scope")
     if case_id is not None and case_id not in {c.contract.case_id for c in suite.cases}:
         raise ValueError("live_unknown_case")
     output.mkdir(mode=0o700)
@@ -563,7 +567,11 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None,
         output / "spend.jsonl",
         pricing,
         phase_a_cap=Decimal("0.20") if case_id is not None else Decimal("1"),
-        global_cap=Decimal("0.20") if case_id is not None else Decimal("5"),
+        global_cap=Decimal("0.20")
+        if case_id is not None
+        else Decimal("1")
+        if smoke_only
+        else Decimal("5"),
     )
     records, packet = [], []
     try:
@@ -580,7 +588,7 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None,
             )
             records.append(a)
             packet.extend(excerpts)
-            if a.status == "completed" and case_id is None:
+            if a.status == "completed" and case_id is None and not smoke_only:
                 repeated = {
                     c.contract.case_id
                     for c in suite.cases
@@ -611,6 +619,8 @@ def execute_live(suite, *, api_key, output: Path, revision: str, transport=None,
         report = {
             "execution_scope": "single_case_diagnostic"
             if case_id is not None
+            else "smoke_only"
+            if smoke_only
             else "smoke_and_suite",
             "phase_a_status": a.status,
             "phase_a_stop_code": a.stop_code,
@@ -656,7 +666,9 @@ def main():
     parser = argparse.ArgumentParser(description="Authorized OpenAI-only synthetic live eval")
     parser.add_argument("--allow-paid", action="store_true", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--case", help="One synthetic case once; US$0.20 cap, never starts B")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--case", help="One synthetic case once; US$0.20 cap, never starts B")
+    scope.add_argument("--smoke-only", action="store_true", help="Ten-case smoke; US$1 cap, no B")
     args = parser.parse_args()
     logging.getLogger("dotenv.main").disabled = True
     key = os.environ.get("OPENAI_API_KEY") or dotenv_values(".env").get("OPENAI_API_KEY")
@@ -678,6 +690,7 @@ def main():
             output=args.output,
             revision=revision,
             case_id=args.case,
+            smoke_only=args.smoke_only,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception:

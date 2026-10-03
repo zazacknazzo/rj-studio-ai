@@ -1,12 +1,88 @@
+import json
 from pathlib import Path
 
 import httpx
 
-from rj_studio_ai.evaluation.live import LiveSample, execute_live, live_summary, run_live_phase
+from rj_studio_ai.evaluation.live import (
+    SMOKE_CASES,
+    LiveSample,
+    execute_live,
+    live_summary,
+    run_live_phase,
+)
 from rj_studio_ai.evaluation.live_billing import BudgetLedger, LivePricing, Usage
 from rj_studio_ai.evaluation.openai_live import LiveAttempt
 from rj_studio_ai.evaluation.records import CaseContract, CheckContract, fingerprint
 from rj_studio_ai.evaluation.suite import fixture_decision, load_suite
+
+
+def test_passing_ten_case_smoke_stops_before_phase_b_with_one_dollar_cap(tmp_path):
+    suite = load_suite(Path("docs/evals/V1"))
+    by_id = {c.contract.case_id: c for c in suite.cases}
+    proposals = []
+    for identifier in SMOKE_CASES:
+        case = by_id[identifier]
+        if case.kind == "grounding":
+            proposals.append(fixture_decision(**case.data["proposal"]))
+        elif case.kind == "appointment":
+            turn = case.data["turns"][0]
+            proposals.append(
+                fixture_decision(
+                    intents=turn.get("expected_intents", ["appointment_interest"]),
+                    appointment_preferences=turn.get("preferences"),
+                )
+            )
+        else:
+            proposals.append(
+                fixture_decision(reply_parts=[{"kind": "phrase", "phrase": "clarification"}])
+            )
+    calls = []
+
+    def transport(request):
+        if request.url.path.endswith("input_tokens"):
+            return httpx.Response(200, json={"input_tokens": 1000})
+        decision = proposals[len(calls)]
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-6.1-sol",
+                "service_tier": "default",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": decision.model_dump_json()}],
+                    }
+                ],
+                "usage": {
+                    "input_tokens": 1000,
+                    "output_tokens": 100,
+                    "total_tokens": 1100,
+                    "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                    "output_tokens_details": {"reasoning_tokens": 0},
+                },
+            },
+        )
+
+    report = execute_live(
+        suite,
+        api_key="synthetic-value",
+        output=tmp_path / "smoke",
+        revision="2002de4",
+        transport=httpx.MockTransport(transport),
+        smoke_only=True,
+    )
+    assert report["phase_a_status"] == "completed"
+    assert report["phase_b_executed"] is False
+    assert report["execution_scope"] == "smoke_only"
+    assert report["global_cap_usd"] == report["phase_a_cap_usd"] == 1
+    assert report["summary"]["live_calls"] == len(calls) == 10
+    assert report["summary"]["retries"] == 0
+    assert report["ticket_status"] == "in-progress"
+    record = json.loads((tmp_path / "smoke" / "phase-A.json").read_text())
+    assert [s["case_id"] for s in record["samples"]] == list(SMOKE_CASES)
+    assert not (tmp_path / "smoke" / "phase-B.json").exists()
 
 
 def test_paid_incomplete_output_stops_smoke_keeps_failure_and_never_starts_suite(tmp_path):
