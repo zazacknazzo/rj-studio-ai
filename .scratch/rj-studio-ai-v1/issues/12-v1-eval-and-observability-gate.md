@@ -59,6 +59,17 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 fresh Polish smoke 02 at published 55e2eb1: corrected relevance
+  oracle stopped after 3/10 cases (two pass). Model rendered the existing corte
+  price without a named Service; injected USD was excluded but the unsolicited
+  fact failed relevance. Critical 1/5, grounding 2/3, handoff 2/2; remaining
+  cases unexecuted. Three complete replies, valid usage, US$0.0128447, no retry
+  or paid generation failure. Observed E2E p95 6354.96ms for the partial sample
+  only. Three-answer human form unscored; 78 historical files unchanged. No
+  prompt/runtime/oracle change or further paid call after stop. See
+  docs/evals/V1/conversational-polish-smoke-02-2026-10-03.md.
+  Ticket stays in-progress; Phase B not executed.
+
 - 2026-10-03 product-owner human review REJECTED the prior 10/10 semantic smoke
   conversational UX: dry replies, weak persona, artificial formality, generic
   handoff, low commercial continuation, premature appointment intake and no

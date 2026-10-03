@@ -1,6 +1,12 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Latest authorized fresh smoke: [run 02 factual relevance failure](conversational-polish-smoke-02-2026-10-03.md).
+The corrected oracle stopped after 3/10 cases: corte was introduced without an
+identified Service. Two cases passed; seven were not executed. No prompt/runtime
+change followed; the new three-answer human packet is partial and unscored.
+Ticket 12 stays in-progress and Phase B was not executed.
+
 Implementation and fresh stopped smoke: [Conversational Polish result](conversational-polish-2026-10-03.md).
 Three of ten cases executed (two pass, one semantic failure); no further live
 call or Phase B. The new three-answer human packet is partial and unscored.
