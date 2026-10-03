@@ -11,8 +11,9 @@ Current human decision: [APPROVED qualitatively by the product owner](conversati
 Closure evidence: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
 Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms
 passes the unchanged 8s gate for this run. No additional numerical ratings or
-retrospective average. Qualitative human approval and functional pass release
-Phase B for the NEXT stage; **not executed here**. Ticket 12 stays in-progress,
+retrospective average. Qualitative human approval and functional pass released
+Phase B after that smoke 04 stage; its later stopped execution is linked above.
+Ticket 12 stays in-progress,
 real Meta/WhatsApp E2E remains pending. Historical evidence is unchanged.
 
 ## Historical execution records

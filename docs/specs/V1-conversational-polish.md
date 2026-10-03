@@ -95,7 +95,7 @@ fakes; no naturalness score or exact-word requirement except approved facts.
 Run the full suite and existing static checks; review product/spec, grounding
 safety and code standards independently before any paid evaluation.
 
-## Human and live gates
+## Historical human and live authorizations
 
 Current [product-owner decision](../evals/V1/conversational-polish-human-review-2026-10-03.md):
 conversational human review is APPROVED qualitatively, based on earlier observed

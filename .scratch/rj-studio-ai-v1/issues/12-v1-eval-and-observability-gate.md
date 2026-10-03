@@ -27,20 +27,22 @@ B2 not executed; no oracle/prompt/runtime change or retrospective rescore.
 OpenAI-only gate remains blocked. See
 `docs/evals/V1/openai-phase-b-2026-10-03.md` for original metrics and diagnosis.
 
-## Current product-owner decision (2026-10-03)
+## Historical product-owner decision and smoke 04 closure (2026-10-03)
 
 Conversational Polish human review is APPROVED qualitatively for naturalness,
 clarity, persona and commercial direction, based on prior observed replies.
 No further numerical rating/retrospective average is required. This does not
-waive the smoke 03 cancellation failure. Only cancellation recovery correction,
+waive the smoke 03 cancellation failure. That earlier round authorized only
+cancellation recovery correction,
 tests/three reviews, one US$0.20 isolated retest and a conditional US$1 fresh
 smoke are authorized. Functional 10/10 releases B for the NEXT stage, not this
 session; the official observed 8s gate remains unchanged. See
 `docs/evals/V1/conversational-polish-human-review-2026-10-03.md`.
 Cancellation corrected at 5292a97; isolated retest **1/1** and fresh smoke 04
 **10/10** passed. Human conversational review: **APPROVED BY PRODUCT OWNER**,
-qualitatively based on previous responses. Phase B is released for the next
-stage, **not executed**. Measured observed p95 6,270.32ms passes the unchanged
+qualitatively based on previous responses. At that smoke 04 closure, Phase B
+was released for the next stage and had not yet executed; its later stopped
+B1 is recorded above. Measured observed p95 6,270.32ms passes the unchanged
 8s gate for this run; broader/repeated and real-provider evidence remain open.
 See `docs/evals/V1/cancellation-recovery-2026-10-03.md` for checks, reviews,
 costs, latencies and untouched historical evidence. Ticket stays in-progress;
