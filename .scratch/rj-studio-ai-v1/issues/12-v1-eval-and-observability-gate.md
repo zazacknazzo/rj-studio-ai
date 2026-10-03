@@ -37,6 +37,18 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 latency decomposition and fresh ten-case OpenAI smoke at 8fed9c9:
+  all 10 semantic cases pass; critical 0/18, grounding/handoff 9/9, Intent 1/1,
+  appointment safety 2/2, persona 1 evaluable/pass and 0 fail. 10 calls, no retries,
+  paid failures or system fallbacks; 13750/1597 input/output, 594 reasoning tokens,
+  US$0.0308756 total / US$3.08756 per 1000 completed model replies. Model p95
+  7616.46ms; observed E2E p95 7987.64ms passes measured 8s gate by 12.36ms;
+  one sample >8s. Diagnostic E2E p95 7645.94ms never substitutes the gate.
+  Model/request dominates the slow sample. 670 tests/all checks and both review
+  axes pass, historical evidence unchanged. Human packet has 10 pending answers;
+  real WhatsApp/overall operational gate pending, B prohibited/not run. See
+  docs/evals/V1/latency-breakdown-smoke-2026-10-03.md. Still in-progress.
+
 - 2026-10-03 eval-only observation deadline: 30s total / 1s margin; production
   remains 10s / 1s, network connect capped at 5s, remaining read budget, no retry.
   647 tests/checks pass; two independent reviews cleared after fixing two

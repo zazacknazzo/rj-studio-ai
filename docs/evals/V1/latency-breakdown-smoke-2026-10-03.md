@@ -67,3 +67,86 @@ Configuration: `gpt-6.1-sol`, medium, default/standard, 512 output tokens,
 usage, timeout, accounting or privacy failures stop the run. Slowness alone
 is recorded as a failed latency gate and does not stop remaining valid cases.
 No historical run is reused. Checks and actual result will be recorded below.
+
+## Checks and actual smoke
+
+The three prior commits were published before editing; origin was confirmed at
+`941114ec4ed2bf84a9505bee6e4c7f2a6ed17efc`. No main merge.
+Instrumentation revision: `8fed9c90f3bd116582b7fec0fa71456b463d22e1`.
+All **670 tests** passed (23 new cases), including 320 focused evaluation,
+application/deadline, grounding, durable handoff and appointment regressions.
+Ruff check/format, compileall, pip check and diff checks passed. One existing
+Starlette/AnyIO warning remains. Independent Standards and Spec reviews had
+zero findings; reviewers made no network/paid calls.
+
+Fresh run recorded at **2026-10-03 14:47:27 UTC** under
+`work/evals/openai-latency-smoke-2026-10-03-01/`. All ten `SMOKE_CASES` executed
+once in their declared order; **10 pass / 0 fail**, no unexecuted cases or B.
+All received completed valid decisions and usage; no truncation, prohibited
+claim, generation failure, privacy/accounting failure, retry or system fallback.
+The one sample over eight seconds did not fail the semantic run or become a
+provider failure. All stages were observed for all ten executions, and the
+maximum per-execution reconciliation error was **0ms**.
+
+| Semantic measure | Result |
+| --- | --- |
+| Failed critical checks | **0/18** |
+| Grounding | **9/9** |
+| Intent | **1/1**, the explicit multi-intent oracle |
+| Human Handoff correctness | **9/9** |
+| Appointment safety | **2/2** |
+| Context | **2/2** |
+| Persona evaluable / pass / fail | **1 / 1 / 0** |
+
+These are applicable checks, not a claim of full Intent/persona suite coverage.
+Human naturalness review is still pending.
+
+| Cost measure | Result |
+| --- | --- |
+| Live calls / retries / paid failures | **10 / 0 / 0** |
+| Completed model replies / separate system fallbacks | **10 / 0** |
+| Input / output / reasoning tokens | **13,750 / 1,597 / 594** |
+| Cache-read / cache-write / ordinary input tokens | **8,106 / 5,614 / 30** |
+| Total cost, unchanged versioned pricing | **US$0.0308756** |
+| Cost per 1,000 completed model replies | **US$3.08756**, denominator 10 |
+| Hard cap | **US$1; respected** |
+
+Reasoning is included in output tokens, not charged again. Cost independently
+reconciles from the token partitions using the unchanged rates; paid failures
+would still contribute cost without increasing the completed-reply denominator.
+
+| Latency, milliseconds | p50 | p95 | Maximum | Above 8s |
+| --- | ---: | ---: | ---: | ---: |
+| Model HTTP request | 5,494.95 | 7,616.46 | 8,348.30 | 1/10 |
+| Observed eval E2E | 5,877.60 | **7,987.64** | 8,725.87 | **1/10** |
+| Production-equivalent diagnostic | 5,524.92 | 7,645.94 | 8,378.23 | 1/10 |
+| Input counting | 343.43 | 833.77 | 1,102.11 | 0/10 |
+
+The unchanged observed p95 gate **passes for this ten-case smoke**, by only
+**12.36ms**. It was not passed using the diagnostic. Real WhatsApp E2E and the
+overall operational gate remain pending; ten single-run cases and an interpolated
+p95 do not establish a robust production latency distribution. Earlier runs,
+including slow and unknown-usage attempts, remain historical evidence and are
+not erased or replaced by this run. No overall V1 gate approval is claimed.
+
+The slowest case was `grounding-multiple-facts`: model **8,348.30ms**, observed
+**8,725.87ms**, diagnostic **8,378.23ms**, input count **343.73ms**. It passed all
+three semantic checks and rendered both approved synthetic facts without handoff.
+Its model call alone exceeded eight seconds, so this excess primarily comes
+from model/request latency; removing eval overhead cannot fix that sample.
+Model requests account for **92.39%** of this run's summed observed time.
+This does not distinguish provider inference from network time inside that request.
+
+`LiveRecord` validation and independently recomputed summaries passed. The
+multi-fact request hash and suite/Knowledge/prompt-schema fingerprints match the
+preceding isolated retest exactly. All **53 files across six historical runs**
+remain byte-for-byte unchanged. Component percentile populations name their
+observed/missing counts; component percentiles must not be added as if they were
+one execution's timeline.
+
+Private human review packet: `human-review.md` and `human-review.json` in the new
+run directory, **10 synthetic answers**, unscored with status `pending`.
+No Anthropic, Meta/WhatsApp, real Customer, secret output or credential change.
+No production files, prompts, model/effort/output limit, grounding, finalizer,
+handoff or pricing were changed. **Phase B was not executed**; Ticket 12 remains
+**in-progress**, with human and real operational evidence still pending.
