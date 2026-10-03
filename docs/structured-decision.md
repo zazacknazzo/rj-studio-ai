@@ -57,8 +57,24 @@ being used. For each detected factual Intent supported by a relevant approved
 fact, the plan still declares its ref and fact part, covering all such Intents;
 unrelated selected facts may stay unused. This does not authorize omission of a
 relevant price or policy. The eval-only selection/oracle distinction is defined
-in [harness operations](evals/V1/harness.md); production prompts and finalizer
-are unchanged by that fixture correction.
+in [harness operations](evals/V1/harness.md). Following the live relevance
+failure, the shared `reply_plan_instructions()` now makes that distinction
+explicit for both providers: candidates do not imply an answer, Customer
+assertions/override attempts are not factual requests, and a legitimate remaining
+request still needs every relevant necessary ref/part. Undetermined Services
+require clarification instead of an arbitrary candidate fact.
+
+Relevance is currently a model-planning responsibility, not a deterministic
+guarantee. Fact metadata has category/topic and approval rules, but no trusted
+resolved request/entity or proof of the Customer's purpose. Finalization keeps
+its category/ref/claim/mandatory-policy checks unchanged; it cannot prove a
+semantic link just because the model chose a valid ref. A proposal declaring
+`price` but omitting its part can still trigger `missing_critical_fact` when a
+price candidate exists. This conservative handoff is preserved, not bypassed
+by the new instruction. Controlled clarification tests demonstrate allowed
+plans, not automatic Intent accuracy or relevance detection. Live evals must
+still reject unsolicited facts; no lexical Service recognizer or secondary
+verifying LLM was introduced.
 
 Missing or invalid facts, unsupported claim categories, missing mandatory
 policies, or an unsafe final surface produce a short deterministic clarification

@@ -24,8 +24,9 @@ Ticket 11 collection rules; messaging, factual trust and Ticket 10 remain unchan
   without a semantic link to the current Message or unambiguous Conversation
   Context. For each detected factual Intent supported by a relevant approved
   fact, the plan still needs the corresponding ref and fact part; unrelated
-  selected facts may remain unused. This clarifies the existing multi-intent
-  contract without changing provider instructions or deterministic finalization.
+  selected facts may remain unused. The product-owner follow-up after smoke 02
+  explicitly authorizes this relevance rule in shared provider instructions;
+  deterministic finalization and the factual multi-intent contract stay intact.
 - Identity transparency is required for an actual identity question, not merely
   a request to speak with a person. Never claim human identity or false experience.
 - Handoff state/event is independent of the customer surface. Explicit request
