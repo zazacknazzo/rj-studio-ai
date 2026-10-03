@@ -37,6 +37,15 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 shared reply-plan instruction correction committed at 1faf390;
+  both adapters use the same rule, no finalizer/schema/Knowledge changes.
+  600 tests and checks pass; both review axes have no findings. One authorized
+  live retest stopped on live_usage_missing_or_invalid: no valid model reply,
+  usage/cost indeterminate, conservative reservation US$0.0112425, no retries.
+  Full smoke and B NOT executed. See
+  docs/evals/V1/multi-intent-instruction-correction-2026-10-03.md.
+  Ticket remains in-progress; no claim of corrected live behavior.
+
 - 2026-10-03 authorized single-case diagnosis reproduced multi-fact failure: both
   facts selected, price/hours Intents correct, but model omitted factual parts and
   refs. Classification MODEL_PLAN_INCOMPLETE; finalizer correctly imposed
