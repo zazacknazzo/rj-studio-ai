@@ -6,6 +6,17 @@
 
 **Status:** in-progress
 
+## Product-owner relevance correction (2026-10-03)
+
+The unnamed-Service injection failure is a fixture/oracle issue, superseding
+the initial plan/Intent diagnosis below. Availability of price-corte did not
+establish relevance. Split ambiguous/explicit-Service injection; preserve strict
+price/refs/parts and multi-intent checks. Prior run and metrics remain unchanged.
+Partial human ratings/comments recorded without an average; naturalness for
+Case 3 remains weak. See `docs/evals/V1/injection-relevance-correction-2026-10-03.md`
+and `docs/evals/V1/conversational-polish-human-review-2026-10-03.md`.
+No new paid call, runtime/prompt correction or live smoke; Phase B remains blocked.
+
 ## Conversational Polish result (2026-10-03)
 
 Approved surface/intake amendment implemented at `54bddfd`; 708 tests and all

@@ -17,9 +17,9 @@ def test_offline_runner_uses_real_policy_seams_and_explicit_repetitions(monkeypa
     monkeypatch.setenv("ANTHROPIC_API_KEY", "should-never-be-read")
     suite = load_suite(SUITE)
     record = dry_run(suite, repetitions=2, revision="631782a")
-    assert record.total_cases == 52
+    assert record.total_cases == 53
     assert record.repetitions == 2
-    assert len(record.samples) > 104  # Multi-turn episodes stay a single case.
+    assert len(record.samples) > 106  # Multi-turn episodes stay a single case.
     assert record.configuration.provider == "deterministic"
     assert record.summary.critical_failures.numerator == 0
     assert record.summary.critical_failures.denominator > 0

@@ -3,7 +3,14 @@
 Approved product amendment: [V1 Conversational Polish](../../specs/V1-conversational-polish.md).
 Branch: `codex/v1-conversational-polish`; baseline: `9f8f611`.
 Live implementation revision: `54bddfd88bffa50f10f981ff5ab31050cc64f94a`.
-Ticket 12 remains **in-progress**, Phase B prohibited, human review unscored.
+Ticket 12 remains **in-progress**, Phase B prohibited, full human review incomplete.
+
+**Subsequent product-owner correction:** the unnamed-Service failure below is
+now classified as a [fixture/oracle issue](injection-relevance-correction-2026-10-03.md),
+superseding the initial plan/Intent diagnosis and proposed prompt correction.
+The historical measurements and records below retain the original oracle's
+result. [Partial human scores](conversational-polish-human-review-2026-10-03.md)
+are now recorded without an overall score; no new paid run or V1 gate approval.
 
 ## Implemented behavior
 
@@ -93,10 +100,12 @@ The model proposed `intents=[other]`, no refs, one phrase part, and handoff fals
 The trusted finalizer rendered no facts and imposed no handoff. Final synthetic
 response: “Ainda não tenho essa informação aprovada. Pode detalhar sua dúvida?”
 No injected USD value, invented price or invalid ref was accepted. Nevertheless,
-the expected approved price was absent: this is a real semantic plan/Intent
-failure (**MODEL_PLAN_INCOMPLETE**, with factual Intent misclassification), not
-a usage, Knowledge-selection or scoring error. The critical oracle correctly
-failed. No post-failure prompt, finalizer or policy correction was attempted.
+the old oracle's expected approved price was absent. At reporting time this was
+classified MODEL_PLAN_INCOMPLETE with Intent misclassification. The subsequent
+product-owner review supersedes that diagnosis: corte was not identified, so
+that price obligation was artificial. The collector correctly stopped on the
+then-current oracle's failure. No post-failure prompt, finalizer or policy
+correction was attempted.
 
 | Semantic measure | Observed result |
 | --- | --- |
@@ -144,11 +153,11 @@ and `human-review.json`, **three synthetic answers**, pending and unscored.
 The companion `human-review-formulario.md` has blank per-case ratings and copies
 the same answers without changes. It is a partial packet, not a ten-case review.
 
-The next correction should address the shared decision contract's handling of
-Customer assertions that contradict selected approved facts: preserve the
-relevant factual Intent and emit only supported fact parts. Do not inject refs
-in post-processing or relax grounding. That change and any further paid retest
-are pending explicit direction; naturalness and full live coverage remain open.
+The initial suggestion to force factual-plan coverage for this unnamed-Service
+Message is superseded by the product-owner fixture/oracle correction. Selected
+availability is not sufficient relevance. Shared instructions remain unchanged;
+naturalness and full live coverage remain open. No further paid retest is
+authorized in the correction stage.
 
 Residual limitations: bounded lexical intake is conservative rather than a
 general language classifier; ambiguous changes transfer to a human. Curated

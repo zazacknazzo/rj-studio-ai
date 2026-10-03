@@ -51,6 +51,15 @@ LLM or numeric regex is the grounding guarantee. New provider requests require
 `reply_parts`; an older proposal without them is read safely but yields a
 clarification. Future adapters return the same untrusted decision contract.
 
+Selected availability does not establish factual relevance. A fact needs a
+semantic link to the current Message or unambiguous Conversation Context before
+being used. For each detected factual Intent supported by a relevant approved
+fact, the plan still declares its ref and fact part, covering all such Intents;
+unrelated selected facts may stay unused. This does not authorize omission of a
+relevant price or policy. The eval-only selection/oracle distinction is defined
+in [harness operations](evals/V1/harness.md); production prompts and finalizer
+are unchanged by that fixture correction.
+
 Missing or invalid facts, unsupported claim categories, missing mandatory
 policies, or an unsafe final surface produce a short deterministic clarification
 or proposal for human review. Selected Services carry their mandatory policies

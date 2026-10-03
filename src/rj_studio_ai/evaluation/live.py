@@ -54,7 +54,7 @@ from rj_studio_ai.evaluation.records import (
     summarize,
 )
 from rj_studio_ai.evaluation.runner import seed_context_history, synthetic_facts, synthetic_message
-from rj_studio_ai.evaluation.suite import load_suite
+from rj_studio_ai.evaluation.suite import grounding_relevance_matches, load_suite
 from rj_studio_ai.grounding import finalize_reply
 from rj_studio_ai.handoff import HandoffReason, handoff_confirmation
 from rj_studio_ai.livia_persona import (
@@ -247,9 +247,13 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
             "trusted_facts": bool(body)
             and all(t in finalized.reply_text for t in contains)
             and not any(t in (body or "") for t in data["expected"]["excludes"])
+            and grounding_relevance_matches(data["expected"], finalized.knowledge_refs)
             and not residue.strip(),
-            "handoff_policy": bool(store.list_active_handoffs()) is data["expected"]["handoff"],
         }
+        if data["expected"]["handoff"] is not None:
+            checks["handoff_policy"] = (
+                bool(store.list_active_handoffs()) is data["expected"]["handoff"]
+            )
         if case.contract.case_id == "grounding-multiple-facts":
             checks["decision_contract"] = set(decision.intents) == {"price", "hours"}
         return checks

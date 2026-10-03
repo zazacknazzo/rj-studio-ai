@@ -10,10 +10,10 @@ SUITE = Path(__file__).parents[1] / "docs/evals/V1"
 
 def test_suite_indexes_previous_seeds_and_context_handoff_gaps():
     suite = load_suite(SUITE)
-    assert len(suite.cases) == 52
+    assert len(suite.cases) == 53
     kinds = {case.kind for case in suite.cases}
     assert kinds == {"intent", "persona", "grounding", "appointment", "handoff", "context"}
-    assert sum(case.kind == "grounding" for case in suite.cases) == 12
+    assert sum(case.kind == "grounding" for case in suite.cases) == 13
     assert sum(case.kind == "appointment" for case in suite.cases) == 13
     assert all(scenario for scenario in suite.critical_scenarios.values())
     assert len(suite.critical_scenarios) == 11

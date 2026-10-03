@@ -23,7 +23,12 @@ from rj_studio_ai.evaluation.records import (
     fingerprint,
     summarize,
 )
-from rj_studio_ai.evaluation.suite import EvalCase, EvalSuite, fixture_decision
+from rj_studio_ai.evaluation.suite import (
+    EvalCase,
+    EvalSuite,
+    fixture_decision,
+    grounding_relevance_matches,
+)
 from rj_studio_ai.generation import GeneratedReply
 from rj_studio_ai.grounding import finalize_reply
 from rj_studio_ai.livia_persona import (
@@ -137,9 +142,11 @@ def _single_case(case):
         checks = {
             "trusted_facts": all(text in result.reply_text for text in data["expected"]["contains"])
             and not any(text in result.reply_text for text in data["expected"]["excludes"])
+            and grounding_relevance_matches(data["expected"], result.knowledge_refs)
             and not residue.strip(),
-            "handoff_policy": result.handoff is data["expected"]["handoff"],
         }
+        if data["expected"]["handoff"] is not None:
+            checks["handoff_policy"] = result.handoff is data["expected"]["handoff"]
     elif case.kind == "intent":
         # Oracle proposal tests the multi-intent schema, not model detection quality.
         result = fixture_decision(intents=data["expected_intents"])

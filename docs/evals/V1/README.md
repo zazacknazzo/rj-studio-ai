@@ -4,6 +4,10 @@ Current product round: [approved Conversational Polish](../../specs/V1-conversat
 Implementation and fresh stopped smoke: [Conversational Polish result](conversational-polish-2026-10-03.md).
 Three of ten cases executed (two pass, one semantic failure); no further live
 call or Phase B. The new three-answer human packet is partial and unscored.
+Product-owner correction: [injection relevance contract](injection-relevance-correction-2026-10-03.md)
+classifies the unnamed-Service failure as a fixture/oracle issue. Original run
+records retain their original results; [partial human scores](conversational-polish-human-review-2026-10-03.md)
+are recorded without an overall score. No fresh paid run or gate approval.
 The previous semantic 10/10 smoke failed product-owner human UX review. Phase B
 remains blocked; new evidence requires fresh unscored human review. Synthetic
 price/discount and appointment expectations now follow that explicit amendment;
@@ -28,7 +32,7 @@ Anthropic comparison is deferred by the product owner. Ticket 12 remains
 in-progress; comparative acceptance and human review are not complete.
 
 Ticket 12 Phase 1: **harness implemented / live model gate pending**.
-`suite.yaml` indexes **52 synthetic cases**: 14 Intent, 6 persona, 12 grounding,
+`suite.yaml` indexes **53 synthetic cases**: 14 Intent, 6 persona, 13 grounding,
 13 appointment episodes, 4 durable handoff episodes and 3 context cases.
 Eleven explicit critical-scenario groups require zero prohibited outcomes.
 The original 45 seeds remain; the seven additions close deterministic
@@ -46,7 +50,7 @@ remains Phase 2 work.
 
 Ticket 08 adds a separate synthetic persona seed. Its naturalness checks are rubrics for Ticket 12, not claimed unit-test proof.
 
-Ticket 09 adds `grounding-cases.yaml`: 12 synthetic grounding, uncertainty,
+Ticket 09 adds `grounding-cases.yaml`: now 13 synthetic grounding, uncertainty,
 technical-risk, and mandatory-policy cases. The `facts` entries are fixture
 overrides, not deployable Salon Knowledge. `tests/test_grounded_reply.py`
 executes their deterministic proposal → rendering contract with synthetic

@@ -13,7 +13,7 @@ SUITE = Path(__file__).parents[1] / "docs/evals/V1"
 
 def test_offline_cli_validates_runs_reports_and_compares(tmp_path, capsys):
     assert main(["--suite", str(SUITE), "validate-suite"]) == 0
-    assert json.loads(capsys.readouterr().out)["total_cases"] == 52
+    assert json.loads(capsys.readouterr().out)["total_cases"] == 53
     run_path = tmp_path / "run.json"
     assert main(["--suite", str(SUITE), "dry-run", "--output", str(run_path)]) == 0
     output = json.loads(capsys.readouterr().out)

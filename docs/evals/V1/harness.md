@@ -45,6 +45,39 @@ the schema: a pass proves orchestration/schema compatibility, **not** detection
 accuracy. Persona checks cover deterministic surface/transparency rules;
 warmth, fit and naturalness remain unscored human judgements.
 
+## Availability and relevance in grounding fixtures
+
+Both grounding paths supply `selected_facts` directly to the finalizer/model
+context. The live `_SelectedKnowledgeContext` replaces the builder's Knowledge
+with fixture-selected synthetic facts. This intentionally isolates grounding;
+it does **not** evaluate production Knowledge selection or prove relevance.
+Only selected facts whose meaning addresses the Message or unambiguous history
+support a factual answer. Their detected factual Intents still require refs and
+fact parts, including multi-intent coverage. Selection is not a render-all list.
+
+The two injection variants separate these properties. The unnamed-Service case
+deliberately makes corte's price available but not relevant; it permits safe
+clarification/redirection and prohibits unsolicited facts. The explicit-corte
+case requires its approved price while rejecting the injected value. The
+multi-intent fixture now names corte explicitly too, without changing its
+required price/hours coverage. No provider instruction or production rule changes.
+
+Optional `expected.allowed_fact_ids` is an independent fixture relevance bound
+on rendered refs: `[]` permits no factual parts; an omitted bound keeps the
+existing oracle. Unknown, duplicate or unselected IDs and malformed bounds are
+rejected at load time. Existing contains/excludes, authorized-text residue and
+core validation still apply; this never authorizes free factual text. Applicable
+mandatory policies must remain in the fixture's relevance bound.
+
+`expected.handoff: null` means no fixed handoff outcome is required by that case.
+It omits the handoff check from the case contract and metric denominator rather
+than counting an unconditional pass. Other true/false handoff expectations stay
+strict, including explicit-Service injection. Naturalness is recorded from human
+review, not inferred from a semantic pass. Suite fingerprints change; historical
+records, failure counts and responses are not rescored or rewritten. The current
+ten-ID `SMOKE_CASES` paid plan is unchanged; the extra variant is offline-covered
+and part of the 53-case suite. No new live execution is authorized at this step.
+
 ## Record v1
 
 [run-record.schema.json](run-record.schema.json) is the generated JSON Schema.

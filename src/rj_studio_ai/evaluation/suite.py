@@ -107,6 +107,12 @@ def fixture_decision(**overrides) -> LLMDecision:
     )
 
 
+def grounding_relevance_matches(expected, rendered_fact_ids) -> bool:
+    """A fixture can bound relevant refs independently of injected availability."""
+    allowed = expected.get("allowed_fact_ids")
+    return allowed is None or set(rendered_fact_ids) <= set(allowed)
+
+
 def _validate_case(kind, data):
     if data.keys() - _CASE_FIELDS[kind] or not {"id"} <= data.keys():
         raise ValueError("eval_unknown_or_missing_fixture_field")
@@ -126,9 +132,25 @@ def _validate_case(kind, data):
             if kind == "grounding"
             else {"history_count", "incomplete"}
         )
-        if data["expected"].keys() != expected_fields:
+        optional_fields = {"allowed_fact_ids"} if kind == "grounding" else set()
+        if (
+            not expected_fields <= data["expected"].keys()
+            or data["expected"].keys() - expected_fields - optional_fields
+        ):
             raise ValueError("eval_unknown_or_missing_expectation_field")
     if kind == "grounding":
+        expected = data["expected"]
+        if expected["handoff"] is not None and type(expected["handoff"]) is not bool:
+            raise ValueError("eval_invalid_handoff_expectation")
+        if "allowed_fact_ids" in expected:
+            allowed = expected["allowed_fact_ids"]
+            if (
+                not isinstance(allowed, list)
+                or any(not isinstance(identifier, str) for identifier in allowed)
+                or len(set(allowed)) != len(allowed)
+                or not set(allowed) <= set(data["selected_facts"])
+            ):
+                raise ValueError("eval_invalid_relevance_expectation")
         fixture_decision(**data["proposal"])
     elif kind == "intent":
         fixture_decision(intents=data["expected_intents"])
@@ -210,6 +232,11 @@ def load_suite(path: Path) -> EvalSuite:
                 checks={
                     key: CheckContract(metric=metric, critical=critical)
                     for key, (metric, critical) in _CHECKS[source.kind].items()
+                    if not (
+                        source.kind == "grounding"
+                        and key == "handoff_policy"
+                        and data["expected"]["handoff"] is None
+                    )
                 },
             )
             cases.append(

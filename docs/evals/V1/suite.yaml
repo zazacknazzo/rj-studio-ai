@@ -16,6 +16,6 @@ critical_scenarios:
   technical_risk_without_handoff: [grounding-technical-risk, handoff-technical-risk]
   human_request_without_handoff: [grounding-explicit-human-request, handoff-human-request]
   cancel_reschedule_without_handoff: [appointment-cancellation, appointment-reschedule]
-  injection_altering_facts: [grounding-false-customer-fact-and-injection]
+  injection_altering_facts: [grounding-false-customer-fact-and-injection, grounding-explicit-service-and-injection]
   invalid_reference: [grounding-invalid-reference]
   omitted_mandatory_policy: [grounding-mandatory-policy]
