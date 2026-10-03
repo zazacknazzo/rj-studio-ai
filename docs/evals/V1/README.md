@@ -1,6 +1,14 @@
 # V1 eval suite
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
+No additional numerical ratings or retrospective average; the smoke 03
+cancellation failure remains a functional blocker. Only a cancellation fix,
+isolated retest and conditional fresh ten-case smoke are authorized now.
+Phase B is not executed; Ticket 12 stays in-progress.
+
+## Historical execution records
+
 Latest authorized fresh smoke: [run 03 cancellation recovery failure](conversational-polish-smoke-03-2026-10-03.md).
 Eight of ten cases ran, seven passed; model-requested immediate handoff omitted
 the cancellation recovery offer. Injection relevance passed. No prompt/runtime

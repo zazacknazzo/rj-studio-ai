@@ -6,6 +6,18 @@
 
 **Status:** in-progress
 
+## Current product-owner decision (2026-10-03)
+
+Conversational Polish human review is APPROVED qualitatively for naturalness,
+clarity, persona and commercial direction, based on prior observed replies.
+No further numerical rating/retrospective average is required. This does not
+waive the smoke 03 cancellation failure. Only cancellation recovery correction,
+tests/three reviews, one US$0.20 isolated retest and a conditional US$1 fresh
+smoke are authorized. Functional 10/10 releases B for the NEXT stage, not this
+session; the official observed 8s gate remains unchanged. See
+`docs/evals/V1/conversational-polish-human-review-2026-10-03.md`.
+Ticket stays in-progress; historical decisions below remain evidence.
+
 ## Product-owner relevance correction (2026-10-03)
 
 The unnamed-Service injection failure is a fixture/oracle issue, superseding

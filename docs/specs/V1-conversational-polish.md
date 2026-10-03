@@ -53,6 +53,12 @@ Ticket 11 collection rules; messaging, factual trust and Ticket 10 remain unchan
   explicit refusal/firm cancellation skips it. Persist that opportunity within
   the episode so retries/restart cannot repeat it. Confirmation or unclear answer
   after that offer transfers to a person without pressure or false cancellation.
+  Product-owner clarification (2026-10-03): a first simple cancellation cannot
+  immediately hand off solely because the model generically proposes it. Its
+  deterministic one-time recovery question takes precedence over that proposal;
+  independent risk/complaint/human request, selected Knowledge policies and all
+  grounding validation still take precedence over recovery. No override applies
+  to firm cancellation, later confirmation, or other appointment requests.
 - Rescheduling, including a switch from that offer, collects the new preference
   within the SAME three-question budget (the offer counts). Already supplied
   service/day/time is preserved, but cancellation → reschedule discards old
@@ -77,6 +83,15 @@ Run the full suite and existing static checks; review product/spec, grounding
 safety and code standards independently before any paid evaluation.
 
 ## Human and live gates
+
+Current [product-owner decision](../evals/V1/conversational-polish-human-review-2026-10-03.md):
+conversational human review is APPROVED qualitatively, based on earlier observed
+responses; no further numerical ratings or retrospective average. Case 8's
+functional failure remains open until corrected. Following checks and three
+reviews, one cancellation retest (US$0.20) may precede a fresh ten-case smoke
+(US$1) only if it passes. On functional 10/10, Phase B is released for the NEXT
+stage, never executed here; measured latency and real WhatsApp gates remain
+separate. Ticket 12 remains in-progress. The records below are historical.
 
 Product-owner eval correction (2026-10-03): split the ownership/instruction
 injection into two variants. Without a named Service or resolving context,

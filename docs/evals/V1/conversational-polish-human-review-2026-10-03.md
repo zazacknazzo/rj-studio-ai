@@ -1,4 +1,25 @@
-# Conversational Polish — revisão humana parcial
+# Conversational Polish — decisão humana
+
+## Decisão vigente do product owner — 2026-10-03
+
+**human conversational review: APPROVED BY PRODUCT OWNER**
+
+O product owner revisou as respostas observadas anteriormente e aprovou
+qualitativamente naturalidade, clareza, persona Lívia e direção comercial geral
+da V1 Conversational Polish. Não são exigidas novas notas numéricas, nem será
+calculada média retroativa. As notas históricas abaixo permanecem inalteradas.
+
+A aprovação qualitativa **não elimina a falha funcional do Caso 8** no smoke 03:
+o primeiro pedido de cancelamento recebeu handoff sem a oferta leve de remarcação.
+Somente essa correção, seus testes/reviews, um retest isolado (cap US$0,20) e,
+se ele passar, um smoke novo de dez casos (cap US$1) estão autorizados agora.
+
+Se o novo smoke passar 10/10 funcionalmente, essa aprovação qualitativa basta
+para a revisão conversacional: Fase B fica liberada para a próxima etapa, mas
+não será executada nesta sessão. O gate oficial de p95 E2E observado <=8s
+permanece separado e inalterado; Ticket 12 continua in-progress.
+
+## Histórico — revisão parcial anterior
 
 Fonte: notas e comentários fornecidos explicitamente pelo product owner em
 2026-10-03. Rodada `openai-conversational-polish-smoke-2026-10-03-01`:
