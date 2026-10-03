@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Offline harness implemented; live model, cost, latency and human-review gates pending |
+| V1 | OpenAI ten-case smoke and qualitative human review passed; Phase B and real-provider gates pending |
 
 Each eval case should contain:
 
@@ -23,8 +23,8 @@ Rules:
 - Keep prompts and implementation out of the expected answer so evals survive refactors.
 - Evals complement deterministic tests; they do not replace webhook, persistence, adapter, or failure-path tests.
 
-The synthetic V1 seeds are indexed under `V1/README.md`; no live-model gate result
-is claimed yet.
+The synthetic V1 seeds and dated live results are indexed under `V1/README.md`;
+passing a partial live gate does not approve V1 or production operation.
 
 Use [V1 harness operations](V1/harness.md) for offline commands, records,
 pricing, metric definitions, privacy and the future Phase 2 checklist.

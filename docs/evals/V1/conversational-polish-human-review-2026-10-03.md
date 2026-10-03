@@ -19,6 +19,16 @@ para a revisão conversacional: Fase B fica liberada para a próxima etapa, mas
 não será executada nesta sessão. O gate oficial de p95 E2E observado <=8s
 permanece separado e inalterado; Ticket 12 continua in-progress.
 
+## Resultado pós-correção — 2026-10-03
+
+O [retest de cancelamento e smoke novo 04](cancellation-recovery-2026-10-03.md)
+passaram: **1/1 e 10/10**, respectivamente. A falha funcional do Caso 8 foi
+corrigida sem dispensar os guardrails. Naturalidade continua **APROVADA
+qualitativamente pelo product owner**, com base nas respostas anteriores,
+sem novas notas ou média retroativa. Fase B está **liberada para a próxima
+etapa e não foi executada**. O gate observado de 8s passou neste smoke;
+real WhatsApp E2E permanece pendente, Ticket 12 segue in-progress.
+
 ## Histórico — revisão parcial anterior
 
 Fonte: notas e comentários fornecidos explicitamente pelo product owner em

@@ -2,10 +2,12 @@
 
 Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
 Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
-No additional numerical ratings or retrospective average; the smoke 03
-cancellation failure remains a functional blocker. Only a cancellation fix,
-isolated retest and conditional fresh ten-case smoke are authorized now.
-Phase B is not executed; Ticket 12 stays in-progress.
+Latest result: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
+Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms
+passes the unchanged 8s gate for this run. No additional numerical ratings or
+retrospective average. Qualitative human approval and functional pass release
+Phase B for the NEXT stage; **not executed here**. Ticket 12 stays in-progress,
+real Meta/WhatsApp E2E remains pending. Historical evidence is unchanged.
 
 ## Historical execution records
 

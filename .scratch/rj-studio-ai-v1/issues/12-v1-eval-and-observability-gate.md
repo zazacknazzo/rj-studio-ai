@@ -16,7 +16,14 @@ tests/three reviews, one US$0.20 isolated retest and a conditional US$1 fresh
 smoke are authorized. Functional 10/10 releases B for the NEXT stage, not this
 session; the official observed 8s gate remains unchanged. See
 `docs/evals/V1/conversational-polish-human-review-2026-10-03.md`.
-Ticket stays in-progress; historical decisions below remain evidence.
+Cancellation corrected at 5292a97; isolated retest **1/1** and fresh smoke 04
+**10/10** passed. Human conversational review: **APPROVED BY PRODUCT OWNER**,
+qualitatively based on previous responses. Phase B is released for the next
+stage, **not executed**. Measured observed p95 6,270.32ms passes the unchanged
+8s gate for this run; broader/repeated and real-provider evidence remain open.
+See `docs/evals/V1/cancellation-recovery-2026-10-03.md` for checks, reviews,
+costs, latencies and untouched historical evidence. Ticket stays in-progress;
+historical decisions below remain evidence.
 
 ## Product-owner relevance correction (2026-10-03)
 
