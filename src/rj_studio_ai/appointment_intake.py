@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
-from rj_studio_ai.handoff import HandoffReason
+from rj_studio_ai.handoff import HandoffReason, safe_handoff_reason
 from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
 from rj_studio_ai.llm_decision import Intent, LLMDecision, ReplyPhrase
 
@@ -130,7 +130,12 @@ def plan_appointment_intake(
         and Intent.APPOINTMENT_INTEREST not in decision.intents
     ):
         return None
-    if change and not cancelling and not rescheduling:
+    if (
+        change
+        and not cancelling
+        and not rescheduling
+        and not (collecting and prior.awaiting_field == "cancellation_choice")
+    ):
         return None
     proposal = decision.appointment_preferences
 
@@ -237,6 +242,27 @@ def intake_handoff_reason(update: AppointmentIntakeUpdate) -> HandoffReason | No
     if update.desired_service and update.preferred_day and update.preferred_time:
         return HandoffReason.APPOINTMENT_INTEREST
     return HandoffReason.APPOINTMENT_INTAKE_LIMIT
+
+
+def apply_cancellation_recovery_policy(
+    decision: LLMDecision, update: AppointmentIntakeUpdate | None
+) -> LLMDecision:
+    """The first simple cancellation offers recovery before generic model handoff.
+
+    Only that one pending question has precedence. Independent risk reasons or
+    Intents remain untouched; grounding still validates the entire proposal.
+    """
+    if (
+        update is not None
+        and update.request_kind == "cancellation"
+        and update.awaiting_field == "cancellation_choice"
+        and decision.handoff
+        and set(decision.intents) <= {Intent.APPOINTMENT_CHANGE, Intent.GREETING, Intent.OTHER}
+        and safe_handoff_reason(decision.handoff_reason or "")
+        in {HandoffReason.MODEL_REQUEST, HandoffReason.APPOINTMENT_CHANGE}
+    ):
+        return decision.model_copy(update={"handoff": False, "handoff_reason": None})
+    return decision
 
 
 def intake_question(update: AppointmentIntakeUpdate, customer_message: str) -> str:

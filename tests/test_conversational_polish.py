@@ -68,6 +68,7 @@ def test_cancellation_offer_occurs_once_and_confirmation_survives_restart(tmp_pa
     store.initialize()
     model = AppointmentModel()
     model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": "model_requested_handoff"}
     first = respond(store, model, message(body="Quero cancelar meu agendamento."))
     assert "?" in first.body and "outro dia" in first.body
     assert not store.list_active_handoffs()
@@ -80,6 +81,168 @@ def test_cancellation_offer_occurs_once_and_confirmation_survives_restart(tmp_pa
     intake = reopened.get_appointment_intake(conversation_id=handoff.conversation_id)
     assert intake.recovery_offered and intake.clarification_count == 1
     assert "?" not in reply.body and "cancelado" not in reply.body
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ["model_requested_handoff", "appointment_change_requested", "Staff must handle cancellation"],
+)
+def test_first_cancellation_recovers_before_nonspecific_model_handoff(tmp_path, reason):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "premature-cancel.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": reason}
+    reply = respond(store, model, message(body="Quero cancelar meu agendamento"))
+
+    assert not store.list_active_handoffs()
+    assert reply.body.count("?") == 1 and "outro dia" in reply.body
+    claim = store.get_generation(provider="meta", provider_message_id="interest-1")
+    intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
+    assert intake.state == "collecting" and intake.awaiting_field == "cancellation_choice"
+    assert intake.recovery_offered and intake.clarification_count == 1
+    assert not any(
+        claim in reply.body.casefold()
+        for claim in ("cancelado", "agendado", "vaga confirmada", "90%")
+    )
+
+
+@pytest.mark.parametrize(
+    "body,overrides,reason",
+    [
+        (
+            "Quero cancelar meu agendamento. Meu couro cabeludo está ardendo após a química.",
+            {},
+            "personalized_technical_risk",
+        ),
+        (
+            "Quero cancelar meu agendamento. Quero falar com uma pessoa.",
+            {},
+            "explicit_human_request",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"intents": ["appointment_change", "complaint"]},
+            "human_review_required",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"handoff_reason": "requires_human_consultation"},
+            "requires_human_consultation",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"handoff_reason": "personalized_technical_risk"},
+            "personalized_technical_risk",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"intents": ["appointment_change", "technical_guidance"]},
+            "model_requested_handoff",
+        ),
+        (
+            "Quero cancelar meu agendamento",
+            {"knowledge_refs": ["invented-reference"]},
+            "unavailable_knowledge",
+        ),
+        (
+            "Quero cancelar meu agendamento. Quanto custa?",
+            {"intents": ["appointment_change", "price"], "handoff": False, "handoff_reason": None},
+            "missing_critical_fact",
+        ),
+    ],
+)
+def test_cancellation_recovery_never_bypasses_independent_safety(tmp_path, body, overrides, reason):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "cancel-safety.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": "model_requested_handoff", **overrides}
+    reply = respond(store, model, message(body=body))
+
+    active = store.list_active_handoffs()[0]
+    assert active.reason_code == reason
+    assert "?" not in reply.body and "outro dia" not in reply.body
+    intake = store.get_appointment_intake(conversation_id=active.conversation_id)
+    assert intake.clarification_count == 0
+    if reason == "personalized_technical_risk":
+        assert "pare" in reply.body and "avaliação profissional" in reply.body
+
+
+def test_human_request_during_cancellation_recovery_hands_off_without_second_offer(tmp_path):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "cancel-human.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": "model_requested_handoff"}
+    respond(store, model, message(body="Quero cancelar meu agendamento"))
+    model.intents = ["human_request"]
+    reply = respond(store, model, message("interest-2", "Quero falar com uma pessoa."))
+
+    active = store.list_active_handoffs()[0]
+    assert active.reason_code == "explicit_human_request"
+    assert "?" not in reply.body and "outro dia" not in reply.body
+    assert (
+        store.get_appointment_intake(conversation_id=active.conversation_id).clarification_count
+        == 1
+    )
+    assert respond(store, model, message("interest-3", "Obrigada")) is None
+    assert model.calls == 2
+
+
+@pytest.mark.parametrize(
+    "fact,reason",
+    [
+        (
+            _fact("service-test", category="service", requires_human_consultation=True),
+            "requires_human_consultation",
+        ),
+        (_fact("handoff-test", category="handoff_condition"), "approved_handoff_condition"),
+        (
+            _fact("service-test", category="service", mandatory_policy_ids=("missing-policy",)),
+            "unavailable_mandatory_policy",
+        ),
+    ],
+)
+def test_selected_knowledge_policy_still_overrides_first_cancellation(tmp_path, fact, reason):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    class SelectedKnowledge:
+        def build(self, **kwargs):
+            return ConversationContext(history=(), knowledge=(fact,))
+
+    store = SqliteConversationStore(tmp_path / "cancel-knowledge-policy.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": "model_requested_handoff"}
+    reply = respond(
+        store,
+        model,
+        message(body="Quero cancelar meu agendamento"),
+        context_builder=SelectedKnowledge(),
+    )
+    active = store.list_active_handoffs()[0]
+    assert active.reason_code == reason
+    assert "?" not in reply.body and "outro dia" not in reply.body
+    assert (
+        store.get_appointment_intake(conversation_id=active.conversation_id).clarification_count
+        == 0
+    )
 
 
 def test_explicit_human_request_has_short_confirmation_then_suppression(tmp_path):
@@ -328,6 +491,42 @@ def test_cancellation_can_switch_to_bounded_reschedule_without_repeating_recover
     assert intake.preferred_day == "sexta" and intake.preferred_time == "à tarde"
     assert intake.clarification_count == 2
     assert "?" not in last.body and "confirmar" in last.body
+
+
+def test_accepting_another_day_continues_intake_after_restart(tmp_path):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    path = tmp_path / "cancel-another-day.db"
+    store = SqliteConversationStore(path)
+    store.initialize()
+    model = AppointmentModel(desired_service="corte")
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": "model_requested_handoff"}
+    first = message(body="Quero cancelar meu agendamento de corte")
+    respond(store, model, first)
+    original = store.get_generation(provider="meta", provider_message_id=first.provider_message_id)
+    episode = store.get_appointment_intake(
+        inbound_message_id=original.inbound_message_id
+    ).episode_token
+
+    reopened = SqliteConversationStore(path)
+    model.preferences = {}
+    model.overrides = {}
+    reply = respond(reopened, model, message("interest-2", "Pode ser outro dia."))
+
+    assert not reopened.list_active_handoffs()
+    assert reply.body.count("?") == 1 and "dia" in reply.body
+    claim = reopened.get_generation(provider="meta", provider_message_id="interest-2")
+    intake = reopened.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
+    assert intake.episode_token == episode
+    assert intake.request_kind == "reschedule" and intake.recovery_offered
+    assert intake.preferred_day is None and intake.preferred_time is None
+    assert intake.clarification_count == 2 and intake.awaiting_field == "preferred_day"
+    assert not any(
+        word in reply.body.casefold() for word in ("confirmado", "agendado", "cancelado")
+    )
 
 
 @pytest.mark.parametrize(

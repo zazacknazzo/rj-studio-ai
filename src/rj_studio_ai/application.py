@@ -4,6 +4,7 @@ from time import monotonic, sleep
 
 from rj_studio_ai.appointment_intake import (
     AppointmentIntakeUpdate,
+    apply_cancellation_recovery_policy,
     appointment_change_requested,
     intake_handoff_reason,
     intake_question,
@@ -194,6 +195,7 @@ class MessageResponder:
                     customer_message=message.body,
                     prior=context.appointment_intake,
                 )
+                proposal = apply_cancellation_recovery_policy(proposal, intake_update)
                 if intake_update is None and appointment_change_requested(message.body):
                     proposal = proposal.model_copy(
                         update={
