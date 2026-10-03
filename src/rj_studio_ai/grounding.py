@@ -1,5 +1,6 @@
 """Compose customer-visible facts from approved data, never from model prose."""
 
+from rj_studio_ai.appointment_intake import AppointmentIntakeUpdate
 from rj_studio_ai.conversation_context import ConversationContext
 from rj_studio_ai.livia_persona import (
     HUMAN_REVIEW_REPLY,
@@ -27,6 +28,7 @@ def finalize_reply(
     *,
     customer_message: str,
     context: ConversationContext,
+    appointment_intake: AppointmentIntakeUpdate | None = None,
 ) -> LLMDecision:
     """Return a trusted rendering while retaining the structured decision seam."""
     facts = {
@@ -50,8 +52,7 @@ def finalize_reply(
     if set(decision.intents) & {
         Intent.HUMAN_REQUEST,
         Intent.COMPLAINT,
-        Intent.APPOINTMENT_CHANGE,
-    }:
+    } or (Intent.APPOINTMENT_CHANGE in decision.intents and appointment_intake is None):
         return _clarify(decision, customer_message, "human_review_required")
     if decision.handoff:
         return _clarify(
@@ -80,12 +81,24 @@ def finalize_reply(
         Intent.LOCATION: SalonKnowledgeCategory.LOCATION,
         Intent.PROMOTION_OR_DISCOUNT: SalonKnowledgeCategory.POLICY,
     }
+    clarification = _commercial_clarification(decision, context, rendered_categories)
+    if clarification is not None:
+        if LiviaPersona().requires_identity_transparency(customer_message):
+            clarification = REPLY_PHRASES[ReplyPhrase.IDENTITY] + " " + clarification
+        return decision.model_copy(
+            update={
+                "reply_text": clarification,
+                "uncertainty": UncertaintyLevel.HIGH,
+            }
+        )
     if any(
         intent in required_categories and required_categories[intent] not in rendered_categories
         for intent in decision.intents
     ):
         return _clarify(decision, customer_message, "missing_critical_fact")
 
+    persona = LiviaPersona()
+    prior_replies = tuple(turn.body for turn in context.history if turn.role == "ai_attendant")
     rendered: list[str] = []
     claims: list[CriticalFactualClaim] = []
     references: list[str] = []
@@ -101,7 +114,11 @@ def finalize_reply(
                 parts.append(FactReplyPart(kind="fact", knowledge_ref=policy_id))
     for part in parts:
         if isinstance(part, PhraseReplyPart):
-            rendered.append(REPLY_PHRASES[part.phrase])
+            rendered.append(
+                persona.phrase(
+                    part.phrase, customer_message=customer_message, prior_ai_replies=prior_replies
+                )
+            )
         elif isinstance(part, FactReplyPart):
             fact = facts[part.knowledge_ref]
             if fact.id in references:
@@ -118,10 +135,22 @@ def finalize_reply(
                         knowledge_ref=fact.id,
                     )
                 )
-    persona = LiviaPersona()
     if persona.requires_identity_transparency(customer_message):
         rendered.insert(0, REPLY_PHRASES[ReplyPhrase.IDENTITY])
-    text = " ".join(rendered) or REPLY_PHRASES[ReplyPhrase.CLARIFICATION]
+    text = persona.compose_reply(
+        rendered,
+        customer_message=customer_message,
+        prior_ai_replies=prior_replies,
+        commercial_answer=appointment_intake is None
+        and bool(rendered_categories)
+        and not set(decision.intents)
+        & {
+            Intent.APPOINTMENT_INTEREST,
+            Intent.APPOINTMENT_CHANGE,
+            Intent.TECHNICAL_GUIDANCE,
+            Intent.COMPLAINT,
+        },
+    )
     try:
         persona.validate_reply(
             customer_message,
@@ -169,3 +198,39 @@ def _clarify(decision: LLMDecision, customer_message: str, reason: str) -> LLMDe
             "handoff_reason": reason,
         }
     )
+
+
+def _commercial_clarification(
+    decision: LLMDecision,
+    context: ConversationContext,
+    rendered_categories: set[SalonKnowledgeCategory],
+) -> str | None:
+    """One controlled question, never an exception for an attempted factual answer."""
+    if rendered_categories or decision.critical_claims or decision.knowledge_refs:
+        return None
+    if len(decision.reply_parts) != 1 or not isinstance(decision.reply_parts[0], PhraseReplyPart):
+        return None
+    phrase = decision.reply_parts[0].phrase
+    choices = {
+        ReplyPhrase.PRICE_SERVICE_QUESTION: (Intent.PRICE, SalonKnowledgeCategory.PRICE),
+        ReplyPhrase.DISCOUNT_SERVICE_QUESTION: (
+            Intent.PROMOTION_OR_DISCOUNT,
+            SalonKnowledgeCategory.POLICY,
+        ),
+    }
+    if phrase not in choices:
+        return None
+    intent, category = choices[phrase]
+    if intent not in decision.intents or set(decision.intents) - {
+        intent,
+        Intent.GREETING,
+        Intent.OTHER,
+    }:
+        return None
+    if any(fact.category is category for fact in context.knowledge):
+        return None
+    questions = {REPLY_PHRASES[key] for key in choices}
+    previous = next((t.body for t in reversed(context.history) if t.role == "ai_attendant"), "")
+    if previous in questions:
+        return None
+    return REPLY_PHRASES[phrase]

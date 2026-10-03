@@ -562,7 +562,7 @@ def test_invalid_sdk_response_retries_safely_and_records_failure_metrics(tmp_pat
         )
 
     assert response.status_code == 200
-    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in response.text
+    assert "Vou pedir ajuda à equipe pra seguir com segurança." in response.text
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
@@ -640,12 +640,12 @@ def test_invalid_structured_decision_retries_safely_then_replays_safe_reply(tmp_
         )
 
     assert first.text == replay.text
-    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in first.text
+    assert "equipe" in first.text
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
     assert lifecycle is not None
-    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert lifecycle.reply_body == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert SqliteConversationStore(database_path).list_active_handoffs()
     assert [
         (metric.outcome, metric.error_code)
@@ -711,11 +711,11 @@ def test_valid_multi_intent_decision_survives_webhook_and_replay(tmp_path) -> No
 
     assert first.status_code == replay.status_code == 200
     assert first.text == replay.text
-    assert "Vou encaminhar sua conversa para uma pessoa da equipe." in first.text
+    assert "Não tenho essa informação confirmada" in first.text
     assert "disponível" not in first.text
     assert len(client.messages.calls) == 1
     lifecycle = SqliteConversationStore(database_path).get_generation(
         provider="twilio", provider_message_id="message-1"
     )
     assert lifecycle is not None
-    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert "equipe" in lifecycle.reply_body

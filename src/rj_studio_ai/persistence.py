@@ -253,6 +253,9 @@ class SqliteConversationStore:
                         last_inbound_message_id=int(row[8]),
                         handoff_token=row[9],
                         updated_at=datetime.fromisoformat(row[10]),
+                        preferred_day=row[11],
+                        request_kind=row[12],
+                        recovery_offered=bool(row[13]),
                     )
                 )
         except sqlite3.Error as error:
@@ -2170,8 +2173,9 @@ class SqliteConversationStore:
                     INSERT INTO appointment_intakes (
                         conversation_id, episode_token, state, desired_service, preferred_time,
                         professional_preference, clarification_count, awaiting_field,
-                        last_inbound_message_id, handoff_token, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        last_inbound_message_id, handoff_token, updated_at,
+                        preferred_day, request_kind, recovery_offered
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(conversation_id) DO UPDATE SET
                         episode_token = excluded.episode_token, state = excluded.state,
                         desired_service = excluded.desired_service,
@@ -2180,7 +2184,10 @@ class SqliteConversationStore:
                         clarification_count = excluded.clarification_count,
                         awaiting_field = excluded.awaiting_field,
                         last_inbound_message_id = excluded.last_inbound_message_id,
-                        handoff_token = excluded.handoff_token, updated_at = excluded.updated_at
+                        handoff_token = excluded.handoff_token, updated_at = excluded.updated_at,
+                        preferred_day = excluded.preferred_day,
+                        request_kind = excluded.request_kind,
+                        recovery_offered = excluded.recovery_offered
                     """,
                     (
                         conversation_id,
@@ -2194,6 +2201,9 @@ class SqliteConversationStore:
                         inbound_message_id,
                         handoff_token,
                         timestamp,
+                        appointment_intake.preferred_day,
+                        appointment_intake.request_kind,
+                        int(appointment_intake.recovery_offered),
                     ),
                 )
             outbound_message_id = int(

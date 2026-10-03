@@ -393,7 +393,7 @@ def test_oversized_current_message_gets_the_safe_reply_without_llm_generation(
         )
 
     assert response.status_code == 200
-    assert response.text == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert response.text == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert generator.calls == []
 
 
@@ -657,7 +657,7 @@ def test_llm_failure_persists_safe_metrics_without_an_invalid_reply(tmp_path: Pa
         )
 
     assert response.status_code == 200
-    assert response.text == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert response.text == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert generator.calls == 2
     store = SqliteConversationStore(database_path)
     lifecycle = store.get_generation(provider="test-provider", provider_message_id="message-1")

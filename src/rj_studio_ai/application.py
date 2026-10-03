@@ -189,7 +189,12 @@ class MessageResponder:
                 reply_body = generated.trusted_reply.body
             else:
                 proposal = generated.decision
-                if appointment_change_requested(message.body):
+                intake_update = plan_appointment_intake(
+                    proposal,
+                    customer_message=message.body,
+                    prior=context.appointment_intake,
+                )
+                if intake_update is None and appointment_change_requested(message.body):
                     proposal = proposal.model_copy(
                         update={
                             "handoff": True,
@@ -199,11 +204,6 @@ class MessageResponder:
                             ),
                         }
                     )
-                intake_update = plan_appointment_intake(
-                    proposal,
-                    customer_message=message.body,
-                    prior=context.appointment_intake,
-                )
                 if intake_update is not None and not proposal.reply_parts:
                     # An intake question has its own trusted surface. All factual
                     # and handoff validation still runs through Ticket 09 below.
@@ -218,6 +218,7 @@ class MessageResponder:
                     proposal,
                     customer_message=message.body,
                     context=context,
+                    appointment_intake=intake_update,
                 )
                 reply_body = finalized.reply_text
                 if intake_update is not None and not finalized.handoff:

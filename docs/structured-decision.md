@@ -11,7 +11,8 @@ reason. The reply has an 800-character hard structural limit and the Anthropic
 request has a 200-token output limit.
 
 Ticket 11 adds nullable `appointment_preferences` with `desired_service`,
-`preferred_time` and optional `professional_preference`. These are untrusted
+`preferred_time` and optional `professional_preference`. Conversational Polish
+adds `preferred_day`; new provider schemas require its nullable slot too. These are untrusted
 Customer excerpts, not `critical_claims` or `knowledge_refs`. Older decisions
 remain readable without this field; new provider requests require it (nullable).
 See [appointment interest](appointment-interest.md) for trusted questions,
@@ -74,3 +75,17 @@ See [Human Handoff operations](human-handoff.md) for explicit release and
 configuration/test replies. LLM adapters must never call it with model data or
 set `trusted_reply`; the Anthropic adapter leaves that field unset. Existing
 fixed-response mode remains compatible. No historical reply is rewritten.
+
+## Conversational Polish
+
+The existing catalog adds acknowledgements, optional warm acknowledgement,
+service clarification and safe continuation. Composition wraps intact fact
+statements; it never calls an LLM after rendering or accepts custom phrase text.
+A narrowly controlled price/discount service question may precede handoff when
+no approved category answer is available, with no claims/refs, no repetition,
+and no risk/mandatory-policy override. It cannot substitute for omitted
+available facts or bypass invalid references. Appointment collection is allowed
+only by the trusted intake planner passed by application, never a model flag.
+Handoff confirmations depend on safe reason; durable activation is unchanged.
+Identity disclosure answers identity questions, not simple human requests.
+The approved [amendment](specs/V1-conversational-polish.md) owns product limits.

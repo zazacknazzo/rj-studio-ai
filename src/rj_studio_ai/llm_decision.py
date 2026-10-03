@@ -72,6 +72,13 @@ class ReplyPhrase(StrEnum):
     DETAIL_QUESTION = "detail_question"
     CLARIFICATION = "clarification"
     IDENTITY = "identity"
+    CONFIRMATION = "confirmation"
+    ACKNOWLEDGEMENT = "acknowledgement"
+    WARM_ACKNOWLEDGEMENT = "warm_acknowledgement"
+    APPOINTMENT_CONTINUATION = "appointment_continuation"
+    SERVICE_CONTINUATION = "service_continuation"
+    PRICE_SERVICE_QUESTION = "price_service_question"
+    DISCOUNT_SERVICE_QUESTION = "discount_service_question"
 
 
 class PhraseReplyPart(BaseModel):
@@ -97,6 +104,7 @@ class AppointmentPreferences(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     desired_service: StrictStr | None = Field(default=None, min_length=1, max_length=120)
+    preferred_day: StrictStr | None = Field(default=None, min_length=1, max_length=120)
     preferred_time: StrictStr | None = Field(default=None, min_length=1, max_length=120)
     professional_preference: StrictStr | None = Field(default=None, min_length=1, max_length=120)
 

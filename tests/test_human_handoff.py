@@ -51,7 +51,7 @@ def _activate(store, message=None, now=None):
     assert store.complete_generation(
         inbound_message_id=claim.inbound_message_id,
         owner_token=claim.owner_token,
-        reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+        reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
         delivery_state=DeliveryState.PENDING,
         handoff_reason="explicit_human_request",
         now=now,
@@ -67,7 +67,7 @@ def test_owned_completion_activates_durable_conversation_handoff_and_suppresses_
     assert store.complete_generation(
         inbound_message_id=claim.inbound_message_id,
         owner_token=claim.owner_token,
-        reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+        reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
         delivery_state=DeliveryState.PENDING,
         handoff_reason="explicit_human_request",
     )
@@ -178,7 +178,7 @@ def test_trusted_policy_activates_handoff_and_no_later_generation_runs(tmp_path,
     first = runner.run_once()
     assert first is not None
     assert store.list_active_handoffs()[0].reason_code == reason
-    assert "Vou encaminhar" in first.reply_body
+    assert "equipe" in first.reply_body
     if reason == "personalized_technical_risk":
         assert "pare e procure avaliação profissional" in first.reply_body
         assert "atendimento médico urgente" in first.reply_body
@@ -284,7 +284,7 @@ def test_legacy_webhook_acknowledges_suppressed_retry_after_release_and_restart(
         first = client.post(
             "/webhooks/whatsapp", json={"id": "inbound-1", "body": "Quero falar com uma pessoa"}
         )
-        assert first.status_code == 200 and "Vou encaminhar" in first.text
+        assert first.status_code == 200 and "equipe" in first.text
         second = client.post("/webhooks/whatsapp", json={"id": "inbound-2", "body": "Continue"})
         assert second.status_code == 200 and second.text == ""
         store = SqliteConversationStore(path)
@@ -320,7 +320,7 @@ def test_legacy_replay_of_an_older_reply_is_ack_only_while_handoff_is_active(tmp
             in client.post("/webhooks/whatsapp", json={"id": "hello", "body": "Oi"}).text
         )
         assert (
-            "Vou encaminhar"
+            "equipe"
             in client.post(
                 "/webhooks/whatsapp", json={"id": "handoff", "body": "Quero falar com uma pessoa"}
             ).text
@@ -353,7 +353,7 @@ def test_fault_rolls_back_reply_delivery_processing_and_handoff(tmp_path, bounda
         store.complete_generation(
             inbound_message_id=claim.inbound_message_id,
             owner_token=claim.owner_token,
-            reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+            reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
             delivery_state=DeliveryState.PENDING,
             handoff_reason="explicit_human_request",
         )
@@ -375,7 +375,7 @@ def test_concurrent_duplicate_activation_has_one_confirmation(tmp_path):
         return store.complete_generation(
             inbound_message_id=claim.inbound_message_id,
             owner_token=claim.owner_token,
-            reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+            reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
             delivery_state=DeliveryState.PENDING,
             handoff_reason="explicit_human_request",
         )
@@ -397,7 +397,7 @@ def test_stale_generation_cannot_complete_or_reactivate_during_manual_release(tm
     assert store.complete_generation(
         inbound_message_id=current.inbound_message_id,
         owner_token=current.owner_token,
-        reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+        reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
         delivery_state=DeliveryState.PENDING,
         handoff_reason="explicit_human_request",
         now=now,
@@ -428,7 +428,7 @@ def test_stale_generation_cannot_complete_or_reactivate_during_manual_release(tm
     assert not store.list_active_handoffs()
     assert (
         store.get_generation(provider="test-provider", provider_message_id="inbound-1").reply_body
-        == "Vou encaminhar sua conversa para uma pessoa da equipe."
+        == "Vou pedir ajuda à equipe pra seguir com segurança."
     )
 
 
@@ -472,7 +472,7 @@ def test_local_list_and_explicit_release_omit_customer_data(tmp_path, monkeypatc
     listing = capsys.readouterr().out
     assert f"conversation_id={handoff.conversation_id}" in listing
     assert "explicit_human_request" in listing and handoff.owner_token in listing
-    assert "customer" not in listing and "Vou encaminhar" not in listing
+    assert "customer" not in listing and "equipe" not in listing
     assert (
         maintenance.main(
             [
@@ -510,7 +510,7 @@ def test_terminal_generation_failure_atomically_hands_off_instead_of_continuing(
     store.initialize()
     store.admit_generation(_message(body="Oi"))
     result = _processing(store, Unavailable()).run_once()
-    assert result is not None and "Vou encaminhar" in result.reply_body
+    assert result is not None and "equipe" in result.reply_body
     assert store.list_active_handoffs()[0].reason_code == "generation_unavailable"
 
 
@@ -653,7 +653,7 @@ def test_meta_early_ack_suppression_survives_lost_ack_release_and_retry(tmp_path
 
     with TestClient(app) as client:
         response = post(client, "wamid.first", "Quero falar com uma pessoa")
-        assert response.status_code == 200 and "Vou encaminhar" not in response.text
+        assert response.status_code == 200 and "equipe" not in response.text
         assert model.calls == 0
         assert _processing(store, model).run_once() is not None
         handoff = store.list_active_handoffs()[0]
@@ -663,7 +663,7 @@ def test_meta_early_ack_suppression_survives_lost_ack_release_and_retry(tmp_path
             conversation_id=handoff.conversation_id, owner_token=handoff.owner_token
         )
         retry = post(client, "wamid.suppressed", "Changed body")
-        assert retry.status_code == 200 and "Vou encaminhar" not in retry.text
+        assert retry.status_code == 200 and "equipe" not in retry.text
         assert _processing(store, model).run_once() is None and model.calls == 1
     state = SqliteConversationStore(path).get_generation(
         provider="meta", provider_message_id="wamid.suppressed"
@@ -746,7 +746,7 @@ def test_activation_cancels_only_proven_unsubmitted_legacy_work(tmp_path):
     assert store.complete_generation(
         inbound_message_id=claim.inbound_message_id,
         owner_token=claim.owner_token,
-        reply_body="Vou encaminhar sua conversa para uma pessoa da equipe.",
+        reply_body="Vou pedir ajuda à equipe pra seguir com segurança.",
         delivery_state=DeliveryState.PENDING,
         handoff_reason="explicit_human_request",
     )

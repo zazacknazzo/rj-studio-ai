@@ -37,6 +37,13 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 product-owner human review REJECTED the prior 10/10 semantic smoke
+  conversational UX: dry replies, weak persona, artificial formality, generic
+  handoff, low commercial continuation, premature appointment intake and no
+  cancellation recovery. Approved V1 Conversational Polish amendment at
+  docs/specs/V1-conversational-polish.md; Phase B remains blocked by product
+  decision. Old evidence is preserved. Ticket 12 stays in-progress.
+
 - 2026-10-03 latency decomposition and fresh ten-case OpenAI smoke at 8fed9c9:
   all 10 semantic cases pass; critical 0/18, grounding/handoff 9/9, Intent 1/1,
   appointment safety 2/2, persona 1 evaluable/pass and 0 fail. 10 calls, no retries,

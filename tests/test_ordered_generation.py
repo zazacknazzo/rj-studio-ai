@@ -436,7 +436,7 @@ def test_two_failed_attempts_persist_one_safe_terminal_reply(
         deadline=ExecutionDeadline.start(clock=clock),
     )
 
-    assert reply.body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert reply.body == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert store.list_active_handoffs()
     lifecycle = store.get_generation(
         provider="test-provider",
@@ -445,7 +445,7 @@ def test_two_failed_attempts_persist_one_safe_terminal_reply(
     assert lifecycle is not None
     assert lifecycle.state is GenerationState.COMPLETED
     assert lifecycle.attempt_count == 2
-    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert lifecycle.reply_body == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert store.list_active_handoffs()
     assert len(store.get_history(provider="test-provider", customer_address="customer-1")) == 2
 
@@ -473,7 +473,7 @@ def test_provider_retry_finalizes_exhausted_work_without_a_third_generation(
 
     reply = responder.handle(message, deadline=ExecutionDeadline.start(clock=clock))
 
-    assert reply.body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert reply.body == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert store.list_active_handoffs()
     assert generator.budgets == []
     terminal = store.get_generation(

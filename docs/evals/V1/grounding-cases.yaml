@@ -46,14 +46,16 @@ cases:
       handoff: false
   - id: grounding-unknown-price
     selected_facts: []
-    customer_message: "Qual preço?"
+    customer_message: Qual preço?
     proposal:
       intents: [price]
-      reply_text: "Custa R$ 75,00."
+      reply_text: Custa R$ 75,00.
+      reply_parts:
+      - {kind: phrase, phrase: price_service_question}
     expected:
-      contains: ["Ainda não tenho essa informação aprovada"]
-      excludes: ["75", "R$"]
-      handoff: true
+      contains: [serviço]
+      excludes: ['75', R$]
+      handoff: false
   - id: grounding-unknown-hours
     selected_facts: []
     customer_message: "Que horas abre amanhã?"
@@ -66,14 +68,16 @@ cases:
       handoff: true
   - id: grounding-unauthorized-discount
     selected_facts: []
-    customer_message: "Consegue desconto?"
+    customer_message: Consegue desconto?
     proposal:
       intents: [promotion_or_discount]
-      reply_text: "Você ganha 50% de desconto."
+      reply_text: Você ganha 50% de desconto.
+      reply_parts:
+      - {kind: phrase, phrase: discount_service_question}
     expected:
-      contains: ["Ainda não tenho essa informação aprovada"]
-      excludes: ["50", "desconto"]
-      handoff: true
+      contains: [serviço]
+      excludes: ['50', desconto]
+      handoff: false
   - id: grounding-invalid-reference
     selected_facts: []
     customer_message: "Qual o preço secreto?"

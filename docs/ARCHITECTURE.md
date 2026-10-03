@@ -245,7 +245,11 @@ commands. Ticket 11 adds one bounded appointment-interest episode per
 Conversation; its preferences, clarification counter and handoff link commit
 with owned generation completion. The LLM proposes current-Message excerpts,
 never availability or salon facts. See [appointment interest](appointment-interest.md)
-for episode, two-question, release, retention and explicit inspection rules.
+for episode, three-question, single cancellation-recovery offer, release,
+retention and explicit inspection rules. Conversational Polish extends the
+existing phrase catalog and trusted composition in `livia_persona.py`, never
+rewrites approved statements. Migration 0011 keeps day separate from period and
+records request kind/recovery offered within the same atomic completion.
 
 ## Deadlines and recovery
 

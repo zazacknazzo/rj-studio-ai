@@ -277,7 +277,7 @@ def test_stale_processing_recovery_and_llm_timeout_follow_the_normal_safe_lifecy
     lifecycle = store.get_generation(provider="test-provider", provider_message_id="stale")
     assert lifecycle is not None
     assert lifecycle.attempt_count == 2
-    assert lifecycle.reply_body == "Vou encaminhar sua conversa para uma pessoa da equipe."
+    assert lifecycle.reply_body == "Vou pedir ajuda à equipe pra seguir com segurança."
     assert store.list_active_handoffs()
     assert len(store.get_history(provider="test-provider", customer_address="customer-1")) == 2
 

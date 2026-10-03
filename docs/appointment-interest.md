@@ -4,30 +4,38 @@ V1 collects interest, not an Appointment. An `appointment_interest` decision
 starts one Conversation-scoped episode. An active episode associates short
 answers with its missing field even when the next Intent is `other`.
 
-Required details are the desired service and preferred day **or** textual
-period. Professional preference is optional. All three are unverified Customer
-preferences, not evidence that RJ Studio offers a Service or that a Professional
-exists or is available. No time is queried, reserved, or confirmed.
+The approved [Conversational Polish amendment](specs/V1-conversational-polish.md)
+now requires service, day and period/preferred time, with at most THREE committed
+questions per episode. Exact time and professional preference are optional.
+These are unverified Customer preferences, never proof of a Service,
+Professional, appointment or available slot. No real schedule operation occurs.
 
-`LLMDecision.appointment_preferences` proposes nullable, bounded exact excerpts
-of the current Customer Message. The policy rejects invented, padded, or
-nonprintable excerpts; it never echoes these excerpts as salon facts. Existing
-grounding, required Service policies, risk rules, multi-Intent validation and
-identity transparency still take precedence. Model `reply_text` remains unused.
-The bounded context includes active preferences as untrusted Customer data;
-this frame consumes input budget and contains no internal IDs or timestamps.
+`LLMDecision.appointment_preferences` adds nullable `preferred_day`; all fields
+remain bounded, printable, verbatim excerpts from the current Message. Existing
+combined day/period proposals remain readable. Day is stored separately so a
+short period answer does not overwrite it. Legacy values survive unchanged;
+old handoff/released episodes remain closed. Active preferences consume bounded
+context as untrusted data. Selected policies, grounding, multi-Intent, technical
+risk, human request and identity transparency still precede collection.
 
-One trusted question asks for the missing service or day/period. Only a
-committed clarification consumes the counter. A complete first Message needs
-zero questions; an incomplete episode can ask at most twice. After the reply
-to the second question, even missing details cause Human Handoff. The trusted
-confirmation says the team will confirm availability, never that it exists.
-Changes, cancellation and rescheduling go directly to handoff, without intake
-questions or asserting an existing Appointment.
+Cancellation permits one gentle offer to choose another day/time. Persisted
+`recovery_offered` prevents repetition across retry/restart. Firm cancellation
+or refusal skips retention; after the offer, confirmation or an unclear answer
+hands off without claiming cancellation. Rescheduling collects new preferences
+within the same three-question budget; that initial offer consumes one question.
+Unknown change requests transfer to a person. Complete intake or the reply to
+the last question ends collection with handoff for real confirmation.
 
-Migration `0010_appointment_intake` adds one current `appointment_intakes` row
+Migration `0011_conversational_intake` extends the existing row with
+`preferred_day`, `request_kind` (`interest`, `cancellation`, `reschedule`) and
+`recovery_offered`. It replaces only the relevant checks, preserves all legacy
+columns and other tables, and rolls back interrupted replacement. No historical
+outbound becomes eligible, no old handoff reopens. The same generation owner,
+episode token/cursor, atomic completion and release/purge fences apply.
+
+Migration `0010_appointment_intake` adds the original current `appointment_intakes` row
 per Conversation: episode token, state (`collecting`, `handoff`, `released`),
-three preferences, clarification count, awaited field, last inbound cursor,
+initial preferences, clarification count, awaited field, last inbound cursor,
 handoff episode token, and update timestamp. The existing generation owner and
 lease plus episode/cursor comparison fence completion. Intake update, AI Reply,
 Outbound Delivery, processing completion and any handoff commit or roll back
@@ -45,7 +53,7 @@ It retains the active handoff suspension; purge is not release. Startup and
 webhooks never silently delete data. Conversation deletion cascades intake.
 Back up before migration; downgrade refuses to silently discard the intake.
 
-The assuming operator can inspect only the three preference fields for a
+The operator can explicitly inspect the preference fields for a
 selected Conversation:
 
 ```bash

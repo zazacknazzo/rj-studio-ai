@@ -97,7 +97,7 @@ def test_customer_visible_price_is_rendered_from_trusted_fact_not_model_text() -
         context=ConversationContext(history=(), knowledge=(_fact(),)),
     )
 
-    assert result.reply_text == "Veja as informações aprovadas: O corte custa R$ 120,00."
+    assert "O corte custa R$ 120,00." in result.reply_text
     assert result.knowledge_refs == ("price-corte",)
     assert result.critical_claims[0].value == "O corte custa R$ 120,00."
     assert not result.handoff
@@ -226,7 +226,7 @@ def test_mandatory_policy_cannot_be_omitted_by_model() -> None:
         context=ConversationContext(history=(), knowledge=(service, policy)),
     )
 
-    assert result.reply_text == "Oferecemos corte. O orçamento é confirmado na avaliação."
+    assert "Oferecemos corte. O orçamento é confirmado na avaliação." in result.reply_text
     assert set(result.knowledge_refs) == {"service-corte", "policy-corte"}
 
 
@@ -446,7 +446,7 @@ def test_untrusted_history_does_not_change_number_currency_or_duration() -> None
         ),
     )
 
-    assert result.reply_text == service.statement
+    assert service.statement in result.reply_text
     assert result.critical_claims[0].value == service.statement
 
 
@@ -484,7 +484,10 @@ def test_processing_persists_only_rendered_reply_atomically_with_outbox_and_repl
     assert processed is not None
     delivery = store.get_delivery_for_inbound(processed.inbound_message_id)
     assert delivery is not None and delivery.state is DeliveryState.PENDING
-    assert delivery.body == "Veja as informações aprovadas: O corte custa R$ 120,00."
+    assert (
+        delivery.body
+        == "Claro! O corte custa R$ 120,00. Quer que eu te ajude a escolher um dia pra vir?"
+    )
     reopened = SqliteConversationStore(tmp_path / "grounding.db")
     reopened.admit_generation(message)
     assert ProcessingRunner(store=reopened, responder=responder).run_once() is None

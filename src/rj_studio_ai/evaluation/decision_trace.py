@@ -1,6 +1,7 @@
 """Allowlisted eval-only observation; never exports prose or provider payloads."""
 
 from contextlib import contextmanager, nullcontext
+from functools import partial
 from typing import Literal
 from unittest.mock import patch
 
@@ -143,11 +144,15 @@ def capture_finalizer(capture, *, timing=None):
     """Scope an observer to the isolated serial eval; restore the application seam on exit."""
     finalizer = application.finalize_reply
 
-    def observed(decision, *, customer_message, context):
+    def observed(decision, *, customer_message, context, **kwargs):
         with timing.measure("trusted_finalization_ms") if timing else nullcontext():
-            result = finalizer(decision, customer_message=customer_message, context=context)
+            result = finalizer(
+                decision, customer_message=customer_message, context=context, **kwargs
+            )
         with timing.measure("eval_bookkeeping_ms") if timing else nullcontext():
-            capture.finalized(decision, result, context, customer_message, finalizer)
+            capture.finalized(
+                decision, result, context, customer_message, partial(finalizer, **kwargs)
+            )
         return result
 
     with patch.object(application, "finalize_reply", observed):

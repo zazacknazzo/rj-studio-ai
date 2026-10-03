@@ -81,7 +81,8 @@ def test_complete_interest_opens_handoff_and_keeps_only_customer_preferences(tmp
     )
     reply = respond(store, model, message())
     assert (
-        reply.body == "Vou encaminhar essas informações para a equipe confirmar a disponibilidade."
+        reply.body
+        == "Perfeito. Vou passar sua preferência à equipe para confirmar a disponibilidade."
     )
     handoff = store.list_active_handoffs()[0]
     intake = store.get_appointment_intake(conversation_id=handoff.conversation_id)
@@ -99,7 +100,7 @@ def test_complete_interest_opens_handoff_and_keeps_only_customer_preferences(tmp
         (
             "Quero progressiva",
             {"desired_service": "progressiva"},
-            "Qual dia ou período seria melhor para você?",
+            "Qual dia seria melhor pra você?",
         ),
         (
             "Quero marcar sábado à tarde",
@@ -137,54 +138,43 @@ def test_short_replies_restart_and_retry_preserve_one_episode_and_two_question_l
     model.preferences = {"desired_service": "progressiva"}
     model.intents = ["other"]
     second = respond(reopened, model, message("interest-2", "progressiva"))
-    assert second.body == "Qual dia ou período seria melhor para você?"
+    assert second.body == "Qual dia seria melhor pra você?"
     assert model.contexts[-1].appointment_intake.awaiting_field == "desired_service"
     midway = reopened.get_appointment_intake(conversation_id=initial.conversation_id)
     assert midway.episode_token == initial.episode_token
     assert midway.desired_service == "progressiva" and midway.clarification_count == 2
     model.preferences = {"preferred_time": "sábado à tarde"}
     final = respond(reopened, model, message("interest-3", "sábado à tarde"))
-    assert "equipe confirmar a disponibilidade" in final.body
+    assert "confirmar a disponibilidade" in final.body
     handoff = reopened.list_active_handoffs()[0]
     result = reopened.get_appointment_intake(conversation_id=initial.conversation_id)
     assert result.preferred_time == "sábado à tarde" and result.clarification_count == 2
     assert result.handoff_token == handoff.owner_token
 
 
-def test_two_unanswered_questions_end_in_handoff_even_when_incomplete(tmp_path):
+def test_three_unanswered_questions_end_in_handoff_even_when_incomplete(tmp_path):
     store = SqliteConversationStore(tmp_path / "intake.db")
     store.initialize()
     model = AppointmentModel()
-    for number, body in [(1, "Quero marcar"), (2, "Ainda não sei")]:
+    for number, body in [(1, "Quero marcar"), (2, "Ainda não sei"), (3, "Ainda não sei")]:
         reply = respond(store, model, message(f"interest-{number}", body))
         assert reply.body == "Qual serviço você gostaria de fazer?"
-    reply = respond(store, model, message("interest-3", "Não sei"))
+    reply = respond(store, model, message("interest-4", "Não sei"))
     assert "?" not in reply.body
     handoff = store.list_active_handoffs()[0]
     assert handoff.reason_code == "appointment_intake_limit"
     intake = store.get_appointment_intake(conversation_id=handoff.conversation_id)
     assert intake.desired_service is None and intake.preferred_time is None
-    assert intake.clarification_count == 2
+    assert intake.clarification_count == 3
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        "Quero alterar meu horário",
-        "Quero cancelar meu agendamento",
-        "Quero remarcar amanhã",
-        "Quero reagendar",
-        "Solicito cancelamento do horário",
-    ],
-)
-def test_change_cancel_reschedule_go_direct_to_human_even_with_model_handoff_false(tmp_path, body):
+def test_unknown_change_still_hands_off_even_with_model_handoff_false(tmp_path):
     store = SqliteConversationStore(tmp_path / "intake.db")
     store.initialize()
-    reply = respond(store, AppointmentModel(), message(body=body))
+    reply = respond(store, AppointmentModel(), message(body="Quero alterar meu horário"))
     handoff = store.list_active_handoffs()[0]
     assert "?" not in reply.body and "equipe" in reply.body
     assert store.get_appointment_intake(conversation_id=handoff.conversation_id) is None
-    assert "confirmado" not in reply.body and "Agendei" not in reply.body
 
 
 def test_model_cannot_invent_preferences_or_echo_booking_promises(tmp_path):
@@ -416,10 +406,10 @@ def test_appointment_transparency_survives_collection_and_handoff(tmp_path):
     store.initialize()
     model = AppointmentModel(desired_service="progressiva")
     reply = respond(store, model, message(body="Você é uma IA? Quero progressiva"))
-    assert "virtual" in reply.body and "dia ou período" in reply.body
+    assert "virtual" in reply.body and "Qual dia" in reply.body
     model.preferences = {"preferred_time": "sábado à tarde"}
     reply = respond(store, model, message("interest-2", "Você é robô? sábado à tarde"))
-    assert "virtual" in reply.body and "equipe confirmar" in reply.body
+    assert "virtual" in reply.body and "confirmar" in reply.body
 
 
 def test_immediate_policy_handoff_does_not_count_an_unasked_question(tmp_path):
@@ -457,7 +447,7 @@ def test_later_inbound_cannot_generate_while_intake_handoff_is_completing(tmp_pa
             assert store.claim_generation(message("interest-2", "domingo")).blocked_by_predecessor
         finally:
             continue_generation.set()
-        assert "equipe confirmar" in first.result().body
+        assert "confirmar" in first.result().body
     assert respond(store, model, message("interest-2", "domingo")) is None
     assert model.calls == 1
     assert len(store.get_history(provider="meta", customer_address="synthetic")) == 3
@@ -542,10 +532,10 @@ def test_twilio_webhook_collects_short_turns_and_suppressed_retry_stays_suppress
         model.preferences = {"desired_service": "progressiva"}
         model.intents = ["other"]
         second = post(client, "SM" + "2" * 32, "progressiva")
-        assert second.status_code == 200 and "dia ou período" in second.text
+        assert second.status_code == 200 and "Qual dia" in second.text
         model.preferences = {"preferred_time": "sábado à tarde"}
         third = post(client, "SM" + "3" * 32, "sábado à tarde")
-        assert third.status_code == 200 and "equipe confirmar" in third.text
+        assert third.status_code == 200 and "confirmar" in third.text
         replay = post(client, "SM" + "3" * 32, "different body")
         # Legacy replay keeps the same persisted reply; proactive Meta below
         # acknowledges retries separately and has only one REST delivery.
@@ -642,7 +632,7 @@ def test_meta_ack_processing_and_outbox_handoff_preserve_provider_lifecycle(tmp_
                 "X-Hub-Signature-256": f"sha256={signature}",
             },
         )
-        assert ack.status_code == 200 and "equipe confirmar" not in ack.text
+        assert ack.status_code == 200 and "confirmar" not in ack.text
         assert model.calls == 0
     runner = ProcessingRunner(
         store=store,
@@ -822,8 +812,5 @@ def test_incomplete_intake_keeps_approved_location_answer_for_multi_intent(tmp_p
     reply = respond(
         store, model, message(body="Quero progressiva. Qual é o endereço?"), context_builder=builder
     )
-    assert (
-        reply.body
-        == "O endereço sintético é Rua Exemplo, 100. Qual dia ou período seria melhor para você?"
-    )
+    assert reply.body == "O endereço sintético é Rua Exemplo, 100. Qual dia seria melhor pra você?"
     assert not store.list_active_handoffs()

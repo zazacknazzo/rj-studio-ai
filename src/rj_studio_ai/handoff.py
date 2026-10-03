@@ -38,13 +38,31 @@ def safe_handoff_reason(proposal: str) -> HandoffReason:
 
 
 def handoff_confirmation(reason: HandoffReason, customer_message: str) -> str:
-    text = "Vou encaminhar sua conversa para uma pessoa da equipe."
-    if reason in {HandoffReason.APPOINTMENT_INTEREST, HandoffReason.APPOINTMENT_INTAKE_LIMIT}:
-        text = "Vou encaminhar essas informações para a equipe confirmar a disponibilidade."
-    if reason is HandoffReason.TECHNICAL_RISK:
+    text = "Vou pedir ajuda à equipe pra seguir com segurança."
+    if reason is HandoffReason.EXPLICIT_HUMAN_REQUEST:
+        text = "Claro! Vou chamar alguém da equipe pra você."
+    elif reason in {
+        HandoffReason.COMPLAINT,
+        HandoffReason.ALLEGED_DAMAGE,
+        HandoffReason.PAYMENT_PROBLEM,
+        HandoffReason.LEGAL_THREAT,
+    }:
+        text = "Sinto muito por isso. Vou chamar alguém da equipe para cuidar do seu caso."
+    elif reason in {
+        HandoffReason.MISSING_FACT,
+        HandoffReason.UNAVAILABLE_KNOWLEDGE,
+        HandoffReason.UNAVAILABLE_POLICY,
+    }:
+        text = "Não tenho essa informação confirmada. Vou pedir ajuda à equipe."
+    elif reason in {HandoffReason.APPOINTMENT_INTEREST, HandoffReason.APPOINTMENT_INTAKE_LIMIT}:
+        text = "Perfeito. Vou passar sua preferência à equipe para confirmar a disponibilidade."
+    elif reason is HandoffReason.APPOINTMENT_CHANGE:
+        text = "Vou chamar alguém da equipe para confirmar essa alteração com você."
+    elif reason is HandoffReason.TECHNICAL_RISK:
         text = (
-            "Se um procedimento estiver em andamento, pare e procure avaliação profissional. "
-            "Se houver falta de ar ou sinais graves, procure atendimento médico urgente. " + text
+            "Se o procedimento estiver em andamento, pare e procure avaliação profissional. "
+            "Se houver falta de ar ou sinais graves, procure atendimento médico urgente. "
+            "Vou chamar a equipe agora."
         )
     if LiviaPersona().requires_identity_transparency(customer_message):
         text = REPLY_PHRASES[ReplyPhrase.IDENTITY] + " " + text

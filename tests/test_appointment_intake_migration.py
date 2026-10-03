@@ -132,7 +132,7 @@ def test_fresh_migration_has_readiness_constraints_and_rejects_destructive_downg
     [
         ("state", "appointment"),
         ("clarification_count", -1),
-        ("clarification_count", 3),
+        ("clarification_count", 4),
         ("clarification_count", 1.5),
         ("desired_service", "x" * 121),
         ("preferred_time", ""),
@@ -157,7 +157,10 @@ def test_database_rejects_invalid_intake_shapes(tmp_path, column, value):
     )
     with sqlite3.connect(path) as connection:
         connection.execute(
-            "INSERT INTO appointment_intakes VALUES (1, 'synthetic-episode', 'collecting', "
+            "INSERT INTO appointment_intakes (conversation_id, episode_token, state, "
+            "desired_service, preferred_time, professional_preference, clarification_count, "
+            "awaiting_field, last_inbound_message_id, handoff_token, updated_at) "
+            "VALUES (1, 'synthetic-episode', 'collecting', "
             "NULL, NULL, NULL, 1, 'desired_service', 1, NULL, '2026-10-02T10:00:00+00:00')"
         )
         with pytest.raises(sqlite3.IntegrityError):

@@ -1,6 +1,15 @@
 # V1 eval suite
 
-Current authorized step: [latency breakdown and ten-case smoke](latency-breakdown-smoke-2026-10-03.md).
+Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
+The previous semantic 10/10 smoke failed product-owner human UX review. Phase B
+remains blocked; new evidence requires fresh unscored human review. Synthetic
+price/discount and appointment expectations now follow that explicit amendment;
+factual prohibitions, invalid refs, mandatory policies and durable handoff
+remain enforced. Old runs and packets are preserved unchanged. The historical
+critical-scenario label `cancel_reschedule_without_handoff` now checks bounded
+collection and eventual handoff, not immediate handoff on the first request.
+
+Previous authorized step: [latency breakdown and ten-case smoke](latency-breakdown-smoke-2026-10-03.md).
 
 Previous isolated retest: [eval observation deadline](observation-deadline-2026-10-03.md).
 

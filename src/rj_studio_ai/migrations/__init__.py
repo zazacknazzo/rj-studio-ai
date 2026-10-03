@@ -93,6 +93,9 @@ class MigrationManager:
             return False
         required_columns = {
             "appointment_intakes": {
+                "preferred_day",
+                "request_kind",
+                "recovery_offered",
                 "conversation_id",
                 "episode_token",
                 "state",
@@ -312,6 +315,9 @@ class MigrationManager:
             inspector.get_pk_constraint("appointment_intakes")["constrained_columns"]
             == ["conversation_id"]
             and {
+                "ck_intake_preferred_day",
+                "ck_intake_request_kind",
+                "ck_intake_recovery",
                 "ck_intake_state",
                 "ck_intake_questions",
                 "ck_intake_episode",
