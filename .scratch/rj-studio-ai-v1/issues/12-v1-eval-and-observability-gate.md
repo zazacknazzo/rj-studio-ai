@@ -37,6 +37,16 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 
 ## Comments
 
+- 2026-10-03 eval-only observation deadline: 30s total / 1s margin; production
+  remains 10s / 1s, network connect capped at 5s, remaining read budget, no retry.
+  647 tests/checks pass; two independent reviews cleared after fixing two
+  evidence-loss paths. One authorized live case at 9244f82 passed grounding,
+  Intent and handoff (1/1 each; critical 0/2), complete valid usage 1425/314
+  input/output tokens, US$0.006701. Model 9804.85ms, E2E 11218.25ms: measured
+  8s latency gate FAIL, no provider failure. No smoke or B; history unchanged.
+  See docs/evals/V1/observation-deadline-2026-10-03.md. Still in-progress;
+  human/operational review pending, comparison deferred.
+
 - 2026-10-03 usage provenance instrumented at d56d764. 634 tests / all checks
   pass; both independent review axes have no findings. The single authorized
   probe proved HTTPX read_timeout (class F), not API USAGE_ABSENT: no usable

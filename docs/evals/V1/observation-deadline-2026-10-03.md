@@ -71,3 +71,58 @@ authorized probe will be recorded below after checks.
 
 Only one new run is authorized: `gpt-6.1-sol`, medium, default/standard,
 `max_output_tokens=512`, no retries. Historical artifacts remain unchanged.
+
+## Checks and live result
+
+Executed **2026-10-03 14:13:09 UTC**, code revision
+`9244f82a69bffdb12dffaa22b85853b8b85a2cf9`, branch
+`codex/v1-ticket-12-openai-live-eval`. Initial commits `d56d764` and `80ada33`
+were published to origin before changes; no main merge.
+
+All **647 tests** passed before the paid call (13 added cases); 297 focused
+evaluation/application/deadline/grounding/handoff/appointment regressions passed.
+Ruff check and format, compileall, pip check and diff checks passed. One existing
+Starlette/AnyIO deprecation warning remains. Standards review: no findings.
+Spec review: two evidence-loss findings corrected, then no remaining material
+findings. No network/paid calls were made by reviewers.
+
+Private, ignored artifacts: `work/evals/openai-observation-deadline-2026-10-03-01/`.
+The record validates with `LiveRecord`; all 47 files in the five historical runs
+remain byte-for-byte unchanged. Request, suite, Knowledge and prompt/schema
+hashes match the preceding timeout probe exactly.
+
+| Measure | Result |
+| --- | --- |
+| Generation calls / retries / paid failures | 1 / 0 / 0 |
+| Response / HTTP status / usage | completed / 200 / present and valid |
+| Completed model replies / system safe fallbacks | 1 / 0 |
+| Input / output / total tokens | 1,425 / 314 / 1,739 |
+| Cache read / cache write input tokens | 0 / 1,422 |
+| Reasoning tokens | 160, already included in output tokens |
+| Cost under unchanged versioned pricing | **US$0.006701** |
+| Cost per 1,000 completed model replies | US$6.701, diagnostic N=1 |
+| Model p50/p95 | **9,804.85 ms** |
+| Synthetic billable E2E p50/p95 | **11,218.25 ms** |
+| Critical failed checks | **0/2** |
+| Grounding / Intent / handoff correctness | **1/1 / 1/1 / 1/1** |
+| Appointment safety | 0/0, not applicable to this case |
+| Measured latency gate | **FAIL**, threshold unchanged at 8,000 ms |
+| Operational latency gate | pending real provider evidence |
+| Hard cap | US$0.20; respected |
+
+Sanitized trace confirms selected facts `price-corte` and `hours-corte`, proposed
+Intents `price` and `hours`, both Knowledge references and two corresponding
+`fact` reply parts. Model and finalizer both selected handoff=false; both facts
+were rendered, with no override or safe fallback. **The isolated semantic case
+passes**, while its measured latency fails. One sample does not prove robust
+p95, general multi-intent reliability, naturalness or operational readiness.
+
+Cost is 3 ordinary input tokens at US$2/M, 1,422 cache-write tokens at US$2.50/M
+and 314 output tokens at US$10/M. No second reasoning-token charge, fabricated
+usage or fallback inflating the denominator. No pricing configuration changed.
+
+Stopped after the single authorized case. No full smoke, B, Anthropic,
+Meta/WhatsApp, real Customer, secret output, credential changes or production
+deadline increase. Grounding, finalizer, handoff and multi-intent instructions
+remain unchanged. Ticket 12 remains **in-progress** with human/operational gates
+and cross-provider comparison pending/deferred.
