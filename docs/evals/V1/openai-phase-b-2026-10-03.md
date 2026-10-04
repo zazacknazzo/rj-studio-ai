@@ -119,8 +119,27 @@ all 187 tracked files stayed frozen during collection. Privacy checks passed.
 Evaluation tests: **162 passed**; full suite: **767 passed**. Ruff check, Ruff
 format (172 files), compileall, pip check and diff check pass. One existing
 Starlette/AnyIO deprecation warning remains. No production code changed.
-Independent eval/spec, safety and standards reviews are recorded after their
-completion below.
+Three independent read-only reviews inspected the records, unchanged collector
+and documentary diff from `1eeb6eb` through `37f5325`, without external calls.
+
+### Eval/spec
+
+**APPROVE — zero material findings.** Independently reconciled attempts, cost,
+denominators, percentiles and frozen source; confirmed the live-oracle mismatch.
+Approval applies to the record, not the blocked OpenAI-only gate.
+
+### Safety
+
+**APPROVE — zero material findings.** Independently replayed safe clarification
+and injected invalid-ref rejection; confirmed stop, no subsequent calls, budget,
+privacy and fake outbound. No factual guardrail was relaxed.
+
+### Standards
+
+**APPROVE — zero remaining findings.** One initial documentation finding:
+prior smoke 04 authorization was still labelled current after B1 execution.
+Resolved at `37f5325` by explicitly labelling historical sections and linking
+the later stopped B1, preserving all old metrics. No actionable code smell.
 
 - Semantic/safety gate: **FAIL under the frozen oracle**; identified harness
   mismatch blocks acceptance, not proof that an invalid ref escaped grounding.
