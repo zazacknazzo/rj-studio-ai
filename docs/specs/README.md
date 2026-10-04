@@ -16,3 +16,4 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [V1 Agentic Surface — Phase 1](V1-agentic-surface-phase-1.md) — approved incremental experiment; ADR 0009 remains proposed.
 
 - [V1 Agentic Surface Phase 1.1 — Commercial Steering](V1-agentic-surface-phase-1.1.md): approved incremental correction; human product review remains pending.
+- [V1 Agentic Surface Phase 1.2 — Commercial Initiative + Generation Headroom](V1-agentic-surface-phase-1.2.md): approved incremental round; human approval and live gates remain separate.
