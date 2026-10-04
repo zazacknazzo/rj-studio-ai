@@ -82,7 +82,7 @@ class OpenAIEvalGenerator:
         ledger: BudgetLedger,
         phase: str,
         timing=None,
-        reasoning_effort="medium",
+        reasoning_effort="low",
     ):
         if reasoning_effort not in {"medium", "low"}:
             raise ValueError("invalid_eval_reasoning_effort")

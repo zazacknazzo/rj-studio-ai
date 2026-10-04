@@ -61,10 +61,10 @@ def test_live_adapter_is_standard_stateless_and_accounts_real_usage(tmp_path):
     payload = json.loads(requests[-1].content)
     assert payload["model"] == "gpt-6.1-sol"
     assert payload["service_tier"] == "default"
-    assert payload["reasoning"] == {"effort": "medium"}
+    assert payload["reasoning"] == {"effort": "low"}
     assert payload["store"] is False
     assert payload["max_output_tokens"] == 1024
-    assert result.metric.configuration == "effort=medium;tier=default;max_output_tokens=1024"
+    assert result.metric.configuration == "effort=low;tier=default;max_output_tokens=1024"
     reservations = [
         json.loads(line) for line in (tmp_path / "budget.jsonl").read_text().splitlines()
     ]

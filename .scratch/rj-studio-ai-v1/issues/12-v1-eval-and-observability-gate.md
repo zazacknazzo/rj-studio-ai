@@ -6,6 +6,15 @@
 
 **Status:** in-progress
 
+## Latest product-owner decision — 2026-10-04
+
+Human A/B Review: LOW APPROVED. OpenAI candidate/default low, medium override
+retained, Agentic Surface frozen. Fresh B1 53 cases and conditional B2 authorized
+under existing US$5 cap / US$1 checkpoint and unchanged gates. Exact oracle name
+requires clarification before paid execution: instruction v3 vs approved/current
+v4. See docs/evals/V1/low-product-decision-2026-10-04.md. Status stays in-progress.
+No completion or new live run is claimed.
+
 ## Current product-owner pause — 2026-10-04
 
 **Phase B PAUSED**, before correcting the case 32 oracle. Current B1 remains

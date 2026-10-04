@@ -481,7 +481,7 @@ def run_live_phase(
     ledger,
     client,
     stop_on_any_failure=False,
-    reasoning_effort="medium",
+    reasoning_effort="low",
 ):
     suite = _live_contracts(suite)
     samples, packet, hashes = [], [], []

@@ -82,7 +82,7 @@ def test_live_request_and_reservation_share_1024_ceiling(tmp_path):
         remaining_budget=29,
     )
     assert payloads[0]["max_output_tokens"] == 1024
-    assert payloads[0]["reasoning"] == {"effort": "medium"}
+    assert payloads[0]["reasoning"] == {"effort": "low"}
     assert payloads[0]["service_tier"] == "default"
     assert result.metric.configuration.endswith("max_output_tokens=1024")
     journal = [json.loads(line) for line in (tmp_path / "budget.jsonl").read_text().splitlines()]
