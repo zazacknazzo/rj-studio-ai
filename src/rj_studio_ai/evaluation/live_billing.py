@@ -11,10 +11,11 @@ from typing import Literal
 from pydantic import model_validator
 
 from rj_studio_ai.evaluation.records import Count, RecordModel
+from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS
 
 PRICING_PATH = Path("docs/evals/V1/pricing.openai-2026-10-02.json")
-# Eval-only ceiling authorized by the product owner; production stays unchanged.
-LIVE_MAX_OUTPUT_TOKENS = 512
+# Shared Phase 1.2 ceiling; explicit lower runtime configuration is still honored.
+LIVE_MAX_OUTPUT_TOKENS = MAX_OUTPUT_TOKENS
 
 
 UsageValidationCode = Literal[

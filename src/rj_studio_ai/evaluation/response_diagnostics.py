@@ -25,6 +25,8 @@ def installed_sdk_version():
 
 class ResponseDiagnostics(RecordModel):
     response_status: ResponseStatus | None = None
+    incomplete_reason_present: StrictBool | None = None
+    incomplete_reason: Literal["max_output_tokens", "content_filter", "unrecognized"] | None = None
     usage_present: StrictBool | None = None
     input_tokens_present: StrictBool | None = None
     output_tokens_present: StrictBool | None = None
@@ -57,6 +59,8 @@ class ResponseDiagnostics(RecordModel):
             return self
         status = data.get("status")
         usage = data.get("usage")
+        details = data.get("incomplete_details")
+        reason = details.get("reason") if isinstance(details, dict) else None
         observed = {
             "response_status": status
             if isinstance(status, str)
@@ -64,6 +68,12 @@ class ResponseDiagnostics(RecordModel):
             in {"completed", "incomplete", "failed", "in_progress", "queued", "cancelled"}
             else "unrecognized",
             "usage_present": usage is not None,
+            "incomplete_reason_present": reason is not None,
+            "incomplete_reason": reason
+            if isinstance(reason, str) and reason in {"max_output_tokens", "content_filter"}
+            else "unrecognized"
+            if reason is not None
+            else None,
         }
         usage = usage if isinstance(usage, dict) else {}
         input_details = usage.get("input_tokens_details")

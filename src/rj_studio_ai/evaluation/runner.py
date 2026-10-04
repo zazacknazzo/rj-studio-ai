@@ -38,7 +38,7 @@ from rj_studio_ai.livia_persona import (
     PersonaValidationError,
     reply_plan_instructions,
 )
-from rj_studio_ai.llm_decision import LLMDecision
+from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS, LLMDecision
 from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.salon_knowledge import SalonKnowledgeFact, SalonKnowledgeRepository
 
@@ -292,7 +292,7 @@ def dry_run(suite: EvalSuite, *, repetitions: int = 1, revision: str) -> RunReco
         model="fixture-proposals-v1",
         thinking="disabled",
         structured_output=True,
-        max_output_tokens=200,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
         context_max_messages=12,
         context_token_budget=4000,
     )

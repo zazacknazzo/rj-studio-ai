@@ -661,11 +661,11 @@ def test_invalid_structured_decision_retries_safely_then_replays_safe_reply(tmp_
 
 
 def test_anthropic_adapter_rejects_output_cap_above_the_v1_contract() -> None:
-    with pytest.raises(ValueError, match="between 1 and 200"):
+    with pytest.raises(ValueError, match="between 1 and 1024"):
         AnthropicReplyGenerator(
             api_key="test-key",
             model="claude-sonnet-5",
-            max_output_tokens=201,
+            max_output_tokens=1025,
             pricing=LLMPriceTable(
                 input_microusd_per_million=3_000_000,
                 output_microusd_per_million=15_000_000,

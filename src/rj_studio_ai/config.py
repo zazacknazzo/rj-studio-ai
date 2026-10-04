@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["fixed", "anthropic"] = "fixed"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
-    anthropic_max_output_tokens: int = Field(default=200, ge=1, le=200)
+    anthropic_max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=1, le=MAX_OUTPUT_TOKENS)
     conversation_context_maximum_messages: int = Field(default=12, ge=1)
     conversation_context_history_token_budget: int = Field(default=2_000, ge=1)
     llm_input_token_budget: int = Field(default=4_000, ge=1)

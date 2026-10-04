@@ -464,7 +464,7 @@ def test_noncritical_quality_failure_is_recorded_without_safety_stop(tmp_path):
         )
     assert record.status == "completed"
     assert record.stop_code is None
-    assert record.configuration["max_output_tokens"] == 512
+    assert record.configuration["max_output_tokens"] == 1024
     assert live_summary(record.samples, record.contracts, ledger.pricing)["persona"] == {
         "evaluable": 1,
         "pass": 0,

@@ -90,6 +90,7 @@ SMOKE_CASES = (
     "grounding-multiple-facts",
 )
 COMMERCIAL_RETEST_CASES = (SMOKE_CASES[0], SMOKE_CASES[1], SMOKE_CASES[3])
+INITIATIVE_RETEST_CASES = (*COMMERCIAL_RETEST_CASES, SMOKE_CASES[4])
 
 RUBRIC = (
     "naturalidade de WhatsApp",
@@ -733,29 +734,31 @@ def execute_live(
     case_id=None,
     smoke_only=False,
     commercial_only=False,
+    initiative_only=False,
     phase_b_authorized=False,
 ):
     suite = _live_contracts(suite)
-    if sum((case_id is not None, smoke_only, commercial_only)) > 1:
+    if sum((case_id is not None, smoke_only, commercial_only, initiative_only)) > 1:
         raise ValueError("live_conflicting_execution_scope")
     if case_id is not None and case_id not in {c.contract.case_id for c in suite.cases}:
         raise ValueError("live_unknown_case")
     output.mkdir(mode=0o700)
     pricing = LivePricing.load()
-    ledger = BudgetLedger(
-        output / "spend.jsonl",
-        pricing,
-        phase_a_cap=Decimal("0.20")
+    phase_a_cap = (
+        Decimal("0.20")
         if case_id is not None
-        else Decimal("0.30")
-        if commercial_only
-        else Decimal("1"),
-        global_cap=Decimal("0.20")
-        if case_id is not None
+        else Decimal("0.40")
+        if initiative_only
         else Decimal("0.30")
         if commercial_only
         else Decimal("1")
-        if smoke_only
+    )
+    ledger = BudgetLedger(
+        output / "spend.jsonl",
+        pricing,
+        phase_a_cap=phase_a_cap,
+        global_cap=phase_a_cap
+        if case_id is not None or commercial_only or initiative_only or smoke_only
         else Decimal("5"),
     )
     records, packet = [], []
@@ -765,6 +768,8 @@ def execute_live(
                 suite,
                 [(case_id, 1)]
                 if case_id is not None
+                else [(i, 1) for i in INITIATIVE_RETEST_CASES]
+                if initiative_only
                 else [(i, 1) for i in COMMERCIAL_RETEST_CASES]
                 if commercial_only
                 else [(i, 1) for i in SMOKE_CASES],
@@ -774,7 +779,7 @@ def execute_live(
                 revision=revision,
                 ledger=ledger,
                 client=client,
-                stop_on_any_failure=commercial_only,
+                stop_on_any_failure=commercial_only or initiative_only,
             )
             records.append(a)
             packet.extend(excerpts)
@@ -785,6 +790,7 @@ def execute_live(
                 and case_id is None
                 and not smoke_only
                 and not commercial_only
+                and not initiative_only
                 and phase_b_authorized
             ):
                 repeated = {
@@ -818,6 +824,8 @@ def execute_live(
         report = {
             "execution_scope": "single_case_diagnostic"
             if case_id is not None
+            else "initiative_retest"
+            if initiative_only
             else "commercial_retest"
             if commercial_only
             else "smoke_only"
@@ -854,8 +862,9 @@ def execute_live(
         )
         text = "# Revisão humana qualitativa\n\nSem notas automáticas ou numéricas.\n\n"
         text += (
-            "- Parece uma pessoa competente?\n- A conversa flui?\n"
-            "- Parece comercial sem insistência?\n- Tem autonomia?\n"
+            "- Parece uma atendente competente?\n- Parece interessada em ajudar?\n"
+            "- Conduz a conversa quando existe oportunidade?\n- Sabe quando NÃO conduzir?\n"
+            "- É comercial sem ser insistente?\n- Continua autônoma?\n"
             "- Fez algo factualmente ou operacionalmente errado?\n"
         )
         for index, item in enumerate(packet, 1):
@@ -878,6 +887,9 @@ def main():
     scope.add_argument("--smoke-only", action="store_true", help="Ten-case smoke; US$1 cap, no B")
     scope.add_argument(
         "--commercial-only", action="store_true", help="Three-case retest; shared US$0.30 cap, no B"
+    )
+    scope.add_argument(
+        "--initiative-only", action="store_true", help="Four-case retest; shared US$0.40 cap, no B"
     )
     args = parser.parse_args()
     logging.getLogger("dotenv.main").disabled = True
@@ -902,6 +914,7 @@ def main():
             case_id=args.case,
             smoke_only=args.smoke_only,
             commercial_only=args.commercial_only,
+            initiative_only=args.initiative_only,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception:

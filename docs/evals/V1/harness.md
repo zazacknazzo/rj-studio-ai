@@ -237,3 +237,20 @@ Finite cues are diagnostic, not full NLP; wording quality still needs human revi
 A retained CTA/commercial continuation is observed, never required. Record v9
 binds this version. Record v8/v3 and v2 historical replay keep their prior rules;
 no old run is rescored. Trace contains enums/booleans only, no prose or CoT.
+
+## Agentic Phase 1.2 targeted retest
+
+`--initiative-only` runs the existing direct-price, ambiguous-price, discount and
+technical-risk cases exactly once on a shared US$0.40 ledger. It stops on any
+failed check/generation/privacy/accounting condition and cannot start B. Only
+4/4 pass permits a separate US$1 `--smoke-only` ten-case run under this approval.
+No automatic retries. Slow but complete/valid responses continue to be measured;
+the inclusive official 8s gate is unchanged, not replaced by the diagnostic
+production-equivalent metric. Qualitative approval is still human-owned.
+
+Generation output ceiling is now 1024, shared with the runtime configuration
+default/upper bound. Live model/medium/default/30s settings and pricing stay fixed.
+New optional diagnostic fields preserve historical record parsing without
+rescore: allowlisted incomplete reason/presence and soft early-closure signal.
+See the [architecture amendment](../../architecture/v1-agentic-surface-phase-1.md)
+for interpretation and limits. No oracle rule or factual expectation changes.

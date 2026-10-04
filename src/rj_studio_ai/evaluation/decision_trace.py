@@ -33,6 +33,8 @@ class DecisionTrace(RecordModel):
     retained_information_targets: tuple[InformationTarget, ...] = ()
     actionable_information_targets: tuple[InformationTarget, ...] = ()
     commercial_continuation_present: StrictBool = False
+    # Heuristic product signal, never a safety gate or a claim about Customer intent.
+    conversation_closed_early: StrictBool | None = None
     proposed_appointment_targets: tuple[PreferenceTarget, ...] = ()
     authorized_appointment_targets: tuple[PreferenceTarget, ...] = ()
     denied_appointment_targets: tuple[PreferenceTarget, ...] = ()
@@ -196,9 +198,33 @@ class DecisionTraceCapture:
                     "override_code": safe_handoff_reason(persisted_handoff_reason),
                 }
             )
+        commercial_intents = {
+            Intent.PRICE,
+            Intent.SERVICE_INFORMATION,
+            Intent.PROFESSIONAL,
+            Intent.HOURS,
+            Intent.LOCATION,
+            Intent.PROMOTION_OR_DISCOUNT,
+            Intent.APPOINTMENT_INTEREST,
+        }
+        continuing = self.trace.commercial_continuation_present or bool(
+            self.trace.retained_information_targets or self.trace.authorized_appointment_targets
+        )
+        early_closure = None
+        if (
+            body
+            and not safe_fallback
+            and not persisted_handoff_reason
+            and set(self.trace.proposed_intents) & commercial_intents
+        ):
+            if continuing:
+                early_closure = False
+            elif self.trace.proposed_next_action == NextConversationalAction.ANSWER_ONLY:
+                early_closure = True
         return DecisionTrace.model_validate(
             {
                 **self.trace.model_dump(),
+                "conversation_closed_early": early_closure,
                 "retained_information_targets": self.trace.retained_information_targets
                 if body and not persisted_handoff_reason
                 else (),

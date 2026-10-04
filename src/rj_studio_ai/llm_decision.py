@@ -13,7 +13,8 @@ from pydantic import (
     model_validator,
 )
 
-MAX_OUTPUT_TOKENS = 200
+# Generation headroom includes the structured plan and any provider reasoning.
+MAX_OUTPUT_TOKENS = 1024
 MAX_REPLY_TEXT_CHARACTERS = 800
 
 

@@ -175,3 +175,43 @@ Functional safety passing != product conversational quality passing. The new
 smoke is blocked, human review remains NOT YET APPROVED, and partial observed
 p95 E2E fails 8s. Phase B is paused, Ticket 12 in-progress, ADR 0009 proposed.
 Historical evidence and product-owner annotations are preserved, without rescore.
+
+## Phase 1.2 — Commercial Initiative + Generation Headroom
+
+The [approved amendment](../specs/V1-agentic-surface-phase-1.2.md) strengthens
+`agentic_surface_instructions()` once for both provider paths. Commercial
+initiative is soft policy: answer trusted information, assess a useful next step,
+continue naturally when appropriate. A Customer seeking information only,
+social conversation or safety context does not require sales continuation.
+The existing advisory `continue_conversation` covers sales/qualification without
+creating an action, intake or Appointment. CTA, timing and wording stay model-owned.
+No renderer, factual/handoff/appointment authority or persistence changes.
+
+Eval trace retains `next_action` and continuation presence. New
+`conversation_closed_early` is a tri-state heuristic: true for a proposed
+commercial Intent with answer-only planning and no retained continuation/question,
+false when such a question/continuation remains, otherwise unknown. It does not
+establish that the Customer wanted progression and can flag a legitimate
+information-only answer. Human review interprets it; no oracle gate uses it.
+Suppressed/failed/safety outcomes have no early-closure product judgement.
+
+The prior smoke reached output 512 including reasoning 264 with `incomplete`,
+valid usage and no timeout. This is consistent with headroom exhaustion, but its
+unrecorded provider reason is not retroactively inferred. Diagnostics now capture
+only allowlisted `incomplete_details.reason` (`max_output_tokens`, `content_filter`,
+or `unrecognized`), presence and existing counters/status. Missing remains unknown;
+no CoT, provider text/payload or arbitrary error string is retained.
+
+`llm_decision.MAX_OUTPUT_TOKENS=1024` centralizes the authorized ceiling. Live
+OpenAI request, budget reservation and config record use it, previously 512.
+Anthropic runtime default/upper bound and `.env.example` use it, previously 200;
+explicit lower configuration remains honored and local `.env` is untouched.
+Anthropic thinking stays disabled and is not live-called. Output headroom is a
+ceiling, not a target. Paid incomplete calls retain their actual cost and safe
+system outcome, without inflating completed-model-reply denominators or retries.
+
+Model, effort, tier, pricing, production 10s deadline, eval 30s observation budget,
+and official 8s E2E gate remain unchanged. A bigger output ceiling may increase
+cost/latency and does not guarantee completion. Hitting 1024 is recorded as a
+headroom concern; another incomplete blocks the run without automatic escalation.
+Finite prose/behavior recognition and the separate human approval gate remain.

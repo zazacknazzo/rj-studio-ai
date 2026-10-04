@@ -63,12 +63,12 @@ def test_live_adapter_is_standard_stateless_and_accounts_real_usage(tmp_path):
     assert payload["service_tier"] == "default"
     assert payload["reasoning"] == {"effort": "medium"}
     assert payload["store"] is False
-    assert payload["max_output_tokens"] == 512
-    assert result.metric.configuration == "effort=medium;tier=default;max_output_tokens=512"
+    assert payload["max_output_tokens"] == 1024
+    assert result.metric.configuration == "effort=medium;tier=default;max_output_tokens=1024"
     reservations = [
         json.loads(line) for line in (tmp_path / "budget.jsonl").read_text().splitlines()
     ]
-    assert reservations[1]["output_bound"] == 512
+    assert reservations[1]["output_bound"] == 1024
     assert payload["text"]["format"]["strict"] is True
     assert result.trusted_reply is None
     assert adapter.attempts[0].usage.reasoning_tokens == 40
