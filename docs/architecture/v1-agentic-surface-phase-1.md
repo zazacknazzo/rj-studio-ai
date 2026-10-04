@@ -99,3 +99,17 @@ no post-smoke prompt/runtime change was made. The
 [qualitative packet](../evals/V1/agentic-surface-human-review-2026-10-04.md)
 contains exactly those ten observed responses. Product approval and real-provider
 operation remain pending; this does not resume Phase B.
+
+## Phase 1.1 — Commercial Steering
+
+Functional safety passing != product conversational quality passing. The product
+owner reviewed Phase 1: case 1 was factual but dry; cases 2/4 ignored the request
+after generic fallback; case 3 was accepted. Human conversational/product review
+is **NOT YET APPROVED**. The remaining six cases were not used to reject it.
+
+The approved [Phase 1.1 scope](../specs/V1-agentic-surface-phase-1.1.md) adds
+commercial goals and general gaps without restoring deterministic wording.
+Case 1 lacked sufficient soft commercial steering. Cases 2/4 proposed service
+questions, but preference targets required active intake; parts were dropped and
+the local empty-render fallback substituted. General clarification and durable
+appointment collection must have separate scopes.
