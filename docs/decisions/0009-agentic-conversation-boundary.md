@@ -26,3 +26,9 @@ the wider generative representation and retained factual/state authority. That
 approval supersedes the earlier no-change scope for this experiment only. It
 does not accept this ADR, approve pilot or resume Phase B. Historical evidence
 is unchanged; new oracles are versioned.
+
+Phase 1 evidence: 890 offline tests and four independent reviews passed. The
+[new smoke](../evals/V1/agentic-surface-smoke-2026-10-04.md) passed ten functional
+cases (0/19 critical failures); p95 observed E2E 10.930s failed the official 8s
+gate. Qualitative human review is pending, including two generic fallbacks.
+Status remains proposed; no universal free-prose semantic guarantee is claimed.

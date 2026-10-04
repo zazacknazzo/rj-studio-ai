@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Polish complete/approved; fresh B1 stopped on live-oracle mismatch; B2 and real-provider gates pending |
+| V1 | Polish approved; Phase B paused; Agentic Phase 1 functional smoke passed, latency and human/real-provider gates pending |
 
 Each eval case should contain:
 
@@ -28,3 +28,5 @@ passing a partial live gate does not approve V1 or production operation.
 
 Use [V1 harness operations](V1/harness.md) for offline commands, records,
 pricing, metric definitions, privacy and the future Phase 2 checklist.
+
+For Agentic Surface Phase 1, load the [53-case classification](V1/agentic-classification-2026-10-04.md) and [new smoke record](V1/agentic-surface-smoke-2026-10-04.md) only when evaluating that surface. Historical Phase B populations remain unchanged.

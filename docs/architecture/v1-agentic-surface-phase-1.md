@@ -1,7 +1,7 @@
 # V1 Agentic Surface — Phase 1
 
-Date: 2026-10-04. Incremental implementation experiment, approval pending
-independent reviews/live gate. ADR 0009 proposed; Ticket 12 in-progress;
+Date: 2026-10-04. Incremental implementation experiment. Independent reviews
+and functional smoke passed; official latency failed and human approval is pending. ADR 0009 proposed; Ticket 12 in-progress;
 Phase B paused. Baseline `7e3fc975b4de8d0ba0c74c1d52efb992586cc4fd`.
 
 ## Old and new boundary
@@ -91,5 +91,11 @@ Four independent reviews passed after corrections:
 | Architecture/standards | Reconcile retained question/recovery parts before durable completion |
 | Eval behavioral | Source/target/state checks, critical persistence gate, known-field wording tolerance, qualitative packet |
 
-Live smoke is the next separate gate. No provider evidence or human approval
-is inferred from these offline checks.
+The [new live smoke](../evals/V1/agentic-surface-smoke-2026-10-04.md) passed
+10/10 cases, with 0/19 critical checks failed and US$0.0457838 spent. No retries
+or paid failures. p95 observed E2E 10.930s fails the unchanged 8s gate. Two
+noncritical generic clarification fallbacks remain visible for human review;
+no post-smoke prompt/runtime change was made. The
+[qualitative packet](../evals/V1/agentic-surface-human-review-2026-10-04.md)
+contains exactly those ten observed responses. Product approval and real-provider
+operation remain pending; this does not resume Phase B.
