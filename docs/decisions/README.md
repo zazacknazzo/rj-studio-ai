@@ -12,5 +12,6 @@ Read an ADR only when a task touches its decision.
 | [0006](0006-separate-messaging-ingress-processing-delivery.md) | Separate durable ingress, AI processing, and outbound delivery |
 | [0007](0007-trusted-reply-rendering.md) | Render factual replies from approved statements and controlled conversational phrases |
 | [0008](0008-durable-human-handoff.md) | Persist Conversation handoff atomically and fence delivery submission/manual release |
+| [0009](0009-agentic-conversation-boundary.md) | **Proposed:** return conversational initiative to the model while retaining trusted fact/action/state authority; does not amend accepted ADRs |
 
 Add an ADR only for a hard-to-reverse choice that would be surprising without its trade-off. Keep it concise and update this index.

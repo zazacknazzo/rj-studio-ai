@@ -6,6 +6,15 @@
 
 **Status:** in-progress
 
+## Current product-owner pause — 2026-10-04
+
+**Phase B PAUSED**, before correcting the case 32 oracle. Current B1 remains
+32/53, 31 pass / one raw fail, without rescore; B2 not executed. The
+[V1 Agentic Boundary Review](../../../docs/architecture/v1-agentic-boundary-review.md)
+and proposed ADR 0009 are analysis only. No runtime/prompt/oracle/migration
+change or new paid execution is authorized by this review. Prior authorizations
+below are historical; Ticket 12 remains in-progress.
+
 ## Product milestone and Phase B authorization (2026-10-03)
 
 Latest execution (2026-10-04): corrected oracle-v2 B1 stopped at case 50/53,
