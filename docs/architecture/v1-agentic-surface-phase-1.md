@@ -113,3 +113,45 @@ Case 1 lacked sufficient soft commercial steering. Cases 2/4 proposed service
 questions, but preference targets required active intake; parts were dropped and
 the local empty-render fallback substituted. General clarification and durable
 appointment collection must have separate scopes.
+
+### Phase 1.1 boundary
+
+`conversation.information_targets` describes general gaps: `service`,
+`customer_goal`, `clarification`. It is mutually exclusive with appointment
+`targets` and allowed only for question/clarification parts. Outside intake it
+creates no preferences, episode or budget charge. Inside intake, recognizable
+preference requests must retain authorized appointment targets; known service
+questions are vetoed using persisted intake or a validated current Customer
+excerpt. Selected Knowledge alone never proves Customer service choice. Ordinary
+goal questions do not spend the appointment question budget.
+
+`next_action` is an optional five-value planning proposal: answer only, clarify,
+continue conversation, social response, request human attention. It chooses no
+wording, authorizes no effect and adds no state machine. Soft human attention is
+only semantic preparation; no notification, queue or persisted flag was added.
+Model wording, strategy, timing and optional CTA remain model-owned. Facts,
+safety, intake budgets/recovery and terminal handoff remain deterministic.
+
+The provider-neutral instructions live once in `agentic_surface_instructions`.
+They teach understanding, trusted answering, useful next step and continuation
+when useful. No new phrase IDs, forced commercial composition or CTA were added.
+Anthropic and OpenAI eval share the same typed schema/instructions. Legacy Python
+proposals remain readable; new strict provider schemas require explicit scopes
+and advisory plan. Anthropic's output budget was not changed or live-tested.
+
+### Phase 1.1 evaluation contract
+
+Oracle v4 adds a noncritical `commercial/general_clarification` check for the
+existing unresolved commercial fixtures. It observes retained question targets
+plus broad meaning cues in the emitted text, not labels alone or exact canned
+wording. Generic help/fallback fails this product check even if factual safety
+passes. These finite cues can reject novel valid wording and are not a semantic
+proof; human review decides product quality. Continuation presence is an
+allowlisted diagnostic from retained purpose, never a required CTA or score.
+
+Live record v9 keeps v2/v3 oracles and v8 records readable without applying v4
+checks to history. Existing evidence/Customer review notes are frozen. No fixture,
+model, output limit, deadline, pricing or latency gate changes accompany this
+round. `--commercial-only` runs the three existing cases once on one US$0.30
+ledger, stops on any failed check and never authorizes B. The separate ten-case
+smoke retains its US$1 cap and critical stop rules; latency alone never aborts it.

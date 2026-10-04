@@ -49,9 +49,11 @@ from rj_studio_ai.evaluation.openai_live import (
 )
 from rj_studio_ai.evaluation.oracle import (
     ORACLE_VERSION,
+    PHASE_ONE_ORACLE_VERSION,
     GroundingObservation,
     execution_category,
     replay_grounding,
+    requires_general_clarification,
 )
 from rj_studio_ai.evaluation.records import (
     PRODUCT_E2E_LATENCY_LIMIT_MS,
@@ -87,6 +89,8 @@ SMOKE_CASES = (
     "persona-incomplete-context",
     "grounding-multiple-facts",
 )
+COMMERCIAL_RETEST_CASES = (SMOKE_CASES[0], SMOKE_CASES[1], SMOKE_CASES[3])
+
 RUBRIC = (
     "naturalidade de WhatsApp",
     "clareza",
@@ -152,7 +156,7 @@ class LiveSample(Sample):
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3, 4, 5, 6, 7, 8] = 8
+    schema_version: Literal[3, 4, 5, 6, 7, 8, 9] = 9
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -176,7 +180,8 @@ class LiveRecord(RecordModel):
         check_privacy(self.model_dump(mode="json", exclude={"request_hashes"}))
         if self.created_at.tzinfo is None:
             raise ValueError("live_missing_timezone")
-        if self.schema_version >= 8 and self.configuration.get("oracle_version") != ORACLE_VERSION:
+        expected_oracle = PHASE_ONE_ORACLE_VERSION if self.schema_version == 8 else ORACLE_VERSION
+        if self.schema_version >= 8 and self.configuration.get("oracle_version") != expected_oracle:
             raise ValueError("live_missing_oracle_version")
         observed = [(s.case_id, s.repetition, s.turn) for s in self.samples]
         if len(set(self.plan)) != len(self.plan) or len(set(observed)) != len(observed):
@@ -261,6 +266,9 @@ def _score(
             context=context,
             body=body,
             handoff_active=bool(store.list_active_handoffs()),
+            actionable_information_targets=decision_trace.actionable_information_targets
+            if decision_trace
+            else (),
         )
         return {
             k: v == "pass"
@@ -446,6 +454,8 @@ def _live_contracts(suite):
             checks.pop("handoff_policy", None)
         if "live_expected_intents" in data:
             checks["decision_contract"] = CheckContract(metric="intent")
+        if requires_general_clarification(case):
+            checks["general_clarification"] = CheckContract(metric="commercial")
         cases.append(
             replace(
                 case,
@@ -459,7 +469,18 @@ def _live_contracts(suite):
     )
 
 
-def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledger, client):
+def run_live_phase(
+    suite,
+    selections,
+    phase,
+    *,
+    api_key,
+    output,
+    revision,
+    ledger,
+    client,
+    stop_on_any_failure=False,
+):
     suite = _live_contracts(suite)
     samples, packet, hashes = [], [], []
     by_id = {c.contract.case_id: c for c in suite.cases}
@@ -569,6 +590,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         body=body,
                         handoff_active=bool(handoffs),
                         authorized_question_targets=generator.trace_capture.trace.authorized_appointment_targets,
+                        actionable_information_targets=generator.trace_capture.trace.actionable_information_targets,
                     )
                     checks = replay_grounding(case, observation, body=body, facts=context.knowledge)
                 else:
@@ -643,8 +665,11 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 critical = any(
                     checks[k] != "pass" for k, v in case.contract.checks.items() if v.critical
                 )
-                if generator.stop_code or critical:
-                    stop_code = generator.stop_code or ("critical_failure")
+                product_failure = stop_on_any_failure and any(v != "pass" for v in checks.values())
+                if generator.stop_code or critical or product_failure:
+                    stop_code = generator.stop_code or (
+                        "critical_failure" if critical else "behavioral_failure"
+                    )
                     break
             if stop_code:
                 break
@@ -707,10 +732,11 @@ def execute_live(
     transport=None,
     case_id=None,
     smoke_only=False,
+    commercial_only=False,
     phase_b_authorized=False,
 ):
     suite = _live_contracts(suite)
-    if case_id is not None and smoke_only:
+    if sum((case_id is not None, smoke_only, commercial_only)) > 1:
         raise ValueError("live_conflicting_execution_scope")
     if case_id is not None and case_id not in {c.contract.case_id for c in suite.cases}:
         raise ValueError("live_unknown_case")
@@ -719,9 +745,15 @@ def execute_live(
     ledger = BudgetLedger(
         output / "spend.jsonl",
         pricing,
-        phase_a_cap=Decimal("0.20") if case_id is not None else Decimal("1"),
+        phase_a_cap=Decimal("0.20")
+        if case_id is not None
+        else Decimal("0.30")
+        if commercial_only
+        else Decimal("1"),
         global_cap=Decimal("0.20")
         if case_id is not None
+        else Decimal("0.30")
+        if commercial_only
         else Decimal("1")
         if smoke_only
         else Decimal("5"),
@@ -731,13 +763,18 @@ def execute_live(
         with httpx.Client(transport=transport, follow_redirects=False) as client:
             a, excerpts = run_live_phase(
                 suite,
-                [(case_id, 1)] if case_id is not None else [(i, 1) for i in SMOKE_CASES],
+                [(case_id, 1)]
+                if case_id is not None
+                else [(i, 1) for i in COMMERCIAL_RETEST_CASES]
+                if commercial_only
+                else [(i, 1) for i in SMOKE_CASES],
                 "A",
                 api_key=api_key,
                 output=output,
                 revision=revision,
                 ledger=ledger,
                 client=client,
+                stop_on_any_failure=commercial_only,
             )
             records.append(a)
             packet.extend(excerpts)
@@ -747,6 +784,7 @@ def execute_live(
                 and _measured_latency_gate(a_summary) == "pass"
                 and case_id is None
                 and not smoke_only
+                and not commercial_only
                 and phase_b_authorized
             ):
                 repeated = {
@@ -780,6 +818,8 @@ def execute_live(
         report = {
             "execution_scope": "single_case_diagnostic"
             if case_id is not None
+            else "commercial_retest"
+            if commercial_only
             else "smoke_only"
             if smoke_only
             else "smoke_and_suite",
@@ -836,6 +876,9 @@ def main():
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--case", help="One synthetic case once; US$0.20 cap, never starts B")
     scope.add_argument("--smoke-only", action="store_true", help="Ten-case smoke; US$1 cap, no B")
+    scope.add_argument(
+        "--commercial-only", action="store_true", help="Three-case retest; shared US$0.30 cap, no B"
+    )
     args = parser.parse_args()
     logging.getLogger("dotenv.main").disabled = True
     key = os.environ.get("OPENAI_API_KEY") or dotenv_values(".env").get("OPENAI_API_KEY")
@@ -858,6 +901,7 @@ def main():
             revision=revision,
             case_id=args.case,
             smoke_only=args.smoke_only,
+            commercial_only=args.commercial_only,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception:

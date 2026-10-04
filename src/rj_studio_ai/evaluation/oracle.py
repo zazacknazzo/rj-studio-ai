@@ -16,6 +16,7 @@ from rj_studio_ai.evaluation.suite import grounding_relevance_matches
 from rj_studio_ai.handoff import HandoffReason, handoff_confirmation
 from rj_studio_ai.livia_persona import HUMAN_REVIEW_REPLY, REPLY_PHRASES
 from rj_studio_ai.llm_decision import (
+    InformationTarget,
     Intent,
     PreferenceTarget,
     StructuredDecisionValidationError,
@@ -23,7 +24,8 @@ from rj_studio_ai.llm_decision import (
 )
 
 LEGACY_ORACLE_VERSION = "v1-live-semantic-2026-10-03-v2"
-ORACLE_VERSION = "v1-agentic-behavioral-2026-10-04-v3"
+PHASE_ONE_ORACLE_VERSION = "v1-agentic-behavioral-2026-10-04-v3"
+ORACLE_VERSION = "v1-agentic-commercial-2026-10-04-v4"
 
 
 def execution_category(case):
@@ -52,7 +54,9 @@ class GroundingObservation(RecordModel):
     """Trusted observer metadata, not model prose, Customer text or reasoning."""
 
     oracle_version: Literal[
-        "v1-live-semantic-2026-10-03-v2", "v1-agentic-behavioral-2026-10-04-v3"
+        "v1-live-semantic-2026-10-03-v2",
+        "v1-agentic-behavioral-2026-10-04-v3",
+        "v1-agentic-commercial-2026-10-04-v4",
     ] = ORACLE_VERSION
     oracle: Digest
     case_id: Identifier
@@ -61,6 +65,7 @@ class GroundingObservation(RecordModel):
     reference_contract_valid: StrictBool
     handoff_active: StrictBool
     proposed_intents: tuple[Intent, ...]
+    actionable_information_targets: tuple[InformationTarget, ...] = ()
     known_preference_fields: tuple[Identifier, ...] = ()
     authorized_question_targets: tuple[PreferenceTarget, ...] = ()
 
@@ -71,7 +76,15 @@ class GroundingObservation(RecordModel):
 
     @classmethod
     def capture(
-        cls, case, *, decision, context, body, handoff_active, authorized_question_targets=()
+        cls,
+        case,
+        *,
+        decision,
+        context,
+        body,
+        handoff_active,
+        authorized_question_targets=(),
+        actionable_information_targets=(),
     ):
         if body is None:
             raise ValueError("eval_missing_grounding_surface")
@@ -85,6 +98,7 @@ class GroundingObservation(RecordModel):
             valid = False
         return cls(
             authorized_question_targets=authorized_question_targets,
+            actionable_information_targets=actionable_information_targets,
             oracle=_oracle_digest(case),
             case_id=case.contract.case_id,
             reply_hash=fingerprint(body),
@@ -140,7 +154,7 @@ def replay_grounding(case, observation: GroundingObservation, *, body, facts=Non
     residue = body or ""
     for text in sorted(allowed, key=len, reverse=True):
         residue = residue.replace(text, "")
-    if observation.oracle_version == ORACLE_VERSION:
+    if observation.oracle_version in {PHASE_ONE_ORACLE_VERSION, ORACLE_VERSION}:
         # Only source-based expectations remain literal. Safety guidance words
         # preserve meaning; routine ACK/question/CTA substrings are not gates.
         required = [
@@ -177,4 +191,29 @@ def replay_grounding(case, observation: GroundingObservation, *, body, facts=Non
             if set(observation.proposed_intents) == set(case.data["live_expected_intents"])
             else "fail"
         )
+    if observation.oracle_version == ORACLE_VERSION and requires_general_clarification(case):
+        checks["general_clarification"] = (
+            "pass"
+            if (
+                not observation.handoff_active
+                and bool(
+                    set(observation.actionable_information_targets)
+                    & {InformationTarget.SERVICE, InformationTarget.CUSTOMER_GOAL}
+                )
+            )
+            else "fail"
+        )
     return checks
+
+
+def requires_general_clarification(case):
+    """Fixture contract: an unresolved commercial request, not every commercial turn."""
+    if case.kind != "grounding":
+        return False
+    expected = live_expectation(case)
+    return (
+        case.kind == "grounding"
+        and not case.data["selected_facts"]
+        and expected["handoff"] is False
+        and "serviço" in expected["contains"]
+    )

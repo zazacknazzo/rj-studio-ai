@@ -129,3 +129,20 @@ def score_appointment(
         "handoff_policy": active is expected["handoff"] and reason_ok,
         "bounded_intake": bounded and compatible and recovery_ok and preferences_ok,
     }
+
+
+def actionable_information_question(text, target):
+    """Bounded diagnostic cues, not a runtime planner or full semantic judge.
+
+    Model labels alone are insufficient. Novel valid wording can need human review.
+    """
+    value = normalized(text)
+    if "?" not in value:
+        return False
+    cues = {
+        "service": r"\b(?:servico|tratamento|atendimento)\b"
+        r"|\bo que\b.{0,30}\b(?:fazer|procura|busca)\b",
+        "customer_goal": r"\b(?:objetivo|resultado|procura|busca|precisa|interesse)\b",
+        "clarification": r"\b(?:contexto|detalhe|especificar|contar mais|explicar melhor)\b",
+    }
+    return bool(target in cues and re.search(cues[target], value))

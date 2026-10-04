@@ -9,11 +9,15 @@ from pydantic import StrictBool, model_validator
 
 from rj_studio_ai import application
 from rj_studio_ai.appointment_intake import reconcile_agentic_intake
+from rj_studio_ai.evaluation.behavioral import actionable_information_question
 from rj_studio_ai.evaluation.records import Identifier, RecordModel, check_privacy
 from rj_studio_ai.handoff import HandoffReason, safe_handoff_reason
 from rj_studio_ai.llm_decision import (
     ConversationalPurpose,
+    ConversationalReplyPart,
+    InformationTarget,
     Intent,
+    NextConversationalAction,
     PreferenceTarget,
 )
 
@@ -24,6 +28,11 @@ class DecisionTrace(RecordModel):
     proposed_knowledge_refs: tuple[Identifier, ...] = ()
     reply_part_kinds: tuple[Literal["phrase", "fact", "conversation"], ...] = ()
     conversational_purposes: tuple[ConversationalPurpose, ...] = ()
+    proposed_next_action: NextConversationalAction | None = None
+    proposed_information_targets: tuple[InformationTarget, ...] = ()
+    retained_information_targets: tuple[InformationTarget, ...] = ()
+    actionable_information_targets: tuple[InformationTarget, ...] = ()
+    commercial_continuation_present: StrictBool = False
     proposed_appointment_targets: tuple[PreferenceTarget, ...] = ()
     authorized_appointment_targets: tuple[PreferenceTarget, ...] = ()
     denied_appointment_targets: tuple[PreferenceTarget, ...] = ()
@@ -92,6 +101,22 @@ class DecisionTraceCapture:
                     if isinstance(t, str) and t in set(PreferenceTarget)
                 )
             ),
+            proposed_next_action=payload.get("next_action")
+            if isinstance(payload.get("next_action"), str)
+            and payload["next_action"] in set(NextConversationalAction)
+            else None,
+            proposed_information_targets=tuple(
+                dict.fromkeys(
+                    t
+                    for p in parts
+                    for t in (
+                        p["information_targets"]
+                        if isinstance(p.get("information_targets"), (list, tuple))
+                        else ()
+                    )
+                    if isinstance(t, str) and t in set(InformationTarget)
+                )
+            ),
             reply_part_fact_refs=references(
                 [p.get("knowledge_ref") for p in parts if p.get("kind") == "fact"]
             ),
@@ -127,6 +152,32 @@ class DecisionTraceCapture:
                 "finalizer_handoff": result.handoff,
                 "finalizer_reason_code": reason,
                 "override_code": override,
+                "retained_information_targets": tuple(
+                    dict.fromkeys(
+                        t
+                        for part in result.reply_parts
+                        if isinstance(part, ConversationalReplyPart)
+                        and part.text in result.reply_text
+                        for t in part.information_targets
+                    )
+                ),
+                "actionable_information_targets": tuple(
+                    dict.fromkeys(
+                        t
+                        for part in result.reply_parts
+                        if isinstance(part, ConversationalReplyPart)
+                        and part.text in result.reply_text
+                        for t in part.information_targets
+                        if actionable_information_question(part.text, t)
+                    )
+                ),
+                "commercial_continuation_present": any(
+                    isinstance(part, ConversationalReplyPart)
+                    and part.text in result.reply_text
+                    and part.purpose
+                    in {ConversationalPurpose.COMMERCIAL_CONTINUATION, ConversationalPurpose.CTA}
+                    for part in result.reply_parts
+                ),
             }
         )
         facts = {f.id: f.statement for f in context.knowledge}
@@ -148,6 +199,15 @@ class DecisionTraceCapture:
         return DecisionTrace.model_validate(
             {
                 **self.trace.model_dump(),
+                "retained_information_targets": self.trace.retained_information_targets
+                if body and not persisted_handoff_reason
+                else (),
+                "actionable_information_targets": self.trace.actionable_information_targets
+                if body and not persisted_handoff_reason
+                else (),
+                "commercial_continuation_present": self.trace.commercial_continuation_present
+                if body and not persisted_handoff_reason
+                else False,
                 "authorized_handoff": bool(persisted_handoff_reason),
                 "authorized_actions": tuple(
                     (["terminal_handoff"] if persisted_handoff_reason else [])

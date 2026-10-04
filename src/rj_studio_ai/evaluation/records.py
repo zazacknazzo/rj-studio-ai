@@ -15,7 +15,7 @@ PositiveCount = Annotated[int, Field(strict=True, gt=0)]
 Milliseconds = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$")]
 Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
-Metric = Literal["grounding", "intent", "handoff", "persona", "context"]
+Metric = Literal["grounding", "intent", "handoff", "persona", "context", "commercial"]
 Verdict = Literal["pass", "fail", "not_run"]
 PRODUCT_E2E_LATENCY_LIMIT_MS = 8000
 

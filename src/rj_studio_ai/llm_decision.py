@@ -114,6 +114,12 @@ class PreferenceTarget(StrEnum):
     CANCELLATION = "cancellation_choice"
 
 
+class InformationTarget(StrEnum):
+    SERVICE = "service"
+    CUSTOMER_GOAL = "customer_goal"
+    CLARIFICATION = "clarification"
+
+
 class ConversationalReplyPart(BaseModel):
     """Untrusted bounded wording. Purpose/targets confer no action authority."""
 
@@ -124,10 +130,21 @@ class ConversationalReplyPart(BaseModel):
     text: StrictStr = Field(min_length=1, max_length=400)
     targets: tuple[PreferenceTarget, ...] = Field(default=(), max_length=4)
 
+    information_targets: tuple[InformationTarget, ...] = Field(default=(), max_length=3)
+
     @model_validator(mode="after")
     def coherent_targets(self):
         if not self.text.strip() or any(ord(c) < 32 and c not in "\n\t" for c in self.text):
             raise ValueError("invalid conversational surface")
+        if self.targets and self.information_targets:
+            raise ValueError("question scopes must be separate")
+        if len(set(self.information_targets)) != len(self.information_targets):
+            raise ValueError("duplicate information target")
+        if self.information_targets and self.purpose not in {
+            ConversationalPurpose.QUESTION,
+            ConversationalPurpose.CLARIFICATION,
+        }:
+            raise ValueError("only a general question can target an information gap")
         if len(set(self.targets)) != len(self.targets):
             raise ValueError("duplicate question target")
         if self.targets and self.purpose not in {
@@ -157,12 +174,22 @@ class AppointmentPreferences(BaseModel):
     professional_preference: StrictStr | None = Field(default=None, min_length=1, max_length=120)
 
 
+class NextConversationalAction(StrEnum):
+    ANSWER_ONLY = "answer_only"
+    CLARIFY = "clarify"
+    CONTINUE_CONVERSATION = "continue_conversation"
+    SOCIAL_RESPONSE = "social_response"
+    REQUEST_HUMAN_ATTENTION = "request_human_attention"
+
+
 class LLMDecision(BaseModel):
     """A structurally valid but still untrusted proposal for one inbound Message."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     surface: Literal["legacy", "agentic"] = "legacy"
+    # Planning/observation only. Never grants an operational effect.
+    next_action: NextConversationalAction | None = None
     intents: tuple[Intent, ...] = Field(min_length=1)
     reply_text: StrictStr = Field(min_length=1, max_length=MAX_REPLY_TEXT_CHARACTERS)
     # Empty only for older proposals and deterministic fixed replies. Free text
@@ -238,9 +265,11 @@ def decision_json_schema() -> dict[str, Any]:
     for field in preferences["properties"].values():
         field.pop("default", None)
     conversational = schema["$defs"]["ConversationalReplyPart"]
-    conversational["properties"]["targets"].pop("default", None)
+    for field in ("targets", "information_targets"):
+        conversational["properties"][field].pop("default", None)
     conversational["required"] = list(conversational["properties"])
     schema["properties"]["surface"].pop("default", None)
+    schema["properties"]["next_action"].pop("default", None)
     schema["required"] = list(schema["properties"])
     return schema
 

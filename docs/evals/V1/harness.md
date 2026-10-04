@@ -221,3 +221,19 @@ Before separately authorized Phase 2:
 
 Meta smoke remains independently blocked on App Secret; this harness neither
 reads credentials nor runs that smoke.
+
+## Agentic Phase 1.1 targeted retest
+
+After offline checks and four reviews, `--commercial-only` selects the existing
+price, ambiguous-price and discount smoke cases. One run each, no retries, one
+shared US$0.30 ledger; any failed check stops. It cannot start B even if the caller
+requests B. Only three passing cases authorize a separate `--smoke-only` run in
+this round. Existing model/effort/output/observation configuration stays unchanged.
+
+Oracle `v1-agentic-commercial-2026-10-04-v4` separates general clarification from
+factual safety (`commercial` metric). Retained information targets plus broad
+meaning cues must support an actionable question, rather than generic help.
+Finite cues are diagnostic, not full NLP; wording quality still needs human review.
+A retained CTA/commercial continuation is observed, never required. Record v9
+binds this version. Record v8/v3 and v2 historical replay keep their prior rules;
+no old run is rescored. Trace contains enums/booleans only, no prose or CoT.

@@ -213,7 +213,7 @@ def test_reasoning_count_can_remain_unknown_with_complete_pricing_evidence(tmp_p
     attempt = record["samples"][0]["attempts"][0]
     assert attempt["response_diagnostics"]["reasoning_tokens_present"] is False
     assert attempt["usage"]["reasoning_tokens"] is None
-    assert record["schema_version"] == 8
+    assert record["schema_version"] == 9
     timing = record["samples"][0].pop("latency_breakdown")
     with pytest.raises(ValueError, match="live_missing_latency_breakdown"):
         LiveRecord.model_validate(record)

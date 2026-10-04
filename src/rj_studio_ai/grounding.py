@@ -16,6 +16,7 @@ from rj_studio_ai.llm_decision import (
     CriticalFactType,
     CriticalFactualClaim,
     FactReplyPart,
+    InformationTarget,
     Intent,
     LLMDecision,
     PhraseReplyPart,
@@ -82,7 +83,10 @@ def finalize_reply(
         and not rendered_categories
         and any(
             isinstance(part, ConversationalReplyPart)
-            and part.purpose is ConversationalPurpose.CLARIFICATION
+            and (
+                part.purpose is ConversationalPurpose.CLARIFICATION
+                or (part.purpose is ConversationalPurpose.QUESTION and part.information_targets)
+            )
             for part in decision.reply_parts
         )
         and not decision.critical_claims
@@ -146,6 +150,18 @@ def finalize_reply(
     undeclared_preference = appointment_intake is not None and bool(
         question_fields(untargeted_text)
     )
+    # General information questions confer no preference/intake authority.
+    known_service = (
+        appointment_intake.desired_service
+        if appointment_intake is not None
+        else context.appointment_intake.desired_service
+        if context.appointment_intake is not None
+        else decision.appointment_preferences.desired_service
+        if decision.appointment_preferences is not None
+        and decision.appointment_preferences.desired_service
+        and decision.appointment_preferences.desired_service in customer_message
+        else None
+    )
     emitted_parts = []
     for part in parts:
         if isinstance(part, ConversationalReplyPart):
@@ -158,6 +174,8 @@ def finalize_reply(
                 or not set(part.targets) <= set(appointment_intake.question_targets)
             ):
                 continue  # denied question: no wording substitution or budget charge
+            if InformationTarget.SERVICE in part.information_targets and known_service:
+                continue
             emitted_parts.append(part)
             rendered.append(part.text)
         elif isinstance(part, PhraseReplyPart):
