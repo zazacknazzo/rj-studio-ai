@@ -16,8 +16,8 @@ O corte custa R$ 120,00. Quer ajuda para escolher um dia?
 
 Avaliação manual (A / B / equivalente; sem pontuação automática):
 
-- Entendimento e relevância: ____
-- Clarificação: ____
+- Entendimento e relevância: mesma coisa
+- Clarificação: mesma coisa
 - Iniciativa comercial: ____
 - Autonomia e condução: ____
 - Naturalidade e persona Lívia: ____

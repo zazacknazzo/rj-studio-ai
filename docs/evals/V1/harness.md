@@ -259,7 +259,8 @@ for interpretation and limits. No oracle rule or factual expectation changes.
 
 [Protocol](../../specs/V1-runtime-reasoning-ab.md): same ten Phase 1.2 cases,
 medium then low per case, one shared US$0.30 journal. Existing live default stays
-medium; only this collector supplies low. No Phase B route.
+low after [human approval](low-product-decision-2026-10-04.md); this collector
+still supplies explicit medium/low arms. No Phase B route in the A/B collector.
 
 ```bash
 .venv/bin/python -m rj_studio_ai.evaluation.reasoning_ab --allow-paid --output work/evals/UNIQUE-ab-run

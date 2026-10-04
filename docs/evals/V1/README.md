@@ -1,5 +1,11 @@
 # V1 eval suite
 
+Latest product decision: [HUMAN A/B REVIEW — LOW APPROVED](low-product-decision-2026-10-04.md).
+OpenAI eval candidate/default is now low, explicit medium remains available.
+Agentic Surface is approved/frozen. Fresh Phase B is authorized after checks,
+but its oracle name awaits clarification: request says v3, current approved code is v4.
+No new paid population has started; Ticket 12 remains in-progress.
+
 Current product round: [Agentic Surface Phase 1.2](../../specs/V1-agentic-surface-phase-1.2.md).
 Human conversational/product review: **PASS WITH NOTES**; [decision and frozen surface](agentic-phase12-product-decision-2026-10-04.md).
 Latest evidence: [Phase 1.2 retest and fresh smoke](agentic-phase12-results-2026-10-04.md).
