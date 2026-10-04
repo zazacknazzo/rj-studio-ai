@@ -1,6 +1,8 @@
 # Revisão humana — Agentic Surface Phase 1.2
 
-Status: pending. Dez respostas deste novo smoke. Sem notas numéricas ou automáticas.
+Status: **PASS WITH NOTES** — aprovação explícita do product owner em 2026-10-04.
+Veja a [decisão registrada](agentic-phase12-product-decision-2026-10-04.md).
+As dez respostas e os campos em branco foram preservados; nenhuma nota foi inferida.
 
 ## Caso 1
 

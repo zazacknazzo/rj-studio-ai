@@ -1,10 +1,12 @@
 # V1 eval suite
 
 Current product round: [Agentic Surface Phase 1.2](../../specs/V1-agentic-surface-phase-1.2.md).
-Human conversational/product review: **NOT YET APPROVED**.
+Human conversational/product review: **PASS WITH NOTES**; [decision and frozen surface](agentic-phase12-product-decision-2026-10-04.md).
 Latest evidence: [Phase 1.2 retest and fresh smoke](agentic-phase12-results-2026-10-04.md).
 Four-case retest and fresh ten-case smoke passed functionally; no incomplete/retry.
 Official 8s latency gate FAILED. Review the [ten complete observed replies](agentic-phase12-human-review-2026-10-04.md).
+Next runtime medium/low A/B stopped before calls: conservative twenty-call
+reservation projection US$0.4104700 exceeds its US$0.30 cap; no comparison yet.
 Historical [Phase 1.1 partial smoke](agentic-phase11-results-2026-10-04.md) remains blocked and unchanged; no rescore.
 Earlier product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress. **Phase B PAUSED by the product owner on

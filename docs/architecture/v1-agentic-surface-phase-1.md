@@ -230,3 +230,11 @@ approves that gate. Human product review and real-provider E2E remain pending;
 Phase B paused, Ticket 12 in-progress, ADR 0009 proposed. The original incomplete
 run is preserved without inferred reason or rescore. Review the ten-response
 qualitative packet before product approval; no automatic ratings are assigned.
+
+### Subsequent product-owner decision
+
+Phase 1.2 human review is now [PASS WITH NOTES](../evals/V1/agentic-phase12-product-decision-2026-10-04.md).
+The surface is frozen for runtime evaluation; minor wording notes do not authorize
+another conversational change. Original run evidence and responses remain intact.
+Latency and real-provider gates are independent. The requested medium/low A/B
+stopped at conservative budget preflight with no calls or implementation change.
