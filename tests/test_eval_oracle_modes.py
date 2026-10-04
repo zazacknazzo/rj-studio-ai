@@ -168,7 +168,7 @@ def test_structural_context_case_is_deterministic_and_does_not_call_a_model(tmp_
 
     suite = load_suite(SUITE)
     case = next(c for c in suite.cases if c.contract.case_id == case_id)
-    assert execution_category(case) == "DETERMINISTIC_ADVERSARIAL"
+    assert execution_category(case) == "STRUCTURAL_CONTRACT"
 
     def forbidden(request):
         raise AssertionError("no model request for deterministic context inspection")

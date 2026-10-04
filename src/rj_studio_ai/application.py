@@ -9,6 +9,7 @@ from rj_studio_ai.appointment_intake import (
     intake_handoff_reason,
     intake_question,
     plan_appointment_intake,
+    reconcile_agentic_intake,
 )
 from rj_studio_ai.conversation_context import (
     ConversationContext,
@@ -26,7 +27,13 @@ from rj_studio_ai.generation import (
 from rj_studio_ai.grounding import finalize_reply
 from rj_studio_ai.handoff import HandoffReason, handoff_confirmation, safe_handoff_reason
 from rj_studio_ai.livia_persona import LiviaPersona, PersonaValidationError
-from rj_studio_ai.llm_decision import FactReplyPart, Intent, PhraseReplyPart, ReplyPhrase
+from rj_studio_ai.llm_decision import (
+    FactReplyPart,
+    Intent,
+    PhraseReplyPart,
+    ReplyPhrase,
+    uses_agentic_surface,
+)
 from rj_studio_ai.persistence import (
     DeliveryState,
     GenerationClaimResult,
@@ -190,6 +197,7 @@ class MessageResponder:
                 reply_body = generated.trusted_reply.body
             else:
                 proposal = generated.decision
+                agentic = uses_agentic_surface(proposal)
                 intake_update = plan_appointment_intake(
                     proposal,
                     customer_message=message.body,
@@ -222,10 +230,14 @@ class MessageResponder:
                     context=context,
                     appointment_intake=intake_update,
                 )
+                if intake_update is not None and agentic:
+                    intake_update = reconcile_agentic_intake(
+                        intake_update, finalized, prior=context.appointment_intake
+                    )
                 reply_body = finalized.reply_text
                 if intake_update is not None and not finalized.handoff:
                     handoff_reason = intake_handoff_reason(intake_update)
-                    if handoff_reason is None:
+                    if handoff_reason is None and not agentic:
                         has_rendered_facts = bool(finalized.critical_claims) or any(
                             isinstance(part, FactReplyPart) for part in finalized.reply_parts
                         )
@@ -237,14 +249,19 @@ class MessageResponder:
                             if has_rendered_facts
                             else question
                         )
-                    else:
+                    elif handoff_reason is not None:
                         reply_body = handoff_confirmation(handoff_reason, message.body)
                 if finalized.handoff:
                     handoff_reason = safe_handoff_reason(finalized.handoff_reason or "")
                     reply_body = handoff_confirmation(handoff_reason, message.body)
                 if intake_update is not None:
                     try:
-                        LiviaPersona().validate_reply(message.body, reply_body)
+                        validator = (
+                            LiviaPersona().validate_agentic_reply
+                            if agentic
+                            else LiviaPersona().validate_reply
+                        )
+                        validator(message.body, reply_body)
                     except PersonaValidationError:
                         handoff_reason = HandoffReason.UNSAFE_SURFACE
                         reply_body = handoff_confirmation(handoff_reason, message.body)

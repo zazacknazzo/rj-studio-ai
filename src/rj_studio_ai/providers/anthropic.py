@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Protocol
 
 import anthropic
 
-from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
+from rj_studio_ai.appointment_intake import (
+    APPOINTMENT_EXTRACTION_INSTRUCTIONS,
+    appointment_constraints,
+)
 from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.generation import (
     GeneratedReply,
@@ -304,6 +307,7 @@ class AnthropicReplyGenerator:
             f"{cls._system_prompt}\n\n{cls._persona.instructions}\n\n{reply_plan_instructions()}"
             f"\n\n{APPOINTMENT_EXTRACTION_INSTRUCTIONS}"
         )
+        prompt += "\n\n" + appointment_constraints(context.appointment_intake if context else None)
         if context is not None and context.history_may_be_incomplete:
             prompt += (
                 " O histórico anterior pode estar incompleto; não deduza o que falta "

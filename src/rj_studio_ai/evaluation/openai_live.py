@@ -6,7 +6,10 @@ from time import monotonic
 import httpx
 from pydantic import StrictBool, model_validator
 
-from rj_studio_ai.appointment_intake import APPOINTMENT_EXTRACTION_INSTRUCTIONS
+from rj_studio_ai.appointment_intake import (
+    APPOINTMENT_EXTRACTION_INSTRUCTIONS,
+    appointment_constraints,
+)
 from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
 from rj_studio_ai.evaluation.latency import LatencyRecorder
 from rj_studio_ai.evaluation.live_billing import (
@@ -56,6 +59,7 @@ def eval_prompt(context):
         f"\n\n{LiviaPersona().instructions}\n\n{reply_plan_instructions()}"
         f"\n\n{APPOINTMENT_EXTRACTION_INSTRUCTIONS}"
     )
+    prompt += "\n\n" + appointment_constraints(context.appointment_intake)
     if context.history_may_be_incomplete:
         prompt += (
             " O histórico anterior pode estar incompleto; não deduza o que falta "

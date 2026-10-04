@@ -1,7 +1,9 @@
 # V1 Agentic Boundary Review
 
-Data: 2026-10-04. Status: **review / proposta para aprovação**, sem autorização
-de implementação. Baseline: `4c4ff46aad03ed346c396dcf6d1832e13317624a`, branch
+Data: 2026-10-04. Status original: **review / proposta para aprovação**, sem autorização
+de implementação naquele review. Depois o product owner autorizou a
+[Phase 1 incremental](v1-agentic-surface-phase-1.md). O diagnóstico abaixo
+descreve o baseline anterior. Baseline: `4c4ff46aad03ed346c396dcf6d1832e13317624a`, branch
 `codex/v1-conversational-polish`, publicado no origin nesta sessão.
 
 Phase B está **PAUSADA** por decisão do product owner, antes de corrigir o

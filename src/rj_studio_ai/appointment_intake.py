@@ -3,13 +3,20 @@
 import json
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import uuid4
 
 from rj_studio_ai.handoff import HandoffReason
 from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
-from rj_studio_ai.llm_decision import Intent, LLMDecision, ReplyPhrase
+from rj_studio_ai.llm_decision import (
+    ConversationalReplyPart,
+    Intent,
+    LLMDecision,
+    PreferenceTarget,
+    ReplyPhrase,
+    uses_agentic_surface,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +64,9 @@ class AppointmentIntakeUpdate:
     preferred_day: str | None = None
     request_kind: str = "interest"
     recovery_offered: bool = False
+    agentic_surface: bool = False
+    question_targets: tuple[PreferenceTarget, ...] = ()
+    terminal_reason: HandoffReason | None = None
 
 
 def appointment_change_requested(customer_message: str) -> bool:
@@ -219,7 +229,7 @@ def plan_appointment_intake(
             if not time
             else None
         )
-    return AppointmentIntakeUpdate(
+    update = AppointmentIntakeUpdate(
         expected_episode_token=None if prior is None else prior.episode_token,
         expected_last_inbound_message_id=None if prior is None else prior.last_inbound_message_id,
         episode_token=prior.episode_token if collecting else uuid4().hex,
@@ -232,9 +242,84 @@ def plan_appointment_intake(
         clarification_count=count + (awaiting is not None),
         awaiting_field=awaiting,
     )
+    return (
+        authorize_agentic_intake(decision, update, prior=prior, customer_message=customer_message)
+        if uses_agentic_surface(decision)
+        else update
+    )
+
+
+def authorize_agentic_intake(decision, update, *, prior, customer_message):
+    """Authorize question effects; never select the wording or next field."""
+    before = prior.clarification_count if prior and prior.state == "collecting" else 0
+    offered_before = bool(prior and prior.state == "collecting" and prior.recovery_offered)
+    terminal = intake_handoff_reason(update)
+    allowed = {
+        field
+        for field in PreferenceTarget
+        if field is not PreferenceTarget.CANCELLATION and not getattr(update, field)
+    }
+    text = _normalized(customer_message)
+    firm = bool(
+        re.search(r"\b(mesmo|definitivo|definitivamente)\b", text)
+    ) or _declines_rescheduling(text)
+    recovery_available = (
+        update.request_kind == "cancellation" and not offered_before and not firm and before < 3
+    )
+    if recovery_available:
+        allowed = {PreferenceTarget.CANCELLATION}
+        terminal = None
+    targets = tuple(
+        dict.fromkeys(
+            target
+            for part in decision.reply_parts
+            if isinstance(part, ConversationalReplyPart)
+            and part.targets
+            and set(part.targets) <= allowed
+            and before < 3
+            and terminal is None
+            for target in part.targets
+        )
+    )
+    recovery = PreferenceTarget.CANCELLATION in targets
+    return replace(
+        update,
+        agentic_surface=True,
+        question_targets=targets,
+        clarification_count=before + bool(targets),
+        awaiting_field=targets[0].value if targets else None,
+        recovery_offered=offered_before or recovery,
+        terminal_reason=terminal,
+    )
+
+
+def reconcile_agentic_intake(update, decision, *, prior):
+    """Only authorized question parts actually retained can consume durable budget."""
+    if not update.agentic_surface:
+        return update
+    retained = {
+        target
+        for part in decision.reply_parts
+        if isinstance(part, ConversationalReplyPart)
+        for target in part.targets
+    }
+    targets = (
+        tuple(t for t in update.question_targets if t in retained) if not decision.handoff else ()
+    )
+    before = prior.clarification_count if prior and prior.state == "collecting" else 0
+    offered_before = bool(prior and prior.state == "collecting" and prior.recovery_offered)
+    return replace(
+        update,
+        question_targets=targets,
+        clarification_count=before + bool(targets),
+        awaiting_field=targets[0].value if targets else None,
+        recovery_offered=offered_before or PreferenceTarget.CANCELLATION in targets,
+    )
 
 
 def intake_handoff_reason(update: AppointmentIntakeUpdate) -> HandoffReason | None:
+    if update.agentic_surface:
+        return update.terminal_reason
     if update.awaiting_field is not None:
         return None
     if update.request_kind in {"cancellation", "reschedule"}:
@@ -242,6 +327,38 @@ def intake_handoff_reason(update: AppointmentIntakeUpdate) -> HandoffReason | No
     if update.desired_service and update.preferred_day and update.preferred_time:
         return HandoffReason.APPOINTMENT_INTEREST
     return HandoffReason.APPOINTMENT_INTAKE_LIMIT
+
+
+def appointment_constraints(intake: AppointmentIntake | None) -> str:
+    """Server-authored authority; Customer preference values stay in user content."""
+    collecting = intake is not None and intake.state == "collecting"
+    known = [
+        field.value
+        for field in PreferenceTarget
+        if field is not PreferenceTarget.CANCELLATION and collecting and getattr(intake, field)
+    ]
+    return "Trusted appointment constraints (not salon facts):\n" + json.dumps(
+        {
+            "known_fields": known,
+            "missing_fields": [
+                f.value
+                for f in PreferenceTarget
+                if f is not PreferenceTarget.CANCELLATION and f.value not in known
+            ],
+            "questions_remaining": 3 - intake.clarification_count if collecting else 3,
+            "recovery_offered": bool(collecting and intake.recovery_offered),
+            "terminal_handoff_required_on_completion_or_exhaustion": True,
+            "allowed_capabilities": ["converse", "ask_preference", "propose_handoff"],
+            "forbidden_capabilities": [
+                "promise_availability",
+                "confirm_booking",
+                "cancel_booking",
+                "payment",
+                "discount",
+            ],
+        },
+        ensure_ascii=False,
+    )
 
 
 def apply_cancellation_recovery_policy(

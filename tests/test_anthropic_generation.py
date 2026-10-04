@@ -211,6 +211,7 @@ def test_anthropic_adapter_uses_structured_output_without_thinking() -> None:
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
     assert set(schema["properties"]) == {
+        "surface",
         "appointment_preferences",
         "intents",
         "reply_text",

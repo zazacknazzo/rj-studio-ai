@@ -8,16 +8,27 @@ from unittest.mock import patch
 from pydantic import StrictBool, model_validator
 
 from rj_studio_ai import application
+from rj_studio_ai.appointment_intake import reconcile_agentic_intake
 from rj_studio_ai.evaluation.records import Identifier, RecordModel, check_privacy
 from rj_studio_ai.handoff import HandoffReason, safe_handoff_reason
-from rj_studio_ai.llm_decision import Intent
+from rj_studio_ai.llm_decision import (
+    ConversationalPurpose,
+    Intent,
+    PreferenceTarget,
+)
 
 
 class DecisionTrace(RecordModel):
     selected_fact_ids: tuple[Identifier, ...]
     proposed_intents: tuple[Intent, ...] = ()
     proposed_knowledge_refs: tuple[Identifier, ...] = ()
-    reply_part_kinds: tuple[Literal["phrase", "fact"], ...] = ()
+    reply_part_kinds: tuple[Literal["phrase", "fact", "conversation"], ...] = ()
+    conversational_purposes: tuple[ConversationalPurpose, ...] = ()
+    proposed_appointment_targets: tuple[PreferenceTarget, ...] = ()
+    authorized_appointment_targets: tuple[PreferenceTarget, ...] = ()
+    denied_appointment_targets: tuple[PreferenceTarget, ...] = ()
+    authorized_handoff: StrictBool | None = None
+    authorized_actions: tuple[Literal["ask_preference", "terminal_handoff"], ...] = ()
     reply_part_fact_refs: tuple[Identifier, ...] = ()
     proposed_handoff: StrictBool | None = None
     normalized_handoff_reason: HandoffReason | None = None
@@ -65,7 +76,22 @@ class DecisionTraceCapture:
             if isinstance(intents, (list, tuple))
             else (),
             proposed_knowledge_refs=references(payload.get("knowledge_refs", ())),
-            reply_part_kinds=tuple(p["kind"] for p in parts if p.get("kind") in ("fact", "phrase")),
+            reply_part_kinds=tuple(
+                p["kind"] for p in parts if p.get("kind") in ("fact", "phrase", "conversation")
+            ),
+            conversational_purposes=tuple(
+                p["purpose"]
+                for p in parts
+                if isinstance(p.get("purpose"), str) and p["purpose"] in set(ConversationalPurpose)
+            ),
+            proposed_appointment_targets=tuple(
+                dict.fromkeys(
+                    t
+                    for p in parts
+                    for t in (p["targets"] if isinstance(p.get("targets"), (list, tuple)) else ())
+                    if isinstance(t, str) and t in set(PreferenceTarget)
+                )
+            ),
             reply_part_fact_refs=references(
                 [p.get("knowledge_ref") for p in parts if p.get("kind") == "fact"]
             ),
@@ -122,6 +148,16 @@ class DecisionTraceCapture:
         return DecisionTrace.model_validate(
             {
                 **self.trace.model_dump(),
+                "authorized_handoff": bool(persisted_handoff_reason),
+                "authorized_actions": tuple(
+                    (["terminal_handoff"] if persisted_handoff_reason else [])
+                    + (
+                        ["ask_preference"]
+                        if self.trace.authorized_appointment_targets
+                        and not persisted_handoff_reason
+                        else []
+                    )
+                ),
                 "final_rendered_fact_ids": tuple(
                     identifier
                     for identifier, statement in self._render_candidates.items()
@@ -148,6 +184,22 @@ def capture_finalizer(capture, *, timing=None):
         with timing.measure("trusted_finalization_ms") if timing else nullcontext():
             result = finalizer(
                 decision, customer_message=customer_message, context=context, **kwargs
+            )
+        intake = kwargs.get("appointment_intake")
+        if intake is not None:
+            intake = reconcile_agentic_intake(intake, result, prior=context.appointment_intake)
+        if capture.trace is not None:
+            proposed_targets = capture.trace.proposed_appointment_targets
+            authorized = (
+                tuple(intake.question_targets) if intake is not None and not result.handoff else ()
+            )
+            capture.trace = capture.trace.model_copy(
+                update={
+                    "authorized_appointment_targets": authorized,
+                    "denied_appointment_targets": tuple(
+                        t for t in proposed_targets if t not in authorized
+                    ),
+                }
             )
         with timing.measure("eval_bookkeeping_ms") if timing else nullcontext():
             capture.finalized(

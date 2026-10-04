@@ -55,6 +55,8 @@ def test_passing_ten_case_smoke_requires_scope_and_latency_gate_before_phase_b(
     calls = []
 
     def transport(request):
+        assert b"customer_preference_expectations" not in request.content
+        assert b"adversarial_reply_text" not in request.content
         if request.url.path.endswith("input_tokens"):
             return httpx.Response(200, json={"input_tokens": 1000})
         decision = proposals[len(calls)]
@@ -90,7 +92,9 @@ def test_passing_ten_case_smoke_requires_scope_and_latency_gate_before_phase_b(
         transport=httpx.MockTransport(transport),
         smoke_only=model_seconds == 0,
     )
-    assert report["phase_a_status"] == "completed"
+    assert report["phase_a_status"] == "completed", json.loads(
+        (tmp_path / "smoke" / "phase-A.json").read_text()
+    )["samples"][-1]["checks"]
     assert report["phase_b_executed"] is False
     assert report["execution_scope"] == ("smoke_only" if model_seconds == 0 else "smoke_and_suite")
     assert report["global_cap_usd"] == (1 if model_seconds == 0 else 5)
@@ -102,6 +106,10 @@ def test_passing_ten_case_smoke_requires_scope_and_latency_gate_before_phase_b(
     record = json.loads((tmp_path / "smoke" / "phase-A.json").read_text())
     assert [s["case_id"] for s in record["samples"]] == list(SMOKE_CASES)
     assert not (tmp_path / "smoke" / "phase-B.json").exists()
+    packet = json.loads((tmp_path / "smoke" / "human-review.json").read_text())
+    assert packet["review_format"] == "qualitative" and len(packet["items"]) == 10
+    assert "rubric" not in packet
+    assert "1 a 5" not in (tmp_path / "smoke" / "human-review.md").read_text()
 
 
 @pytest.mark.parametrize(
@@ -194,7 +202,9 @@ def test_reasoning_count_can_remain_unknown_with_complete_pricing_evidence(tmp_p
         case_id="grounding-multiple-facts",
         transport=httpx.MockTransport(transport),
     )
-    assert report["phase_a_status"] == "completed"
+    assert report["phase_a_status"] == "completed", json.loads(
+        (tmp_path / "smoke" / "phase-A.json").read_text()
+    )["samples"][-1]["checks"]
     assert report["phase_b_executed"] is False
     assert report["summary"]["reasoning_tokens"] is None
     assert report["summary"]["estimated_cost_usd"] == 0.00277
@@ -203,7 +213,7 @@ def test_reasoning_count_can_remain_unknown_with_complete_pricing_evidence(tmp_p
     attempt = record["samples"][0]["attempts"][0]
     assert attempt["response_diagnostics"]["reasoning_tokens_present"] is False
     assert attempt["usage"]["reasoning_tokens"] is None
-    assert record["schema_version"] == 7
+    assert record["schema_version"] == 8
     timing = record["samples"][0].pop("latency_breakdown")
     with pytest.raises(ValueError, match="live_missing_latency_breakdown"):
         LiveRecord.model_validate(record)
@@ -407,7 +417,7 @@ def test_preflight_failure_keeps_durable_fallback_separate_without_paid_generati
     assert summary["critical_failures"] == {"numerator": 2, "denominator": 2}
 
 
-def test_failed_noncritical_smoke_check_blocks_phase_a(tmp_path):
+def test_noncritical_quality_failure_is_recorded_without_safety_stop(tmp_path):
     def transport(request):
         if request.url.path.endswith("input_tokens"):
             return httpx.Response(200, json={"input_tokens": 1000})
@@ -452,8 +462,8 @@ def test_failed_noncritical_smoke_check_blocks_phase_a(tmp_path):
             ledger=ledger,
             client=client,
         )
-    assert record.status == "blocked"
-    assert record.stop_code == "smoke_check_failure"
+    assert record.status == "completed"
+    assert record.stop_code is None
     assert record.configuration["max_output_tokens"] == 512
     assert live_summary(record.samples, record.contracts, ledger.pricing)["persona"] == {
         "evaluable": 1,
@@ -523,7 +533,7 @@ def test_paid_retry_and_fallback_cost_use_only_completed_model_reply_denominator
     assert report["run_count"] == 2
 
 
-def test_trusted_facts_with_wrong_multi_intent_do_not_pass_smoke(tmp_path):
+def test_wrong_intent_is_recorded_but_does_not_stop_safe_observation(tmp_path):
     decision = fixture_decision(
         intents=["other"],
         knowledge_refs=["price-corte", "hours-corte"],
@@ -569,7 +579,7 @@ def test_trusted_facts_with_wrong_multi_intent_do_not_pass_smoke(tmp_path):
             ledger=ledger,
             client=client,
         )
-    assert record.status == "blocked"
+    assert record.status == "completed"
     assert record.samples[0].checks == {
         "trusted_facts": "pass",
         "handoff_policy": "pass",

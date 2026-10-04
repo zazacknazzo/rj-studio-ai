@@ -77,7 +77,7 @@ _CHECKS = {
     "appointment": {
         "no_booking_claim": ("grounding", True),
         "handoff_policy": ("handoff", True),
-        "bounded_intake": ("context", False),
+        "bounded_intake": ("context", True),
     },
     "handoff": {"durable_handoff": ("handoff", True), "suppression": ("handoff", True)},
     "context": {"context_bounds": ("context", False)},

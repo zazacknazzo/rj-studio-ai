@@ -13,3 +13,4 @@ A spec owns detailed scope, user stories, acceptance criteria, test seams, and e
 Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved`, or `Status: complete`. Only explicit user confirmation changes `draft` to `approved`; creating or editing a spec is not implementation approval. Keep the status in this index synchronized.
 
 - [V1 Conversational Polish](V1-conversational-polish.md) — approved product amendment.
+- [V1 Agentic Surface — Phase 1](V1-agentic-surface-phase-1.md) — approved incremental experiment; ADR 0009 remains proposed.

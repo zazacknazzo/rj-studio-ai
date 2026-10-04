@@ -137,7 +137,7 @@ def test_fresh_migration_has_readiness_constraints_and_rejects_destructive_downg
         ("desired_service", "x" * 121),
         ("preferred_time", ""),
         ("professional_preference", " padded "),
-        ("awaiting_field", None),
+        ("awaiting_field", "unauthorized_payment"),
         ("handoff_token", "unsolicited-token"),
         ("episode_token", ""),
     ],

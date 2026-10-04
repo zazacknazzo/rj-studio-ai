@@ -95,7 +95,55 @@ class FactReplyPart(BaseModel):
     knowledge_ref: StrictStr = Field(min_length=3, pattern=r"^[a-z0-9][a-z0-9-]*$")
 
 
-ReplyPart = PhraseReplyPart | FactReplyPart
+class ConversationalPurpose(StrEnum):
+    ACKNOWLEDGEMENT = "acknowledgement"
+    SOCIAL = "social"
+    CLARIFICATION = "clarification"
+    QUESTION = "question"
+    COMMERCIAL_CONTINUATION = "commercial_continuation"
+    CTA = "cta"
+    RECOVERY = "recovery"
+    TRANSITION = "transition"
+
+
+class PreferenceTarget(StrEnum):
+    SERVICE = "desired_service"
+    DAY = "preferred_day"
+    TIME = "preferred_time"
+    PROFESSIONAL = "professional_preference"
+    CANCELLATION = "cancellation_choice"
+
+
+class ConversationalReplyPart(BaseModel):
+    """Untrusted bounded wording. Purpose/targets confer no action authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["conversation"]
+    purpose: ConversationalPurpose
+    text: StrictStr = Field(min_length=1, max_length=400)
+    targets: tuple[PreferenceTarget, ...] = Field(default=(), max_length=4)
+
+    @model_validator(mode="after")
+    def coherent_targets(self):
+        if not self.text.strip() or any(ord(c) < 32 and c not in "\n\t" for c in self.text):
+            raise ValueError("invalid conversational surface")
+        if len(set(self.targets)) != len(self.targets):
+            raise ValueError("duplicate question target")
+        if self.targets and self.purpose not in {
+            ConversationalPurpose.QUESTION,
+            ConversationalPurpose.CLARIFICATION,
+            ConversationalPurpose.RECOVERY,
+        }:
+            raise ValueError("only a question/recovery can target a preference")
+        if self.purpose is ConversationalPurpose.RECOVERY and self.targets != (
+            PreferenceTarget.CANCELLATION,
+        ):
+            raise ValueError("recovery must declare its persisted opportunity")
+        return self
+
+
+ReplyPart = PhraseReplyPart | FactReplyPart | ConversationalReplyPart
 
 
 class AppointmentPreferences(BaseModel):
@@ -114,6 +162,7 @@ class LLMDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    surface: Literal["legacy", "agentic"] = "legacy"
     intents: tuple[Intent, ...] = Field(min_length=1)
     reply_text: StrictStr = Field(min_length=1, max_length=MAX_REPLY_TEXT_CHARACTERS)
     # Empty only for older proposals and deterministic fixed replies. Free text
@@ -188,8 +237,18 @@ def decision_json_schema() -> dict[str, Any]:
     preferences["required"] = list(preferences["properties"])
     for field in preferences["properties"].values():
         field.pop("default", None)
+    conversational = schema["$defs"]["ConversationalReplyPart"]
+    conversational["properties"]["targets"].pop("default", None)
+    conversational["required"] = list(conversational["properties"])
+    schema["properties"]["surface"].pop("default", None)
     schema["required"] = list(schema["properties"])
     return schema
+
+
+def uses_agentic_surface(decision: LLMDecision) -> bool:
+    return decision.surface == "agentic" or any(
+        isinstance(part, ConversationalReplyPart) for part in decision.reply_parts
+    )
 
 
 def _is_knowledge_id(value: str) -> bool:

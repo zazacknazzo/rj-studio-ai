@@ -16,3 +16,13 @@ any wider generative wording requires explicit approval of its representation,
 tests and residual semantic risk. Current ADRs 0007/0008 and approved specs remain
 in force. This proposal authorizes no runtime, prompt, oracle or migration change;
 Phase B is paused and Ticket 12 remains in-progress.
+
+## Phase 1 evidence — 2026-10-04
+
+Separate product-owner approval authorized the
+[Phase 1 experiment](../specs/V1-agentic-surface-phase-1.md). Its
+[implementation report](../architecture/v1-agentic-surface-phase-1.md) records
+the wider generative representation and retained factual/state authority. That
+approval supersedes the earlier no-change scope for this experiment only. It
+does not accept this ADR, approve pilot or resume Phase B. Historical evidence
+is unchanged; new oracles are versioned.

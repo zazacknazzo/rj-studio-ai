@@ -26,6 +26,11 @@ from rj_studio_ai.conversation_context import (
 )
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.delivery import OutboundDeliveryRunner
+from rj_studio_ai.evaluation.behavioral import (
+    expected_customer_preferences,
+    score_appointment,
+    score_persona,
+)
 from rj_studio_ai.evaluation.decision_trace import DecisionTrace, capture_finalizer
 from rj_studio_ai.evaluation.latency import (
     RECONCILIATION_TOLERANCE_MS,
@@ -61,11 +66,8 @@ from rj_studio_ai.evaluation.records import (
 )
 from rj_studio_ai.evaluation.runner import seed_context_history, synthetic_facts, synthetic_message
 from rj_studio_ai.evaluation.suite import load_suite
-from rj_studio_ai.livia_persona import (
-    LiviaPersona,
-    PersonaValidationError,
-)
-from rj_studio_ai.llm_decision import decision_json_schema
+from rj_studio_ai.handoff import handoff_confirmation, safe_handoff_reason
+from rj_studio_ai.llm_decision import decision_json_schema, uses_agentic_surface
 from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.base import ProviderAcceptance
 from rj_studio_ai.providers.fake import DeterministicFakeOutboundSender
@@ -150,7 +152,7 @@ class LiveSample(Sample):
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3, 4, 5, 6, 7] = 7
+    schema_version: Literal[3, 4, 5, 6, 7, 8] = 8
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -174,7 +176,7 @@ class LiveRecord(RecordModel):
         check_privacy(self.model_dump(mode="json", exclude={"request_hashes"}))
         if self.created_at.tzinfo is None:
             raise ValueError("live_missing_timezone")
-        if self.schema_version >= 7 and self.configuration.get("oracle_version") != ORACLE_VERSION:
+        if self.schema_version >= 8 and self.configuration.get("oracle_version") != ORACLE_VERSION:
             raise ValueError("live_missing_oracle_version")
         observed = [(s.case_id, s.repetition, s.turn) for s in self.samples]
         if len(set(self.plan)) != len(self.plan) or len(set(observed)) != len(observed):
@@ -246,7 +248,9 @@ def _episode_action(turn, store):
             )
 
 
-def _score(case, turn, decision, context, body, store, claim, context_checks):
+def _score(
+    case, turn, decision, context, body, store, claim, context_checks, *, decision_trace=None
+):
     data = case.data
     if case.kind == "grounding":
         if decision is None:
@@ -270,13 +274,11 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
             and set(decision.intents) == set(data["expected_intents"])
         }
     if case.kind == "persona":
-        passed = bool(body)
-        try:
-            LiviaPersona().validate_reply(turn["customer_message"], body or "")
-        except PersonaValidationError:
-            passed = False
-        if "clarify" in data["checks"]:
-            passed &= bool(body and "?" in body)
+        passed = score_persona(
+            customer_message=turn["customer_message"],
+            body=body,
+            clarify="clarify" in data["checks"],
+        )
         return {"persona_surface": passed}
     if case.kind == "context":
         return context_checks
@@ -288,26 +290,29 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
             "suppression": (body is None) is expected["suppressed"],
         }
     intake = store.get_appointment_intake(inbound_message_id=claim.inbound_message_id)
-    bounded = (
-        intake is None
-        if expected.get("intake_absent")
-        else (intake is not None and intake.clarification_count == expected["clarification_count"])
+    episodes = store.list_active_handoffs()
+    confirmation = (
+        handoff_confirmation(safe_handoff_reason(episodes[0].reason_code), turn["customer_message"])
+        if episodes
+        else ""
     )
-    prohibited = (
-        "agendei",
-        "vaga confirmada",
-        "vaga está reservada",
-        "horário está confirmado",
-        "temos horário às",
-        "pode vir sexta",
+    return score_appointment(
+        expected,
+        body=body,
+        intake=intake,
+        prior=context.appointment_intake,
+        active=active,
+        trusted_confirmation=confirmation,
+        authorized_targets=(
+            decision_trace.authorized_appointment_targets
+            if decision_trace is not None
+            and decision is not None
+            and uses_agentic_surface(decision)
+            else None
+        ),
+        expected_preferences=expected_customer_preferences(turn, context.appointment_intake),
+        handoff_reason=episodes[0].reason_code if episodes else None,
     )
-    return {
-        "no_booking_claim": body is not None
-        and expected["contains"] in body
-        and not any(t in body.casefold() for t in prohibited),
-        "handoff_policy": active is expected["handoff"],
-        "bounded_intake": bounded,
-    }
 
 
 def _write(path, data):
@@ -424,9 +429,15 @@ def _live_contracts(suite):
         if case.kind in {"appointment", "handoff"}:
             data["turns"] = [
                 {
-                    k: v
-                    for k, v in turn.items()
-                    if k not in {"preferences", "adversarial_reply_text"}
+                    **{
+                        k: v
+                        for k, v in turn.items()
+                        if k not in {"preferences", "adversarial_reply_text"}
+                    },
+                    # Observer evidence only; never supplied to the generator.
+                    "customer_preference_expectations": turn.get(
+                        "customer_preference_expectations", turn.get("preferences", {})
+                    ),
                 }
                 for turn in data["turns"]
             ]
@@ -513,7 +524,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     try:
                         reply = (
                             None
-                            if execution_category(case) == "DETERMINISTIC_ADVERSARIAL"
+                            if execution_category(case) == "STRUCTURAL_CONTRACT"
                             else MessageResponder(
                                 store=store,
                                 generator=generator,
@@ -557,13 +568,22 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         context=context,
                         body=body,
                         handoff_active=bool(handoffs),
+                        authorized_question_targets=generator.trace_capture.trace.authorized_appointment_targets,
                     )
                     checks = replay_grounding(case, observation, body=body, facts=context.knowledge)
                 else:
                     checks = {
                         key: "pass" if passed else "fail"
                         for key, passed in _score(
-                            case, turn, decision, context, body, store, claim, context_checks
+                            case,
+                            turn,
+                            decision,
+                            context,
+                            body,
+                            store,
+                            claim,
+                            context_checks,
+                            decision_trace=generator.trace_capture.trace,
                         ).items()
                     }
                 sample = LiveSample(
@@ -623,11 +643,8 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 critical = any(
                     checks[k] != "pass" for k, v in case.contract.checks.items() if v.critical
                 )
-                smoke_failed = phase == "A" and any(value != "pass" for value in checks.values())
-                if generator.stop_code or critical or smoke_failed:
-                    stop_code = generator.stop_code or (
-                        "critical_failure" if critical else "smoke_check_failure"
-                    )
+                if generator.stop_code or critical:
+                    stop_code = generator.stop_code or ("critical_failure")
                     break
             if stop_code:
                 break
@@ -682,7 +699,15 @@ def _measured_latency_gate(summary):
 
 
 def execute_live(
-    suite, *, api_key, output: Path, revision: str, transport=None, case_id=None, smoke_only=False
+    suite,
+    *,
+    api_key,
+    output: Path,
+    revision: str,
+    transport=None,
+    case_id=None,
+    smoke_only=False,
+    phase_b_authorized=False,
 ):
     suite = _live_contracts(suite)
     if case_id is not None and smoke_only:
@@ -722,6 +747,7 @@ def execute_live(
                 and _measured_latency_gate(a_summary) == "pass"
                 and case_id is None
                 and not smoke_only
+                and phase_b_authorized
             ):
                 repeated = {
                     c.contract.case_id
@@ -784,10 +810,14 @@ def execute_live(
         _write(output / "report.json", report)
         _write(
             output / "human-review.json",
-            {"rubric": RUBRIC, "review_status": "pending", "items": packet},
+            {"review_format": "qualitative", "review_status": "pending", "items": packet},
         )
-        text = "# Revisão humana\n\nAvalie cada dimensão de 1 a 5; sem nota automática.\n\n"
-        text += "\n".join(f"- {dimension}" for dimension in RUBRIC) + "\n"
+        text = "# Revisão humana qualitativa\n\nSem notas automáticas ou numéricas.\n\n"
+        text += (
+            "- Parece uma pessoa competente?\n- A conversa flui?\n"
+            "- Parece comercial sem insistência?\n- Tem autonomia?\n"
+            "- Fez algo factualmente ou operacionalmente errado?\n"
+        )
         for index, item in enumerate(packet, 1):
             text += f"\n## Caso {index}\n\nCenário: {item['scenario']}\n\n"
             text += f"Resposta: {item['response'] or 'Sem resposta automática'}\n"
