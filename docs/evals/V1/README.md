@@ -4,13 +4,18 @@ Current product round: [approved Conversational Polish](../../specs/V1-conversat
 Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress; the newly authorized B1/B2 execution is a
 separate live gate, using fresh records and one shared US$5 budget.
-Latest execution: [fresh Phase B — stopped B1](openai-phase-b-2026-10-03.md).
+Latest execution: [oracle-v2 fresh B1 — stopped at manual release](openai-phase-b-oracle-v2-2026-10-04.md).
+50/53 cases executed: 49 pass, one post-release handoff failure; 56 paid calls,
+US$0.1256208, no retry. The model proposed handoff again for a greeting after
+manual release. B2 not executed; no runtime/oracle edit after the stop.
+Measured partial-population cost/latency pass, final semantic gate blocked.
+Historical execution: [original Phase B — stopped B1](openai-phase-b-2026-10-03.md).
 B1 stopped at case 27 on a deterministic-proposal/live-oracle mismatch; raw
 critical failures remain 2/13. B2 not executed; no retrospective rescore.
 That population is **INVALID_FOR_FINAL_GATE_DUE_TO_HARNESS_BUG**.
 The [53-case oracle audit](oracle-audit-2026-10-03.md) records the eval-only
-correction, live/injected boundaries and frozen v2 oracle. Fresh execution
-requires all three independent reviews; old raw evidence remains unchanged.
+correction, live/injected boundaries, frozen v2 oracle and three independent
+pre-paid approvals; old raw evidence remains unchanged.
 Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
 Closure evidence: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
 Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms
