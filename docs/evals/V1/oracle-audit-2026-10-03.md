@@ -142,3 +142,35 @@ Valid slow responses continue; the official observed billable p95 ≤8s gate
 and cost ≤US$10/1000 completed model replies are unchanged. Diagnostic production
 equivalent timing is not a substitute gate. Real Meta/WhatsApp E2E pending,
 cross-provider deferred, qualitative human conversational review approved.
+
+## Pre-paid validation and independent reviews — 2026-10-04
+
+Correction commit: `82ce414`. Full suite **800 passed**; targeted eval,
+structured-decision, grounding, handoff and appointment tests **361 passed**.
+Ruff check/format, compileall, pip check, diff check and suite validation pass.
+Original deterministic run: all 53 cases / zero failed checks. Forty historical
+v3–v6 live records remain valid; 196 prior files were verified unchanged before
+the validity sidecar was added, then all 197 local evidence files were frozen.
+One existing Starlette/AnyIO deprecation warning remains.
+
+Three independent read-only reviews approved before any fresh paid call:
+
+- **Eval/spec: APPROVE**, zero material findings; all 53 audit rows, source
+  boundaries, shared replay, original evidence and separate B1/B2 plan checked.
+- **Safety/grounding: APPROVE**, zero material findings; actual bad refs,
+  undeclared claims/parts, required facts/policy/technical guidance, durable
+  handoff, privacy and capped task-specific execution checked. Independently
+  ran 220 targeted tests, passing.
+- **Standards: APPROVE**, zero documented-standard violations. One non-blocking
+  duplication heuristic: the fallback `_score` branch and collector both call
+  observation capture/replay. The actual oracle is shared; no behavior or
+  required safety correction follows from that optional cleanup.
+
+The reviewed task-specific script uses a fresh directory, not the generic
+legacy smoke→repeated-suite command: 53 B1 cases / 63 turns, then only after all
+B1 checks pass, 35 stochastic B2 cases at repetitions 2 and 3 / 90 turns.
+No deterministic context repetition; redundant model-proposal-only booking and
+invented-preferences variants excluded from B2. One US$5 ledger for both stages;
+no budget reset or hidden retry. The plan stores this frozen commit/version and
+tracked-file hashes before collection. No new paid call occurred before these
+approvals.
