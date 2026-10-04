@@ -44,3 +44,12 @@ not exist for this experiment. Recommendation: **INCONCLUSIVE**, no new evidence
 Do not reuse Phase 1.2 replies as A/B samples. An explicit budget interpretation
 or higher cap is needed before execution; the agent does not raise the cap or
 reduce headroom. Ticket 12 remains in-progress; operational/latency gates remain.
+
+## Subsequent approval — incremental pairs
+
+The product owner explicitly authorized proceeding on 2026-10-04 without
+raising US$0.30. The conservative whole-run projection above is historical;
+only actual settled spend plus the next pair's safe bound controls admission.
+See [approved A/B protocol](../../specs/V1-runtime-reasoning-ab.md).
+Conversational freeze, PASS WITH NOTES, paused Phase B and in-progress Ticket 12
+remain unchanged. Historical runs are not A/B samples.

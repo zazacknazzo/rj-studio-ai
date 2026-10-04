@@ -13,6 +13,8 @@ from rj_studio_ai.appointment_intake import (
 from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
 from rj_studio_ai.evaluation.latency import LatencyRecorder
 from rj_studio_ai.evaluation.live_billing import (
+    LIVE_INPUT_RESERVATION_MARGIN,
+    LIVE_INPUT_TOKEN_LIMIT,
     LIVE_MAX_OUTPUT_TOKENS,
     BudgetLedger,
     Usage,
@@ -73,8 +75,18 @@ def eval_prompt(context):
 
 class OpenAIEvalGenerator:
     def __init__(
-        self, *, api_key: str, client: httpx.Client, ledger: BudgetLedger, phase: str, timing=None
+        self,
+        *,
+        api_key: str,
+        client: httpx.Client,
+        ledger: BudgetLedger,
+        phase: str,
+        timing=None,
+        reasoning_effort="medium",
     ):
+        if reasoning_effort not in {"medium", "low"}:
+            raise ValueError("invalid_eval_reasoning_effort")
+        self.reasoning_effort = reasoning_effort
         self._api_key = api_key
         self.client = client
         self.ledger = ledger
@@ -110,7 +122,7 @@ class OpenAIEvalGenerator:
                 for turn in context.history
             ]
             + [{"role": "user", "content": content}],
-            "reasoning": {"effort": "medium"},
+            "reasoning": {"effort": self.reasoning_effort},
             "text": {
                 "format": {
                     "type": "json_schema",
@@ -143,14 +155,16 @@ class OpenAIEvalGenerator:
                 if count_response.status_code != 200:
                     raise ValueError("input_count_failed")
                 input_count = count_response.json()["input_tokens"]
-                if type(input_count) is not int or not 1 <= input_count <= 16_000:
+                if type(input_count) is not int or not 1 <= input_count <= LIVE_INPUT_TOKEN_LIMIT:
                     raise ValueError("input_count_invalid")
             remaining = remaining_budget - (monotonic() - started)
             if remaining < 1:
                 raise ValueError("preflight_deadline")
             with self.timing.measure("budget_reservation_ms"):
                 self.ledger.reserve(
-                    self.phase, input_bound=input_count + 1024, output_bound=LIVE_MAX_OUTPUT_TOKENS
+                    self.phase,
+                    input_bound=input_count + LIVE_INPUT_RESERVATION_MARGIN,
+                    output_bound=LIVE_MAX_OUTPUT_TOKENS,
                 )
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
             self.stop_code = (
@@ -312,7 +326,7 @@ class OpenAIEvalGenerator:
         metric = GenerationMetric(
             provider="openai",
             model="gpt-6.1-sol",
-            configuration=f"effort=medium;tier=default;max_output_tokens={LIVE_MAX_OUTPUT_TOKENS}",
+            configuration=f"effort={self.reasoning_effort};tier=default;max_output_tokens={LIVE_MAX_OUTPUT_TOKENS}",
             latency_ms=round(latency),
             input_tokens=attempt.input_tokens,
             output_tokens=attempt.output_tokens,

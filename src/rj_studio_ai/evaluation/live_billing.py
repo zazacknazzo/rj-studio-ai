@@ -16,6 +16,8 @@ from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS
 PRICING_PATH = Path("docs/evals/V1/pricing.openai-2026-10-02.json")
 # Shared Phase 1.2 ceiling; explicit lower runtime configuration is still honored.
 LIVE_MAX_OUTPUT_TOKENS = MAX_OUTPUT_TOKENS
+LIVE_INPUT_TOKEN_LIMIT = 16_000
+LIVE_INPUT_RESERVATION_MARGIN = 1024
 
 
 UsageValidationCode = Literal[

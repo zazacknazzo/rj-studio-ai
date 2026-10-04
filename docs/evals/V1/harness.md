@@ -254,3 +254,20 @@ New optional diagnostic fields preserve historical record parsing without
 rescore: allowlisted incomplete reason/presence and soft early-closure signal.
 See the [architecture amendment](../../architecture/v1-agentic-surface-phase-1.md)
 for interpretation and limits. No oracle rule or factual expectation changes.
+
+## Authorized reasoning-effort A/B
+
+[Protocol](../../specs/V1-runtime-reasoning-ab.md): same ten Phase 1.2 cases,
+medium then low per case, one shared US$0.30 journal. Existing live default stays
+medium; only this collector supplies low. No Phase B route.
+
+```bash
+.venv/bin/python -m rj_studio_ai.evaluation.reasoning_ab --allow-paid --output work/evals/UNIQUE-ab-run
+```
+
+Use a fresh output directory and clean committed checkout; never resume ambiguous
+submissions automatically. Per-pair maximum input-count bound allows admission
+without double-counting API requests. Actual valid usage settles each call.
+`report.json`, per-arm/case records and `spend.jsonl` retain evidence. Six or more
+completed pairs produce a blind form plus separate mapping. Naturalness is human
+review; the technical recommendation never changes production effort.

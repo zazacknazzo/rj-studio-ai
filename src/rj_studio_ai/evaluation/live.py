@@ -481,6 +481,7 @@ def run_live_phase(
     ledger,
     client,
     stop_on_any_failure=False,
+    reasoning_effort="medium",
 ):
     suite = _live_contracts(suite)
     samples, packet, hashes = [], [], []
@@ -535,7 +536,12 @@ def run_live_phase(
                         and context.history_may_be_incomplete is expected["incomplete"]
                     }
                 generator = OpenAIEvalGenerator(
-                    api_key=api_key, client=client, ledger=ledger, phase=phase, timing=timing
+                    api_key=api_key,
+                    client=client,
+                    ledger=ledger,
+                    phase=phase,
+                    timing=timing,
+                    reasoning_effort=reasoning_effort,
                 )
                 with timing.measure("eval_bookkeeping_ms"):
                     generator.trace_capture.propose(None, context)
@@ -685,7 +691,7 @@ def run_live_phase(
         configuration={
             "provider": "openai",
             "model": "gpt-6.1-sol",
-            "reasoning_effort": "medium",
+            "reasoning_effort": reasoning_effort,
             "service_tier": "default",
             "max_output_tokens": LIVE_MAX_OUTPUT_TOKENS,
             "observation_deadline_seconds": LIVE_OBSERVATION_DEADLINE_SECONDS,
