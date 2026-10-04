@@ -50,15 +50,15 @@ def trace_at_finalizer(decision, context):
     return capture.finish(finalized.reply_text, safe_fallback=False), finalized
 
 
-def test_trace_identifies_model_requested_handoff_without_exporting_raw_reason():
+def test_trace_distinguishes_advisory_proposal_from_final_authorization():
     decision = multi_fact_decision(handoff=True, handoff_reason="Untrusted free-form explanation")
     trace, finalized = trace_at_finalizer(decision, multi_fact_context())
-    assert finalized.handoff is True
+    assert finalized.handoff is False
     assert trace.proposed_handoff is True
     assert trace.normalized_handoff_reason == "model_requested_handoff"
-    assert trace.finalizer_handoff is True
-    assert trace.override_code == "model_requested_handoff"
-    assert trace.final_rendered_fact_ids == ()
+    assert trace.finalizer_handoff is False
+    assert trace.override_code is None
+    assert set(trace.final_rendered_fact_ids) == {"price-corte", "hours-corte"}
     assert "Untrusted free-form explanation" not in trace.model_dump_json()
 
 

@@ -6,6 +6,17 @@ PHASE B ORACLE VERSION = `v1-live-semantic-2026-10-03-v2`.
 The four requested documentary commits were published through `2e4441f`;
 no main merge. New correction/review/report commits remain local.
 
+## Subsequent runtime-fix validity annotation
+
+Product-owner decision on 2026-10-04: case 50 is **REAL_RUNTIME_BUG**.
+The release was durably correct; accepting a model-only handoff proposal gave
+it authority to reopen Conversation suspension. The original observed model
+proposal remains unchanged below. This population is now
+**INVALID_FOR_FINAL_GATE_DUE_TO_RUNTIME_FIX**; its 50/53, 49 pass / one fail
+records, audit packet and spend remain intact, with no rescore. A new runtime
+requires isolated retest and a wholly fresh B1; historical samples contribute
+to neither denominator. See [trusted handoff policy work](trusted-handoff-policy-2026-10-04.md).
+
 ## Harness correction and pre-paid gate
 
 The old `grounding-invalid-reference` oracle required rejection of a fixture

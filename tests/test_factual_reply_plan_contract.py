@@ -335,13 +335,11 @@ def test_factual_plan_never_prevents_legitimate_explicit_handoff(model_requested
         )
     result = finalize_reply(
         decision,
-        customer_message="Dúvida sintética" if model_requested else "Quero falar com uma pessoa",
+        customer_message="Quero falar com uma pessoa",
         context=ConversationContext((), FACTS[:2]),
     )
     assert result.handoff is True
-    assert result.handoff_reason == (
-        "human_review_required" if model_requested else "explicit_human_request"
-    )
+    assert result.handoff_reason == "explicit_human_request"
     assert result.reply_parts == ()
 
 

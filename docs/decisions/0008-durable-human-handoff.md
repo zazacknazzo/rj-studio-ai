@@ -34,3 +34,32 @@ Release does not resolve unknown/failed outcomes or bypass Conversation
 ordering. Message purge preserves an active episode; explicit Conversation
 deletion remains a separate destructive maintenance operation. Local inspection
 and release expose only operational identifiers, safe reasons, and timestamps.
+
+## Trusted authorization amendment — 2026-10-04
+
+The product owner approved a general gate after a completed model proposal
+reopened handoff on a benign greeting following valid manual release. Model
+`handoff` and its textual reason are advisory: normalization into a safe code
+is privacy protection, never authorization. `handoff.apply_handoff_policy`
+clears only those two fields when no existing policy branch requires handoff;
+`grounding.finalize_reply` then validates/renders the same remaining plan. A
+trusted branch authorizes its own reason irrespective of the model boolean.
+Generation failures and deterministic appointment/cancellation completion
+retain their existing application policies and atomic persistence. No migration
+or history/release/context changes are needed.
+
+We reject treating every probabilistic proposal as terminal Conversation state,
+accepting that a model-only explanation cannot establish a new safety policy.
+Existing current-Message risk/human/complaint/legal/payment triggers, approved
+Knowledge conditions, invalid factual states and appointment rules take priority.
+`MODEL_REQUEST` remains readable for historical episodes, not a new authority.
+
+Separate limitation, intentionally outside this patch: recognized `HUMAN_REQUEST`,
+`COMPLAINT`, and applicable `APPOINTMENT_CHANGE` Intents still activate existing
+policy even when only proposed by the model. False classifications can therefore
+still cause needless handoff. Current deterministic safety recognition is also
+bounded: e.g. face swelling without a recognized risk phrase, a named-owner
+request without HUMAN_REQUEST, or dissatisfaction without COMPLAINT may lack
+policy evidence. A free-form model reason no longer fills that gap. Those
+recognition/Intent trust limits need a separately approved policy change; do not
+weaken factual validation or restore blanket model authorization to hide them.

@@ -3,7 +3,7 @@
 from enum import StrEnum
 
 from rj_studio_ai.livia_persona import REPLY_PHRASES, LiviaPersona
-from rj_studio_ai.llm_decision import ReplyPhrase
+from rj_studio_ai.llm_decision import LLMDecision, ReplyPhrase
 
 
 class HandoffReason(StrEnum):
@@ -30,11 +30,30 @@ class HandoffReason(StrEnum):
 
 
 def safe_handoff_reason(proposal: str) -> HandoffReason:
+    """Normalize for privacy only; this never authorizes a durable episode."""
     try:
         return HandoffReason(proposal)
     except ValueError:
         # Model reasons may contain Customer data: never persist their raw text.
         return HandoffReason.MODEL_REQUEST
+
+
+def apply_handoff_policy(
+    decision: LLMDecision, *, required_reason: HandoffReason | None = None
+) -> LLMDecision:
+    """Authorize only a reason derived from an existing trusted policy branch.
+
+    Callers must not supply a normalized model reason as policy evidence.
+    MODEL_REQUEST is retained for historical records, never an authorization.
+    With no trusted basis, preserve the plan and discard only model handoff.
+    """
+    authorized = required_reason is not None and required_reason is not HandoffReason.MODEL_REQUEST
+    return decision.model_copy(
+        update={
+            "handoff": authorized,
+            "handoff_reason": required_reason.value if authorized else None,
+        }
+    )
 
 
 def handoff_confirmation(reason: HandoffReason, customer_message: str) -> str:

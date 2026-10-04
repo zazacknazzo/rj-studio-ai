@@ -223,6 +223,11 @@ handoff guarantees must state that residual race explicitly.
 
 ## Durable Human Handoff
 
+The trusted finalizer authorizes handoff through `handoff.apply_handoff_policy`.
+Model-only handoff/reason fields are advisory; a sanitized reason is not policy
+evidence. Existing required safety/Knowledge/Intents and appointment rules
+remain authoritative; see ADR 0008 for the scoped Intent/recognition limitation.
+
 `conversation_handoffs` holds one current episode per Conversation: active flag,
 safe reason, episode owner token, activation time, and explicit release time.
 Owned generation completion atomically creates the confirmation and outbox,

@@ -2,6 +2,7 @@
 
 from rj_studio_ai.appointment_intake import AppointmentIntakeUpdate
 from rj_studio_ai.conversation_context import ConversationContext
+from rj_studio_ai.handoff import HandoffReason, apply_handoff_policy
 from rj_studio_ai.livia_persona import (
     HUMAN_REVIEW_REPLY,
     REPLY_PHRASES,
@@ -54,10 +55,7 @@ def finalize_reply(
         Intent.COMPLAINT,
     } or (Intent.APPOINTMENT_CHANGE in decision.intents and appointment_intake is None):
         return _clarify(decision, customer_message, "human_review_required")
-    if decision.handoff:
-        return _clarify(
-            decision, customer_message, decision.handoff_reason or "human_review_required"
-        )
+    decision = apply_handoff_policy(decision)
     for claim in decision.critical_claims:
         if facts[claim.knowledge_ref].category.value != claim.fact_type.value:
             return _clarify(decision, customer_message, "unsupported_critical_claim")
@@ -191,15 +189,14 @@ def _clarify(decision: LLMDecision, customer_message: str, reason: str) -> LLMDe
         text = HUMAN_REVIEW_REPLY
     if LiviaPersona().requires_identity_transparency(customer_message):
         text = REPLY_PHRASES[ReplyPhrase.IDENTITY] + " " + text
-    return decision.model_copy(
+    authorized = apply_handoff_policy(decision, required_reason=HandoffReason(reason))
+    return authorized.model_copy(
         update={
             "reply_text": text,
             "reply_parts": (),
             "knowledge_refs": (),
             "critical_claims": (),
             "uncertainty": UncertaintyLevel.HIGH,
-            "handoff": True,
-            "handoff_reason": reason,
         }
     )
 

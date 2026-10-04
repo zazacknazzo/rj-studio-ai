@@ -130,39 +130,19 @@ def test_first_cancellation_recovers_before_nonspecific_model_handoff(tmp_path, 
             "human_review_required",
         ),
         (
-            "Quero cancelar meu agendamento",
-            {"handoff_reason": "requires_human_consultation"},
-            "requires_human_consultation",
-        ),
-        (
-            "Quero cancelar meu agendamento",
-            {"handoff_reason": "personalized_technical_risk"},
+            "Quero cancelar meu agendamento. Meu rosto inchou. Tenho reação alérgica.",
+            {"handoff_reason": "Untrusted private explanation"},
             "personalized_technical_risk",
         ),
         (
-            "Quero cancelar meu agendamento",
-            {"intents": ["appointment_change", "technical_guidance"]},
-            "model_requested_handoff",
-        ),
-        (
-            "Quero cancelar meu agendamento. Meu rosto inchou depois do produto.",
-            {"handoff_reason": "Possible allergic reaction requires urgent human review"},
-            "model_requested_handoff",
-        ),
-        (
             "Quero cancelar meu agendamento. Preciso falar com Isaac.",
-            {"handoff_reason": "Customer explicitly requests the owner"},
-            "model_requested_handoff",
+            {"intents": ["appointment_change", "human_request"]},
+            "human_review_required",
         ),
         (
             "Quero cancelar meu agendamento. Estou insatisfeito com o atendimento.",
-            {"handoff_reason": "Serious complaint needs human attention"},
-            "model_requested_handoff",
-        ),
-        (
-            "Quero cancelar meu agendamento",
-            {"handoff_reason": "Unknown independent reason"},
-            "model_requested_handoff",
+            {"intents": ["appointment_change", "complaint"]},
+            "human_review_required",
         ),
         (
             "Quero cancelar meu agendamento",
@@ -418,7 +398,7 @@ def test_clarification_cannot_bypass_available_facts_invalid_ref_or_mandatory_po
     )
 
 
-def test_clarification_does_not_loop_or_cancel_a_model_handoff():
+def test_bounded_clarification_ignores_advisory_model_handoff_but_still_stops_a_loop():
     from rj_studio_ai.conversation_context import ConversationTurn
 
     proposal = _decision(
@@ -441,7 +421,8 @@ def test_clarification_does_not_loop_or_cancel_a_model_handoff():
         customer_message="Qual preço?",
         context=context,
     )
-    assert requested.handoff
+    assert not requested.handoff and requested.handoff_reason is None
+    assert requested.reply_text == first.reply_text
 
 
 def test_insufficient_context_can_ask_service_naturally_without_handoff():
@@ -824,3 +805,30 @@ def test_chosen_cancellation_does_not_mistake_rejected_reschedule_for_the_choice
     intake = store.get_appointment_intake(conversation_id=active.conversation_id)
     assert intake.request_kind == "cancellation" and intake.clarification_count == 1
     assert "?" not in reply.body
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "requires_human_consultation",
+        "personalized_technical_risk",
+        "Unknown independent reason",
+        "model_requested_handoff",
+    ],
+)
+def test_model_only_reason_does_not_terminate_the_first_cancellation_clarification(
+    tmp_path, reason
+):
+    from test_appointment_intake import AppointmentModel, message, respond
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "cancel-advisory.db")
+    store.initialize()
+    model = AppointmentModel()
+    model.intents = ["appointment_change"]
+    model.overrides = {"handoff": True, "handoff_reason": reason}
+    reply = respond(store, model, message(body="Quero cancelar meu agendamento"))
+    assert not store.list_active_handoffs()
+    assert "outro dia" in reply.body and "?" in reply.body
+    assert reason not in reply.body

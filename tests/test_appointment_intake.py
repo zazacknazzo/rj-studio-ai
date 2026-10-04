@@ -386,7 +386,6 @@ def test_expired_generation_cannot_overwrite_intake_of_current_owner(tmp_path):
             {"intents": ["human_request", "appointment_interest"]},
             "Quero humano. Quero progressiva sábado à tarde",
         ),
-        ({"handoff": True, "handoff_reason": "technical risk"}, "Quero progressiva sábado à tarde"),
     ],
 )
 def test_intake_cannot_bypass_grounding_or_other_handoff_rules(tmp_path, overrides, body):
@@ -416,7 +415,7 @@ def test_immediate_policy_handoff_does_not_count_an_unasked_question(tmp_path):
     store.initialize()
     model = AppointmentModel(desired_service="progressiva")
     model.overrides = {"handoff": True, "handoff_reason": "risk"}
-    respond(store, model, message(body="Quero progressiva"))
+    respond(store, model, message(body="Meu couro cabeludo está ardendo. Quero progressiva"))
     handoff = store.list_active_handoffs()[0]
     assert (
         store.get_appointment_intake(conversation_id=handoff.conversation_id).clarification_count
@@ -813,3 +812,13 @@ def test_incomplete_intake_keeps_approved_location_answer_for_multi_intent(tmp_p
     )
     assert reply.body == "O endereço sintético é Rua Exemplo, 100. Qual dia seria melhor pra você?"
     assert not store.list_active_handoffs()
+
+
+def test_model_only_risk_reason_cannot_replace_the_trusted_intake_completion(tmp_path):
+    store = SqliteConversationStore(tmp_path / "intake.db")
+    store.initialize()
+    model = AppointmentModel(desired_service="progressiva", preferred_time="sábado à tarde")
+    model.overrides = {"handoff": True, "handoff_reason": "technical risk"}
+    reply = respond(store, model, message(body="Quero progressiva sábado à tarde"))
+    assert store.list_active_handoffs()[0].reason_code == "appointment_interest_collected"
+    assert "confirmar" in reply.body

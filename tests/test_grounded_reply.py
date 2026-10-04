@@ -293,20 +293,19 @@ def test_identity_transparency_overrides_inadequate_model_parts() -> None:
     assert "humana" not in result.reply_text
 
 
-def test_model_handoff_proposal_remains_proposal_without_false_transfer_confirmation() -> None:
+def test_model_only_handoff_cannot_replace_a_valid_trusted_fact_plan() -> None:
     result = finalize_reply(
         _decision(
             handoff=True,
             handoff_reason="Tenho uma dúvida que precisa de humano.",
         ),
-        customer_message="Preciso de uma avaliação",
+        customer_message="Quanto custa o corte?",
         context=ConversationContext(history=(), knowledge=(_fact(),)),
     )
 
-    assert result.handoff
-    assert result.handoff_reason == "Tenho uma dúvida que precisa de humano."
+    assert not result.handoff and result.handoff_reason is None
     assert "encaminhei" not in result.reply_text
-    assert "R$" not in result.reply_text
+    assert "R$ 120,00" in result.reply_text
 
 
 @pytest.mark.parametrize(

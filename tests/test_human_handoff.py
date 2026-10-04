@@ -204,8 +204,8 @@ def test_untrusted_handoff_reason_is_not_persisted_or_echoed(tmp_path):
     store.initialize()
     store.admit_generation(_message(body="Preciso de avaliação"))
     result = _processing(store, Model(handoff=True, reason="sensitive-customer-detail")).run_once()
-    handoff = store.list_active_handoffs()[0]
-    assert handoff.reason_code == "model_requested_handoff"
+    assert store.list_active_handoffs() == []
+    assert result.reply_body == "Como posso te ajudar?"
     assert "sensitive" not in result.reply_body
 
 

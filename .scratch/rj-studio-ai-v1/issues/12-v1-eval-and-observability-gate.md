@@ -242,3 +242,11 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
   compileall, pip check and whitespace checks pass. One existing recovery test
   now explicitly isolates its legacy/fixed configuration from the local `.env`.
   Production M06/Tickets 09/10/11 and credentials remain unchanged.
+
+- 2026-10-04 product owner classified post-release greeting as REAL_RUNTIME_BUG
+  and approved a minimal trusted handoff authorization gate. Prior oracle-v2 B1
+  (50/53, 49 pass / one fail) is INVALID_FOR_FINAL_GATE_DUE_TO_RUNTIME_FIX; raw
+  records/spend remain unchanged, no rescore. See
+  docs/evals/V1/trusted-handoff-policy-2026-10-04.md. Three reviews and offline
+  checks precede the one-call retest; fresh B1/B2 are conditional on its success.
+  Ticket remains in-progress; real-provider/cross-provider gates stay open.
