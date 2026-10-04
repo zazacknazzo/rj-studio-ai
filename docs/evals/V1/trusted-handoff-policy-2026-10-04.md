@@ -40,5 +40,23 @@ default / output 512 / observation 30s / zero retries. Product latency remains
 observed billable p95 <=8s; diagnostic timing cannot replace it. Synthetic
 Messages, isolated SQLite, fake Provider Acceptance only.
 
-Execution and independent review results: pending. Ticket 12 remains in-progress;
+## Independent pre-paid reviews
+
+All reviewed `b76e7fe...75fde4f`, independently, read-only:
+
+- Product/spec: APPROVE, zero material omissions, scope creep or implementation
+  findings. Revised model-only test expectations match the approved contract;
+  trusted risk/Intent/Knowledge/appointment/cancellation coverage remains.
+- Safety/handoff: APPROVE, zero material findings. Independently passed 248
+  focused tests, 40 assertions across all familiar reason codes (benign plans
+  denied, missing plans fail closed), and a pending-delivery/fake-acceptance/
+  release/restart/replay scenario with terminal suppression preserved.
+- Standards: APPROVE, zero documented violations or material design smells.
+  Small typed gate at the existing finalizer seam, no new orchestration layer.
+
+No paid call preceded these verdicts. Prior oracle review count clarification:
+its fixture contained 13 grounding cases, not the reviewer’s original printed
+14; all loaded cases were actually compared. Original records are unchanged.
+
+Execution results: pending. Ticket 12 remains in-progress;
 real Meta/WhatsApp E2E is pending and cross-provider comparison deferred.
