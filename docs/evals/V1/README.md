@@ -4,7 +4,11 @@ Current product round: [approved Conversational Polish](../../specs/V1-conversat
 Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress; the newly authorized B1/B2 execution is a
 separate live gate, using fresh records and one shared US$5 budget.
-Current runtime work: [trusted handoff policy gate](trusted-handoff-policy-2026-10-04.md).
+Latest execution: [trusted handoff policy gate + stopped fresh B1](trusted-handoff-policy-2026-10-04.md).
+Retest PASS (model proposal denied; persisted handoff inactive). Fresh B1 stopped
+at 32/53: 31 pass / one raw critical failure where a deterministic intake question
+was absent from the grounding scorer allowlist. B2 not executed; no oracle edit
+or rescore. 32 calls, US$0.0776998; final gate blocked, Ticket 12 in-progress.
 The previous oracle-v2 population is **INVALID_FOR_FINAL_GATE_DUE_TO_RUNTIME_FIX**;
 records/metrics remain unchanged and do not contribute to a new final gate.
 Historical execution: [oracle-v2 fresh B1 — stopped at manual release](openai-phase-b-oracle-v2-2026-10-04.md).

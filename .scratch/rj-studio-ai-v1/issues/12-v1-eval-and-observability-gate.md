@@ -250,3 +250,13 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
   docs/evals/V1/trusted-handoff-policy-2026-10-04.md. Three reviews and offline
   checks precede the one-call retest; fresh B1/B2 are conditional on its success.
   Ticket remains in-progress; real-provider/cross-provider gates stay open.
+
+- 2026-10-04 trusted handoff fix committed at 75fde4f; 831 tests/checks and
+  three independent reviews passed. One paid post-release retest PASS: model
+  proposed handoff, trusted policy denied, no new episode, US$0.0062785.
+  Fresh B1 stopped at 32/53 (31 pass / one fail) on grounding-mandatory-policy;
+  read-only evidence identifies an existing deterministic intake question
+  omitted from oracle-v2 allowed surfaces. Raw fail 1/21 retained, no rescore
+  or oracle edit; B2 not executed. 32 calls, US$0.0776998, cost/latency partial
+  pass; final gate blocked. Evidence/report and retest export limitation in
+  docs/evals/V1/trusted-handoff-policy-2026-10-04.md. Ticket stays in-progress.
