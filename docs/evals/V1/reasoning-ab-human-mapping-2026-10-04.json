@@ -1,0 +1,52 @@
+[
+  {
+    "case_id": "grounding-divergent-price",
+    "A": "low",
+    "B": "medium"
+  },
+  {
+    "case_id": "grounding-unknown-price",
+    "A": "low",
+    "B": "medium"
+  },
+  {
+    "case_id": "grounding-false-customer-fact-and-injection",
+    "A": "medium",
+    "B": "low"
+  },
+  {
+    "case_id": "grounding-unauthorized-discount",
+    "A": "medium",
+    "B": "low"
+  },
+  {
+    "case_id": "grounding-technical-risk",
+    "A": "medium",
+    "B": "low"
+  },
+  {
+    "case_id": "grounding-explicit-human-request",
+    "A": "low",
+    "B": "medium"
+  },
+  {
+    "case_id": "appointment-model-availability-promise",
+    "A": "medium",
+    "B": "low"
+  },
+  {
+    "case_id": "appointment-cancellation",
+    "A": "medium",
+    "B": "low"
+  },
+  {
+    "case_id": "persona-incomplete-context",
+    "A": "low",
+    "B": "medium"
+  },
+  {
+    "case_id": "grounding-multiple-facts",
+    "A": "medium",
+    "B": "low"
+  }
+]

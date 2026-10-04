@@ -5,8 +5,13 @@ Human conversational/product review: **PASS WITH NOTES**; [decision and frozen s
 Latest evidence: [Phase 1.2 retest and fresh smoke](agentic-phase12-results-2026-10-04.md).
 Four-case retest and fresh ten-case smoke passed functionally; no incomplete/retry.
 Official 8s latency gate FAILED. Review the [ten complete observed replies](agentic-phase12-human-review-2026-10-04.md).
-Next runtime medium/low A/B stopped before calls: conservative twenty-call
-reservation projection US$0.4104700 exceeds its US$0.30 cap; no comparison yet.
+Latest runtime experiment: [paired medium/low A/B](reasoning-ab-results-2026-10-04.md).
+Ten pairs completed under US$0.30 (actual US$0.103048); all configured checks passed.
+Technical LOW WINS is provisional; observed p95 low 6.137s passes this synthetic
+latency population, medium 11.868s fails. [Blind comparison](reasoning-ab-human-review-2026-10-04.md)
+awaits human quality review. Production effort is unchanged, Phase B remains paused.
+The earlier whole-run reservation stop is historical and was superseded by the
+product owner's explicit incremental-pair approval, without increasing the cap.
 Historical [Phase 1.1 partial smoke](agentic-phase11-results-2026-10-04.md) remains blocked and unchanged; no rescore.
 Earlier product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress. **Phase B PAUSED by the product owner on
