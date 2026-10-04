@@ -44,3 +44,20 @@ product owner before paid Phase B. Configuration tests/reviews may proceed.
 
 Ticket 12 stays in-progress. Report evidence and remaining material gates before
 any completion recommendation; never mark V1/Ticket 12 complete automatically.
+
+## Pre-live checks — 2026-10-04
+
+984 tests passed (two new default/override integration cases). Ruff check,
+format check, compileall, pip check and git diff --check passed. Default-low
+assertions first failed against medium, then passed after the two default-only
+source edits; the explicit-medium path remained green.
+
+Configuration review: model/tier/1024/30s observation/production 10s deadline,
+pricing, zero retries and incomplete/accounting handling unchanged. Independent
+Standards/safety review: no material findings. Independent eval/spec review: no
+findings in adoption; exact oracle clarification remains the pre-live dependency.
+The suite is still 53 cases: 50 LIVE_BEHAVIORAL and three STRUCTURAL_CONTRACT.
+
+No paid call, B1 or B2 occurred in this adoption step. No new cost/latency or
+semantic gate is claimed from old populations. Human A/B quality is approved;
+V1/Ticket 12 are not marked complete. No Customer, messaging or Anthropic calls.
