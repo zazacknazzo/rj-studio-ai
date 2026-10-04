@@ -440,3 +440,48 @@ def test_general_question_purpose_can_resolve_missing_service_without_handoff():
         context=ConversationContext((), ()),
     )
     assert result.reply_text == wording and not result.handoff
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "Posso ajudar com outra dúvida sobre o serviço?",
+        "Quer saber mais sobre o serviço?",
+        "Posso ajudar com outra dúvida sobre o resultado?",
+    ],
+)
+def test_topic_mention_alone_does_not_resolve_information_gap(wording):
+    target = "customer_goal" if "resultado" in wording else "service"
+    trace, _ = captured_trace(proposal(part(wording, information_targets=[target])))
+    assert trace.actionable_information_targets == ()
+
+
+def test_released_intake_service_does_not_block_new_general_question_after_restart(tmp_path):
+    from test_agentic_intake import Model, send
+    from test_agentic_intake import part as intake_part
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    path = tmp_path / "case.db"
+    store = SqliteConversationStore(path)
+    store.initialize()
+    send(
+        store,
+        Model(
+            [intake_part("Entendi.", purpose="acknowledgement")],
+            preferences={
+                "desired_service": "corte",
+                "preferred_day": "sexta",
+                "preferred_time": "à tarde",
+            },
+        ),
+        "Quero corte sexta à tarde",
+    )
+    handoff = store.list_active_handoffs()[0]
+    store.release_handoff(conversation_id=handoff.conversation_id, owner_token=handoff.owner_token)
+    reopened = SqliteConversationStore(path)
+    wording = "De qual serviço você quer saber o valor?"
+    reply, state = send(reopened, Model([part(wording)], intents=["price"]), "Qual preço?", "two")
+    assert reply.body == wording
+    assert state.state == "released" and state.desired_service == "corte"
+    assert not reopened.list_active_handoffs()

@@ -156,6 +156,7 @@ def finalize_reply(
         if appointment_intake is not None
         else context.appointment_intake.desired_service
         if context.appointment_intake is not None
+        and context.appointment_intake.state == "collecting"
         else decision.appointment_preferences.desired_service
         if decision.appointment_preferences is not None
         and decision.appointment_preferences.desired_service

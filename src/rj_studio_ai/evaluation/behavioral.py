@@ -140,9 +140,13 @@ def actionable_information_question(text, target):
     if "?" not in value:
         return False
     cues = {
-        "service": r"\b(?:servico|tratamento|atendimento)\b"
+        "service": r"\b(?:qual|que|algum)\b.{0,35}\b(?:servico|tratamento|atendimento)\b"
+        r"|\b(?:servico|tratamento|atendimento)\b.{0,30}"
+        r"\b(?:quer|gostaria|pensando|tem em mente|procura|busca|interessa|prefere)\b"
         r"|\bo que\b.{0,30}\b(?:fazer|procura|busca)\b",
-        "customer_goal": r"\b(?:objetivo|resultado|procura|busca|precisa|interesse)\b",
+        "customer_goal": r"\b(?:qual|que|seu|mais sobre)\b.{0,25}\b(?:objetivo|resultado)\b"
+        r"|\b(?:o que|como)\b.{0,35}\b(?:procura|busca|precisa|gostaria)\b"
+        r"|\b(?:me conta|me fale)\b.{0,30}\b(?:objetivo|procura|busca|resultado)\b",
         "clarification": r"\b(?:contexto|detalhe|especificar|contar mais|explicar melhor)\b",
     }
     return bool(target in cues and re.search(cues[target], value))
