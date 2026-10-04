@@ -144,7 +144,7 @@ def actionable_information_question(text, target):
         r"|\b(?:servico|tratamento|atendimento)\b.{0,30}"
         r"\b(?:quer|gostaria|pensando|tem em mente|procura|busca|interessa|prefere)\b"
         r"|\bo que\b.{0,30}\b(?:fazer|procura|busca)\b",
-        "customer_goal": r"\b(?:qual|que|seu|mais sobre)\b.{0,25}\b(?:objetivo|resultado)\b"
+        "customer_goal": r"\b(?:qual|que)\b.{0,25}\b(?:objetivo|resultado)\b"
         r"|\b(?:o que|como)\b.{0,35}\b(?:procura|busca|precisa|gostaria)\b"
         r"|\b(?:me conta|me fale)\b.{0,30}\b(?:objetivo|procura|busca|resultado)\b",
         "clarification": r"\b(?:contexto|detalhe|especificar|contar mais|explicar melhor)\b",

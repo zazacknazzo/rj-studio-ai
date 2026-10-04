@@ -49,7 +49,7 @@ def protected_assertion(text: str) -> str | None:
 
 
 def question_fields(text: str) -> set[str]:
-    """Bounded undeclared-preference cues, not wording selection or full NLP."""
+    """Bounded undeclared preference/recovery cues, not wording selection or full NLP."""
     value = normalized(text)
     if "?" not in value:
         return set()
@@ -62,6 +62,8 @@ def question_fields(text: str) -> set[str]:
         "preferred_time": r"\b(?:qual|que|algum)\b.{0,20}\b(?:horario|hora|periodo)\b|"
         r"\b(?:prefere|melhor|funciona)\b.{0,35}(?:\b(?:horario|manha|tarde|noite)\b|"
         r"\b\d{1,2}(?:h(?:\d{2})?|:\d{2})\b)",
+        "cancellation_choice": r"\b(?:quer|gostaria|prefere|topa|aceita|vamos|tentar)\b.{0,45}"
+        r"\b(?:outro dia|outra data|remarcar|reagendar|mudar a data|trocar o dia)\b",
         "professional_preference": r"\b(?:qual|que|algum|prefere|preferencia)\b.{0,20}"
         r"\b(?:profissional|pessoa)\b|\bprofissional\b.{0,20}\b(?:prefere|preferencia)\b",
     }

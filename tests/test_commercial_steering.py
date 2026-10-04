@@ -485,3 +485,69 @@ def test_released_intake_service_does_not_block_new_general_question_after_resta
     assert reply.body == wording
     assert state.state == "released" and state.desired_service == "corte"
     assert not reopened.list_active_handoffs()
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "Quer saber mais sobre o resultado?",
+        "Posso ajudar com outra dúvida sobre seu objetivo?",
+        "Tem alguma dúvida sobre seu resultado?",
+    ],
+)
+def test_goal_topic_mention_cannot_pass_full_commercial_oracle(wording):
+    from rj_studio_ai.evaluation.oracle import GroundingObservation, replay_grounding
+
+    case = next(
+        c
+        for c in load_suite(Path("docs/evals/V1")).cases
+        if c.contract.case_id == "grounding-unknown-price"
+    )
+    decision = proposal(part(wording, information_targets=["customer_goal"]))
+    trace, final = captured_trace(decision)
+    observed = GroundingObservation.capture(
+        case,
+        decision=decision,
+        context=ConversationContext((), ()),
+        body=final.reply_text,
+        handoff_active=False,
+        actionable_information_targets=trace.actionable_information_targets,
+    )
+    assert (
+        replay_grounding(case, observed, body=final.reply_text)["general_clarification"] == "fail"
+    )
+
+
+@pytest.mark.parametrize("scope", [("clarification",), ()])
+def test_recovery_cannot_escape_allowance_via_general_or_unscoped_question(tmp_path, scope):
+    from test_agentic_intake import Model, send
+
+    from rj_studio_ai.persistence import SqliteConversationStore
+
+    store = SqliteConversationStore(tmp_path / "case.db")
+    store.initialize()
+    wording = "Você gostaria de tentar outro dia antes de cancelar?"
+    model = Model(
+        [part(wording, purpose="question", information_targets=scope)],
+        intents=["appointment_change"],
+    )
+    for identifier in ("one", "two"):
+        reply, state = send(store, model, "Quero cancelar meu agendamento", identifier)
+        assert wording not in reply.body
+        assert state.clarification_count == 0 and not state.recovery_offered
+    # The model can still offer its one authorized recovery in its own wording.
+    model = Model(
+        [
+            {
+                "kind": "conversation",
+                "purpose": "recovery",
+                "text": wording,
+                "targets": ["cancellation_choice"],
+                "information_targets": [],
+            }
+        ],
+        intents=["other"],
+    )
+    reply, state = send(store, model, "Estou pensando", "three")
+    assert reply.body == wording
+    assert state.recovery_offered and state.clarification_count == 1
