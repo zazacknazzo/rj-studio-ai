@@ -325,11 +325,14 @@ ADR 0006 owns this target. ADRs 0001, 0003, and 0005 retain their original
 historical decisions and are explicitly amended where synchronous assumptions
 were replaced.
 
-## Agentic Surface Phase 1 experiment
+## Agentic Surface Phase 1 / 1.1 experiment
 
 Load the [Phase 1 report](architecture/v1-agentic-surface-phase-1.md) for new
 conversation parts, intake authorization and migration 0012. Legacy output
-remains compatible; messaging is unchanged. ADR 0009 stays proposed.
+remains compatible; messaging is unchanged. ADR 0009 stays proposed. Phase 1.1
+separates general information gaps from appointment targets and adds advisory
+planning metadata/shared soft commercial steering, with no new persisted state.
+Load only its section of that report when changing this boundary.
 
 ## Deliberately deferred
 

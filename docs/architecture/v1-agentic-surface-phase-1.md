@@ -155,3 +155,23 @@ model, output limit, deadline, pricing or latency gate changes accompany this
 round. `--commercial-only` runs the three existing cases once on one US$0.30
 ledger, stops on any failed check and never authorizes B. The separate ten-case
 smoke retains its US$1 cap and critical stop rules; latency alone never aborts it.
+
+
+### Phase 1.1 validation outcome
+
+950 tests and all static checks passed; four independent reviews passed after
+fixes for released-episode authority, generic-topic eval false positives and
+undeclared recovery offers. The recovery veto recognizes a bounded invitation
+cue; it does not choose wording or claim exhaustive semantic detection.
+
+The [observed results](../evals/V1/agentic-phase11-results-2026-10-04.md) record
+three passing commercial cases, then a fresh ten-case smoke stopped at case 5:
+`live_incomplete_output`, valid usage, output 512 including reasoning. Four
+complete replies passed; five cases were never executed. No retry or post-stop
+configuration change was made. Direct price remains answer-only for human
+review; no forced CTA hides this remaining product concern.
+
+Functional safety passing != product conversational quality passing. The new
+smoke is blocked, human review remains NOT YET APPROVED, and partial observed
+p95 E2E fails 8s. Phase B is paused, Ticket 12 in-progress, ADR 0009 proposed.
+Historical evidence and product-owner annotations are preserved, without rescore.

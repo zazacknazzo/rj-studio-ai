@@ -1,13 +1,17 @@
 # V1 eval suite
 
-Current product round: [approved Conversational Polish](../../specs/V1-conversational-polish.md).
-Product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
+Current product round: [Agentic Surface Phase 1.1](../../specs/V1-agentic-surface-phase-1.1.md).
+Human conversational/product review: **NOT YET APPROVED**.
+Latest evidence: [Phase 1.1 retest and partial smoke](agentic-phase11-results-2026-10-04.md).
+Three-case retest passed; new ten-case smoke stopped at case 5 on incomplete generation.
+Review only the [four complete observed replies](agentic-phase11-human-review-2026-10-04.md).
+Earlier product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress. **Phase B PAUSED by the product owner on
 2026-10-04**, before the case 32 oracle correction. The
 [V1 Agentic Boundary Review](../../architecture/v1-agentic-boundary-review.md)
 is analysis only; no oracle edit, rescore or further paid execution is authorized
 by that review. Previous B1/B2 authorization and budget remain historical context.
-Latest execution: [trusted handoff policy gate + stopped fresh B1](trusted-handoff-policy-2026-10-04.md).
+Historical Phase B execution: [trusted handoff policy gate + stopped fresh B1](trusted-handoff-policy-2026-10-04.md).
 Retest PASS (model proposal denied; persisted handoff inactive). Fresh B1 stopped
 at 32/53: 31 pass / one raw critical failure where a deterministic intake question
 was absent from the grounding scorer allowlist. B2 not executed; no oracle edit
@@ -26,7 +30,7 @@ That population is **INVALID_FOR_FINAL_GATE_DUE_TO_HARNESS_BUG**.
 The [53-case oracle audit](oracle-audit-2026-10-03.md) records the eval-only
 correction, live/injected boundaries, frozen v2 oracle and three independent
 pre-paid approvals; old raw evidence remains unchanged.
-Current human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
+Earlier Polish human decision: [APPROVED qualitatively by the product owner](conversational-polish-human-review-2026-10-03.md).
 Closure evidence: [cancellation correction, isolated retest and fresh smoke 04](cancellation-recovery-2026-10-03.md).
 Retest 1/1 and fresh smoke **10/10**; critical 0/17, observed p95 6,270.32ms
 passes the unchanged 8s gate for this run. No additional numerical ratings or
