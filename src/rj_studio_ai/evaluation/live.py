@@ -50,6 +50,7 @@ from rj_studio_ai.evaluation.openai_live import (
 from rj_studio_ai.evaluation.oracle import (
     ORACLE_VERSION,
     PHASE_ONE_ORACLE_VERSION,
+    PRE_INTAKE_ORACLE_VERSION,
     GroundingObservation,
     execution_category,
     replay_grounding,
@@ -181,8 +182,15 @@ class LiveRecord(RecordModel):
         check_privacy(self.model_dump(mode="json", exclude={"request_hashes"}))
         if self.created_at.tzinfo is None:
             raise ValueError("live_missing_timezone")
-        expected_oracle = PHASE_ONE_ORACLE_VERSION if self.schema_version == 8 else ORACLE_VERSION
-        if self.schema_version >= 8 and self.configuration.get("oracle_version") != expected_oracle:
+        expected_oracles = (
+            {PHASE_ONE_ORACLE_VERSION}
+            if self.schema_version == 8
+            else {PRE_INTAKE_ORACLE_VERSION, ORACLE_VERSION}
+        )
+        if (
+            self.schema_version >= 8
+            and self.configuration.get("oracle_version") not in expected_oracles
+        ):
             raise ValueError("live_missing_oracle_version")
         observed = [(s.case_id, s.repetition, s.turn) for s in self.samples]
         if len(set(self.plan)) != len(self.plan) or len(set(observed)) != len(observed):
@@ -320,6 +328,7 @@ def _score(
             else None
         ),
         expected_preferences=expected_customer_preferences(turn, context.appointment_intake),
+        customer_message=turn["customer_message"],
         handoff_reason=episodes[0].reason_code if episodes else None,
     )
 

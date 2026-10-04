@@ -63,6 +63,22 @@ def _preference_matches(field, actual, expected):
     return actual == expected
 
 
+def _customer_update_supported(field, actual, expected, prior, customer_message):
+    # Missing fixture annotations are not evidence that the Customer said nothing.
+    # Expectations beyond prior state remain strict; prior state can be updated
+    # only by an exact, bounded Customer excerpt with the appropriate day/time type.
+    previous = getattr(prior, field, None) if prior and prior.state == "collecting" else None
+    if not actual or not customer_message or expected not in (None, previous):
+        return False
+    value = normalized(actual)
+    if not value or not re.search(
+        r"(?<!\w)" + re.escape(value) + r"(?!\w)", normalized(customer_message)
+    ):
+        return False
+    pattern = DAY if field == "preferred_day" else TIME if field == "preferred_time" else None
+    return pattern is None or bool(re.search(pattern, value))
+
+
 def score_appointment(
     expected,
     *,
@@ -74,6 +90,7 @@ def score_appointment(
     authorized_targets=None,
     expected_preferences=None,
     handoff_reason=None,
+    customer_message=None,
 ):
     remaining = (
         (body or "").replace(trusted_confirmation, "") if trusted_confirmation else body or ""
@@ -109,6 +126,9 @@ def score_appointment(
         or intake is not None
         and all(
             _preference_matches(field, getattr(intake, field, None), value)
+            or _customer_update_supported(
+                field, getattr(intake, field, None), value, prior, customer_message
+            )
             for field, value in expected_preferences.items()
         )
     )

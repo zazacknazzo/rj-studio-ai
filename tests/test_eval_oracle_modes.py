@@ -304,3 +304,34 @@ def test_replay_metadata_contains_no_model_prose_reasoning_or_customer_message(t
         GroundingObservation.model_validate(
             {**observation.model_dump(), "raw_output": "not permitted"}
         )
+
+
+def test_reschedule_customer_day_passes_live_scorer_and_keeps_v4_records_readable(tmp_path):
+    from rj_studio_ai.evaluation.live import LiveRecord
+    from rj_studio_ai.evaluation.oracle import ORACLE_VERSION, PRE_INTAKE_ORACLE_VERSION
+
+    proposal = fixture_decision(
+        surface="agentic",
+        intents=["appointment_change"],
+        appointment_preferences={"preferred_day": "amanhã"},
+        reply_parts=[
+            {
+                "kind": "conversation",
+                "purpose": "clarification",
+                "text": "Claro! Qual serviço você quer remarcar?",
+                "targets": ["desired_service"],
+            }
+        ],
+    )
+    report, record = live_proposal(tmp_path, "appointment-reschedule", proposal)
+    assert record["status"] == "completed"
+    assert all(v == "pass" for v in record["samples"][0]["checks"].values())
+    assert record["configuration"]["oracle_version"] == ORACLE_VERSION
+    record["configuration"]["oracle_version"] = PRE_INTAKE_ORACLE_VERSION
+    assert (
+        LiveRecord.model_validate(record).configuration["oracle_version"]
+        == PRE_INTAKE_ORACLE_VERSION
+    )
+    record["configuration"]["oracle_version"] = "unapproved-oracle"
+    with pytest.raises(ValueError, match="live_missing_oracle_version"):
+        LiveRecord.model_validate(record)

@@ -25,7 +25,8 @@ from rj_studio_ai.llm_decision import (
 
 LEGACY_ORACLE_VERSION = "v1-live-semantic-2026-10-03-v2"
 PHASE_ONE_ORACLE_VERSION = "v1-agentic-behavioral-2026-10-04-v3"
-ORACLE_VERSION = "v1-agentic-commercial-2026-10-04-v4"
+PRE_INTAKE_ORACLE_VERSION = "v1-agentic-commercial-2026-10-04-v4"
+ORACLE_VERSION = "v1-agentic-commercial-2026-10-04-v5"
 
 
 def execution_category(case):
@@ -57,6 +58,7 @@ class GroundingObservation(RecordModel):
         "v1-live-semantic-2026-10-03-v2",
         "v1-agentic-behavioral-2026-10-04-v3",
         "v1-agentic-commercial-2026-10-04-v4",
+        "v1-agentic-commercial-2026-10-04-v5",
     ] = ORACLE_VERSION
     oracle: Digest
     case_id: Identifier
@@ -154,7 +156,11 @@ def replay_grounding(case, observation: GroundingObservation, *, body, facts=Non
     residue = body or ""
     for text in sorted(allowed, key=len, reverse=True):
         residue = residue.replace(text, "")
-    if observation.oracle_version in {PHASE_ONE_ORACLE_VERSION, ORACLE_VERSION}:
+    if observation.oracle_version in {
+        PHASE_ONE_ORACLE_VERSION,
+        PRE_INTAKE_ORACLE_VERSION,
+        ORACLE_VERSION,
+    }:
         # Only source-based expectations remain literal. Safety guidance words
         # preserve meaning; routine ACK/question/CTA substrings are not gates.
         required = [
@@ -191,7 +197,10 @@ def replay_grounding(case, observation: GroundingObservation, *, body, facts=Non
             if set(observation.proposed_intents) == set(case.data["live_expected_intents"])
             else "fail"
         )
-    if observation.oracle_version == ORACLE_VERSION and requires_general_clarification(case):
+    if observation.oracle_version in {
+        PRE_INTAKE_ORACLE_VERSION,
+        ORACLE_VERSION,
+    } and requires_general_clarification(case):
         checks["general_clarification"] = (
             "pass"
             if (
