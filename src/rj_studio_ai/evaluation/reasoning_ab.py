@@ -142,6 +142,57 @@ def arm_summary(records, pricing):
     return summary
 
 
+def comparison_deltas(arms, completed_pairs):
+    """Low minus medium; unknown values stay unknown, partial populations are explicit."""
+    medium, low = (arms[effort] for effort in EFFORTS)
+
+    def difference(control, candidate):
+        return candidate - control if control is not None and candidate is not None else None
+
+    values = {
+        key: difference(medium[key], low[key])
+        for key in (
+            "model_p50_ms",
+            "model_p95_ms",
+            "model_max_ms",
+            "billable_e2e_p50_ms",
+            "billable_e2e_p95_ms",
+            "observed_e2e_max_ms",
+            "observed_e2e_above_8s",
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "reasoning_tokens",
+            "reasoning_tokens_per_reply",
+            "estimated_cost_usd",
+            "cost_per_1000_replies_usd",
+        )
+    }
+    values["matched_population"] = all(
+        arm["completed_model_replies"] == arm["live_calls"] == completed_pairs
+        for arm in arms.values()
+    )
+    values["completed_pairs"] = completed_pairs
+    values["population"] = "all_observed_arm_attempts"
+    for key in ("p50_ms", "p95_ms"):
+        component = "production_equivalent_e2e_ms"
+        values["production_equivalent_" + key] = difference(
+            medium["latency_breakdown"]["components"][component][key],
+            low["latency_breakdown"]["components"][component][key],
+        )
+    values["check_differences"] = {
+        metric: {
+            key: difference(medium["metrics"].get(metric, {}).get(key), ratio[key])
+            for key in ("numerator", "denominator")
+        }
+        for metric, ratio in low["metrics"].items()
+    }
+    values["critical_failure_delta"] = (
+        low["critical_failures"]["numerator"] - medium["critical_failures"]["numerator"]
+    )
+    return values
+
+
 def recommendation(arms, completed_pairs, stop_effort, stop_code):
     if stop_effort == "low" and stop_code == "critical_failure":
         return "MEDIUM WINS", "LOW REJECT: critical safety failure"
@@ -202,6 +253,7 @@ def execute_ab(suite, *, api_key, output, revision, transport=None, progress=Non
                         client=client,
                         reasoning_effort=effort,
                     )
+                    write_json(directory / "trusted-response.json", packet)
                     records[effort].append(record)
                     if progress:
                         progress(
@@ -235,6 +287,7 @@ def execute_ab(suite, *, api_key, output, revision, transport=None, progress=Non
             "stop_effort": stop_effort,
             "admissions": admissions,
             "arms": arms,
+            "low_minus_medium": comparison_deltas(arms, len(pairs)),
             "recommendation": classification,
             "recommendation_reason": reason,
             "human_review": "pending",

@@ -225,6 +225,10 @@ def test_twenty_calls_are_interleaved_comparable_and_share_actual_budget(tmp_pat
         low = {k: v for k, v in low.items() if k != "reasoning"}
         assert medium == low
     assert report["actual_cost_usd"] == "0.05540"
+    assert report["low_minus_medium"]["reasoning_tokens"] == 0
+    assert report["low_minus_medium"]["output_tokens"] == 0
+    assert report["low_minus_medium"]["estimated_cost_usd"] == 0
+    assert report["low_minus_medium"]["matched_population"] is True
     assert report["cap_usd"] == "0.30" and not report["phase_b_executed"]
     assert all(a["maximum_safe_reservation_usd"] == "0.1056" for a in report["admissions"])
     assert all(
@@ -248,6 +252,9 @@ def test_failed_low_stops_without_retry_or_new_pair_and_keeps_accounting(tmp_pat
     calls, report, output = run_ab(tmp_path, failure)
     assert len(calls) == 2 and report["completed_pairs"] == 0
     assert report["stop_code"] == code
+    assert len(json.loads((output / "01-medium/trusted-response.json").read_text())) == 1
+    assert json.loads((output / "01-low/trusted-response.json").read_text()) == []
+    assert report["low_minus_medium"]["matched_population"] is False
     low = report["arms"]["low"]
     assert low["completed_model_replies"] == 0 and low["system_safe_fallbacks"] == 1
     assert low["retries"] == 0 and not report["phase_b_executed"]
