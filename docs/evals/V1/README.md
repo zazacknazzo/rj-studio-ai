@@ -2,9 +2,11 @@
 
 Latest product decision: [HUMAN A/B REVIEW — LOW APPROVED](low-product-decision-2026-10-04.md).
 OpenAI eval candidate/default is now low, explicit medium remains available.
-Agentic Surface is approved/frozen. Fresh Phase B is authorized after checks,
-but its oracle name awaits clarification: request says v3, current approved code is v4.
-No new paid population has started; Ticket 12 remains in-progress.
+Agentic Surface is approved/frozen. The product owner confirmed current oracle
+v4. [Fresh low/v4 B1](openai-phase-b-low-v4-2026-10-04.md) stopped at case 40/53:
+39 pass / one raw critical `bounded_intake` failure. B2 was not executed.
+Partial cost/latency pass; final gate remains blocked, without rescore or edits
+to the frozen runtime/oracle. Ticket 12 remains in-progress.
 
 Current product round: [Agentic Surface Phase 1.2](../../specs/V1-agentic-surface-phase-1.2.md).
 Human conversational/product review: **PASS WITH NOTES**; [decision and frozen surface](agentic-phase12-product-decision-2026-10-04.md).
@@ -13,14 +15,15 @@ Four-case retest and fresh ten-case smoke passed functionally; no incomplete/ret
 Official 8s latency gate FAILED. Review the [ten complete observed replies](agentic-phase12-human-review-2026-10-04.md).
 Latest runtime experiment: [paired medium/low A/B](reasoning-ab-results-2026-10-04.md).
 Ten pairs completed under US$0.30 (actual US$0.103048); all configured checks passed.
-Technical LOW WINS is provisional; observed p95 low 6.137s passes this synthetic
+At collection, technical LOW WINS was provisional; observed p95 low 6.137s passes this synthetic
 latency population, medium 11.868s fails. [Blind comparison](reasoning-ab-human-review-2026-10-04.md)
-awaits human quality review. Production effort is unchanged, Phase B remains paused.
+was subsequently approved qualitatively by the product owner (decision above).
+Production selection remains fixed/Anthropic; OpenAI is eval-only.
 The earlier whole-run reservation stop is historical and was superseded by the
 product owner's explicit incremental-pair approval, without increasing the cap.
 Historical [Phase 1.1 partial smoke](agentic-phase11-results-2026-10-04.md) remains blocked and unchanged; no rescore.
 Earlier product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
-Ticket 12 remains in-progress. **Phase B PAUSED by the product owner on
+Ticket 12 remains in-progress. Historical **Phase B PAUSED by the product owner on
 2026-10-04**, before the case 32 oracle correction. The
 [V1 Agentic Boundary Review](../../architecture/v1-agentic-boundary-review.md)
 is analysis only; no oracle edit, rescore or further paid execution is authorized

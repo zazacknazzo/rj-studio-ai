@@ -5,7 +5,7 @@ V0 is deterministic and is verified by automated tests. Starting with V1, each p
 | Version | Status |
 | --- | --- |
 | V0 | Not applicable; deterministic tests only |
-| V1 | Phase 1.2 human PASS WITH NOTES; surface frozen; runtime A/B budget preflight stopped; latency/real-provider gates pending; Phase B paused |
+| V1 | Agentic Surface frozen; human LOW approved; fresh v4 B1 blocked at 40/53; B2 not executed; real-provider/production promotion pending |
 
 Each eval case should contain:
 

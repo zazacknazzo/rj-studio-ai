@@ -27,7 +27,7 @@ No prompt, commercial steering, Reply AST/phrases, next_action, appointment or
 cancellation behavior, handoff surface, Knowledge or oracle change is authorized
 for minor wording differences.
 
-## Fresh Phase B authorization and unresolved oracle name
+## Fresh Phase B authorization and resolved oracle name
 
 The product owner authorizes a fresh B1 with all 53 cases and conditional B2
 under the existing protocol: shared US$5 cap, US$1 spend checkpoint, one initial
@@ -37,10 +37,12 @@ accounting, observed E2E p95 <=8s and cost <=US$10/1000 completed model replies.
 Real safety/provider/accounting failures stop collection; valid wording variants
 are not failures. No live optimization, retries, Anthropic or real messaging.
 
-The instruction names Oracle v3, but code and the approved A/B used
-`v1-agentic-commercial-2026-10-04-v4`; v3 is a historical replay variant.
-The oracle is not edited or rolled back. Its exact name must be resolved by the
-product owner before paid Phase B. Configuration tests/reviews may proceed.
+The initial instruction named v3; the product owner subsequently confirmed
+`v1-agentic-commercial-2026-10-04-v4` explicitly and declared the v3 reference
+outdated. No rollback, rename or scorer change was made. Fresh B1 used frozen
+v4/low/1024 at runtime `42525e8` and stopped at case 40/53 on a raw critical
+`bounded_intake` failure. No B2 or rescore. See the
+[population record and separate diagnosis](openai-phase-b-low-v4-2026-10-04.md).
 
 Ticket 12 stays in-progress. Report evidence and remaining material gates before
 any completion recommendation; never mark V1/Ticket 12 complete automatically.

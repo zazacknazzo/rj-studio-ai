@@ -10,12 +10,15 @@
 
 Human A/B Review: LOW APPROVED. OpenAI candidate/default low, medium override
 retained, Agentic Surface frozen. Fresh B1 53 cases and conditional B2 authorized
-under existing US$5 cap / US$1 checkpoint and unchanged gates. Exact oracle name
-requires clarification before paid execution: instruction v3 vs approved/current
-v4. See docs/evals/V1/low-product-decision-2026-10-04.md. Status stays in-progress.
-No completion or new live run is claimed.
+under existing US$5 cap / US$1 checkpoint and unchanged gates. Product owner
+explicitly confirmed current v4; the v3 reference was outdated. Fresh B1 at
+runtime 42525e8 stopped at 40/53: 39 pass / one raw critical bounded_intake
+failure, 40 calls, US$0.1152439. No B2, rescore or frozen-code edit. Separate
+offline diagnosis reproduces an oracle false negative for a valid Customer day;
+original intake snapshot was not retained, so exact live cause remains unproven.
+See docs/evals/V1/openai-phase-b-low-v4-2026-10-04.md. Status stays in-progress.
 
-## Current product-owner pause — 2026-10-04
+## Historical product-owner pause — 2026-10-04
 
 **Phase B PAUSED**, before correcting the case 32 oracle. Current B1 remains
 32/53, 31 pass / one raw fail, without rescore; B2 not executed. The
@@ -133,6 +136,14 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 - Automatic model switching, production alerting platform, external provider failover, real Customer conversations in fixtures, or authorization for autonomous production operation.
 
 ## Comments
+
+- 2026-10-04 fresh low/v4 B1 at 42525e8: 40/53 cases, 39 pass / one raw
+  critical bounded_intake fail; B2 not executed. 40 calls, zero retries/paid
+  failures, US$0.1152439; partial observed p95 6.164s and cost/1000 US$2.8811.
+  Freeze/history verified unchanged. Offline reproduction proves a valid-day
+  oracle false negative, but original live intake snapshot is unavailable.
+  No rescore/fix/new call after stop. 984 tests and static checks passed.
+  See docs/evals/V1/openai-phase-b-low-v4-2026-10-04.md; stays in-progress.
 
 - 2026-10-03 fresh Polish smoke 03 at published 643a943: 8/10 cases executed,
   seven pass. Cancellation model proposed immediate handoff and omitted the
