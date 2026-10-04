@@ -1,5 +1,13 @@
 # V1 eval suite
 
+Latest lean follow-up: [Customer-state oracle correction and focused retest](customer-intake-oracle-correction-2026-10-04.md).
+Only eval changed (v5); runtime/prompt/fixtures frozen. Focused 14/17 cases
+executed: 13 pass / one raw terminal-handoff expectation fail; original
+reschedule and bounded_intake 13/13 passed. No full B1/B2 or rescore.
+[All 17 synthetic trusted replies](focused-intake-responses-2026-10-04.md).
+Next-step intelligence decision remains blocked by the separate exhausted-budget
+fixture mismatch. Ticket 12 in-progress; no production promotion/readiness claim.
+
 Latest product decision: [HUMAN A/B REVIEW — LOW APPROVED](low-product-decision-2026-10-04.md).
 OpenAI eval candidate/default is now low, explicit medium remains available.
 Agentic Surface is approved/frozen. The product owner confirmed current oracle

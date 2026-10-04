@@ -6,6 +6,18 @@
 
 **Status:** in-progress
 
+## Latest lean follow-up — 2026-10-04
+
+Customer-state bounded_intake correction only, oracle v5; runtime/prompt/fixtures
+unchanged. 18 new tests, 1002 full suite pass. Focused retest stopped at 14/17
+cases: 13 pass / one handoff_policy failure on the exhausted-budget fixture.
+Bounded intake 13/13, original reschedule passed; 17 calls, zero retries/paid
+failures, US$0.0539154. Trace shows only one scoped qualification question,
+while the fixture assumes budget exhausted after four turns. Separate oracle
+expectation mismatch; no fix/rescore/new call after stop. Intelligence-next-step
+decision blocked; no full B1/B2 or production promotion. See
+docs/evals/V1/customer-intake-oracle-correction-2026-10-04.md.
+
 ## Latest product-owner decision — 2026-10-04
 
 Human A/B Review: LOW APPROVED. OpenAI candidate/default low, medium override
@@ -136,6 +148,11 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 - Automatic model switching, production alerting platform, external provider failover, real Customer conversations in fixtures, or authorization for autonomous production operation.
 
 ## Comments
+
+- 2026-10-04 lean focused correction/retest: original Customer-day false negative
+  fixed at 1dc0cda, v4 records preserved/readable. Separate handoff expectation
+  failure retained at case 14; source and historical population unchanged.
+  Ticket stays in-progress; no extra runtime rule or whole-population rerun.
 
 - 2026-10-04 fresh low/v4 B1 at 42525e8: 40/53 cases, 39 pass / one raw
   critical bounded_intake fail; B2 not executed. 40 calls, zero retries/paid
