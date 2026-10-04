@@ -42,6 +42,12 @@ from rj_studio_ai.evaluation.openai_live import (
     OpenAIEvalGenerator,
     eval_prompt,
 )
+from rj_studio_ai.evaluation.oracle import (
+    ORACLE_VERSION,
+    GroundingObservation,
+    execution_category,
+    replay_grounding,
+)
 from rj_studio_ai.evaluation.records import (
     PRODUCT_E2E_LATENCY_LIMIT_MS,
     CaseContract,
@@ -54,12 +60,8 @@ from rj_studio_ai.evaluation.records import (
     summarize,
 )
 from rj_studio_ai.evaluation.runner import seed_context_history, synthetic_facts, synthetic_message
-from rj_studio_ai.evaluation.suite import grounding_relevance_matches, load_suite
-from rj_studio_ai.grounding import finalize_reply
-from rj_studio_ai.handoff import HandoffReason, handoff_confirmation
+from rj_studio_ai.evaluation.suite import load_suite
 from rj_studio_ai.livia_persona import (
-    HUMAN_REVIEW_REPLY,
-    REPLY_PHRASES,
     LiviaPersona,
     PersonaValidationError,
 )
@@ -99,12 +101,22 @@ class LiveSample(Sample):
     reply_origin: Literal["model", "system_safe_fallback", "none"]
     decision_trace: DecisionTrace | None = None
     latency_breakdown: LatencyBreakdown | None = None
+    grounding_observation: GroundingObservation | None = None
     execution_kind: Literal[
-        "live_generation", "handoff_suppression", "delivery_barrier", "preflight_failure"
+        "live_generation",
+        "handoff_suppression",
+        "delivery_barrier",
+        "preflight_failure",
+        "deterministic_adversarial",
     ]
 
     @model_validator(mode="after")
     def matching_reply_origin(self):
+        if self.grounding_observation is not None and (
+            self.grounding_observation.case_id != self.case_id
+            or self.grounding_observation.reply_hash != self.reply_hash
+        ):
+            raise ValueError("live_grounding_observation_mismatch")
         if self.reply_origin == "model" and (
             self.status != "completed"
             or not self.attempts
@@ -138,7 +150,7 @@ class LiveSample(Sample):
 
 
 class LiveRecord(RecordModel):
-    schema_version: Literal[3, 4, 5, 6] = 6
+    schema_version: Literal[3, 4, 5, 6, 7] = 7
     created_at: datetime
     revision: str
     phase: Literal["A", "B"]
@@ -162,6 +174,8 @@ class LiveRecord(RecordModel):
         check_privacy(self.model_dump(mode="json", exclude={"request_hashes"}))
         if self.created_at.tzinfo is None:
             raise ValueError("live_missing_timezone")
+        if self.schema_version >= 7 and self.configuration.get("oracle_version") != ORACLE_VERSION:
+            raise ValueError("live_missing_oracle_version")
         observed = [(s.case_id, s.repetition, s.turn) for s in self.samples]
         if len(set(self.plan)) != len(self.plan) or len(set(observed)) != len(observed):
             raise ValueError("live_duplicate_sample")
@@ -184,6 +198,13 @@ class LiveRecord(RecordModel):
                 raise ValueError("live_missing_response_diagnostics")
             if self.schema_version >= 6 and sample.latency_breakdown is None:
                 raise ValueError("live_missing_latency_breakdown")
+            if (
+                self.schema_version >= 7
+                and "trusted_facts" in sample.checks
+                and sample.reply_origin == "model"
+                and sample.grounding_observation is None
+            ):
+                raise ValueError("live_missing_grounding_observation")
             contract = next(c for c in self.contracts if c.case_id == sample.case_id)
             if sample.checks.keys() != contract.checks.keys():
                 raise ValueError("live_missing_check")
@@ -230,35 +251,19 @@ def _score(case, turn, decision, context, body, store, claim, context_checks):
     if case.kind == "grounding":
         if decision is None:
             return {key: False for key in case.contract.checks}
-        finalized = finalize_reply(
-            decision, customer_message=turn["customer_message"], context=context
+        observation = GroundingObservation.capture(
+            case,
+            decision=decision,
+            context=context,
+            body=body,
+            handoff_active=bool(store.list_active_handoffs()),
         )
-        # Surface greetings belong to naturalness, not the critical factual oracle.
-        contains = [text for text in data["expected"]["contains"] if text != "Olá!"]
-        allowed = [fact.statement for fact in context.knowledge] + list(REPLY_PHRASES.values())
-        allowed += [HUMAN_REVIEW_REPLY]
-        allowed += [
-            handoff_confirmation(reason, turn["customer_message"]) for reason in HandoffReason
-        ]
-        residue = body or ""
-        for text in sorted(allowed, key=len, reverse=True):
-            residue = residue.replace(text, "")
-        checks = {
-            "trusted_facts": bool(body)
-            and all(t in finalized.reply_text for t in contains)
-            and not any(t in (body or "") for t in data["expected"]["excludes"])
-            and grounding_relevance_matches(
-                data["expected"], facts=context.knowledge, reply_text=body
-            )
-            and not residue.strip(),
+        return {
+            k: v == "pass"
+            for k, v in replay_grounding(
+                case, observation, body=body, facts=context.knowledge
+            ).items()
         }
-        if data["expected"]["handoff"] is not None:
-            checks["handoff_policy"] = (
-                bool(store.list_active_handoffs()) is data["expected"]["handoff"]
-            )
-        if case.contract.case_id == "grounding-multiple-facts":
-            checks["decision_contract"] = set(decision.intents) == {"price", "hours"}
-        return checks
     if case.kind == "intent":
         return {
             "decision_contract": decision is not None
@@ -331,7 +336,8 @@ def live_summary(samples, contracts, pricing):
         }
         summary["critical_failures"] = {"numerator": 0, "denominator": 0}
     summary["deterministic_guard_turns"] = sum(
-        s.execution_kind in {"delivery_barrier", "handoff_suppression"} for s in samples
+        s.execution_kind in {"delivery_barrier", "handoff_suppression", "deterministic_adversarial"}
+        for s in samples
     )
     summary["critical_not_evaluable"] = sum(
         s.checks[key] == "not_run"
@@ -408,25 +414,37 @@ def live_summary(samples, contracts, pricing):
 
 
 def _live_contracts(suite):
-    return replace(
-        suite,
-        cases=tuple(
+    cases = []
+    for case in suite.cases:
+        data = dict(case.data)
+        if case.kind == "grounding":
+            data["expected"] = data.pop("live_expected", data["expected"])
+            # Only the deterministic runner injects a fixture proposal.
+            data.pop("proposal", None)
+        if case.kind in {"appointment", "handoff"}:
+            data["turns"] = [
+                {
+                    k: v
+                    for k, v in turn.items()
+                    if k not in {"preferences", "adversarial_reply_text"}
+                }
+                for turn in data["turns"]
+            ]
+        checks = dict(case.contract.checks)
+        if case.kind == "grounding" and data["expected"]["handoff"] is None:
+            checks.pop("handoff_policy", None)
+        if "live_expected_intents" in data:
+            checks["decision_contract"] = CheckContract(metric="intent")
+        cases.append(
             replace(
                 case,
-                contract=CaseContract(
-                    **{
-                        **case.contract.model_dump(),
-                        "checks": {
-                            **case.contract.checks,
-                            "decision_contract": CheckContract(metric="intent"),
-                        },
-                    }
-                ),
+                data=data,
+                contract=CaseContract(**{**case.contract.model_dump(), "checks": checks}),
             )
-            if case.contract.case_id == "grounding-multiple-facts"
-            else case
-            for case in suite.cases
-        ),
+        )
+    return replace(
+        suite,
+        cases=tuple(cases),
     )
 
 
@@ -493,13 +511,17 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                     observe_store(store, timing),
                 ):
                     try:
-                        reply = MessageResponder(
-                            store=store,
-                            generator=generator,
-                            context_builder=builder,
-                            safe_failure_reply="Falha sintética",
-                            completion_delivery_state=DeliveryState.PENDING,
-                        ).process_persisted(message, execution_deadline=observation_deadline)
+                        reply = (
+                            None
+                            if execution_category(case) == "DETERMINISTIC_ADVERSARIAL"
+                            else MessageResponder(
+                                store=store,
+                                generator=generator,
+                                context_builder=builder,
+                                safe_failure_reply="Falha sintética",
+                                completion_delivery_state=DeliveryState.PENDING,
+                            ).process_persisted(message, execution_deadline=observation_deadline)
+                        )
                     except RetryableWebhookError:
                         # A late failure may no longer own the SQLite claim. Keep
                         # observed billing evidence without inventing a persisted reply.
@@ -525,8 +547,18 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                 decision = generator.decisions[-1] if generator.decisions else None
                 safe_fallback = bool(body and (decision is None or generator.stop_code is not None))
                 handoffs = store.list_active_handoffs()
+                observation = None
                 if generator.stop_code:
                     checks = {key: "not_run" for key in case.contract.checks}
+                elif case.kind == "grounding" and decision is not None:
+                    observation = GroundingObservation.capture(
+                        case,
+                        decision=decision,
+                        context=context,
+                        body=body,
+                        handoff_active=bool(handoffs),
+                    )
+                    checks = replay_grounding(case, observation, body=body, facts=context.knowledge)
                 else:
                     checks = {
                         key: "pass" if passed else "fail"
@@ -548,6 +580,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         else "suppressed"
                     ),
                     reply_hash=fingerprint(body) if body else None,
+                    grounding_observation=observation,
                     decision_trace=generator.trace_capture.finish(
                         body,
                         safe_fallback=safe_fallback,
@@ -572,7 +605,9 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
                         "preflight_failure"
                         if generator.stop_code
                         else (
-                            "delivery_barrier" if case.kind == "context" else "handoff_suppression"
+                            "deterministic_adversarial"
+                            if case.kind == "context"
+                            else "handoff_suppression"
                         )
                     ),
                 )
@@ -615,6 +650,7 @@ def run_live_phase(suite, selections, phase, *, api_key, output, revision, ledge
             "http_connect_timeout_seconds": LIVE_CONNECT_TIMEOUT_SECONDS,
             "input_count_timeout_seconds": LIVE_INPUT_COUNT_TIMEOUT_SECONDS,
             "model_latency_scope": "responses_http_request",
+            "oracle_version": ORACLE_VERSION,
             "context_max_messages": 12,
             "context_token_budget": 4000,
             "repetitions_by_case": selections,

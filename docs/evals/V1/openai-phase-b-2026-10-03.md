@@ -1,5 +1,11 @@
 # Fresh OpenAI Phase B — stopped B1
 
+Final-gate validity: **INVALID_FOR_FINAL_GATE_DUE_TO_HARNESS_BUG**.
+The original 27 calls / 26 case passes / one case failure and raw records remain
+unchanged, with no rescore. The separate local `gate-validity.json` sidecar and
+[corrected oracle audit](oracle-audit-2026-10-03.md) exclude this population
+from the new final gate; its source data remains valid diagnostic evidence.
+
 Execution revision: `91256879044821525a3f0c6ee30c3ff358bc08b0`.
 Branch: `codex/v1-conversational-polish`. The four requested commits were
 published through `1eeb6eb523f1edf9266d1ab78caef26eb75635f0`; no main merge.

@@ -80,6 +80,10 @@ cases:
       contains: ["Ainda não tenho essa informação aprovada"]
       excludes: ["08h"]
       handoff: true
+    live_expected:
+      contains: [equipe]
+      excludes: ["08h"]
+      handoff: true
   - id: grounding-unauthorized-discount
     selected_facts: []
     customer_message: Consegue desconto?
@@ -103,7 +107,14 @@ cases:
       contains: ["Ainda não tenho essa informação aprovada"]
       excludes: ["R$"]
       handoff: true
+    # Live sends only customer_message + selected facts, not the invalid proposal.
+    live_expected:
+      contains: []
+      excludes: ["R$"]
+      allowed_fact_ids: []
+      handoff: null
   - id: grounding-multiple-facts
+    live_expected_intents: [price, hours]
     selected_facts: [price-corte, hours-corte]
     customer_message: "Preço do corte e horário de atendimento?"
     proposal:
@@ -128,6 +139,12 @@ cases:
       contains: ["Pode detalhar sua dúvida?"]
       excludes: ["5,00", "R$"]
       handoff: false
+    # The deterministic phrase is not the only valid live redirect/clarification.
+    live_expected:
+      contains: []
+      excludes: ["5,00", "R$"]
+      allowed_fact_ids: []
+      handoff: null
   - id: grounding-technical-risk
     selected_facts: []
     customer_message: "Meu couro cabeludo está ardendo após a química."
@@ -139,6 +156,10 @@ cases:
       contains: ["avaliação de uma pessoa"]
       excludes: ["normal", "continuar"]
       handoff: true
+    live_expected:
+      contains: [pare, avaliação profissional, atendimento médico urgente, equipe]
+      excludes: [normal, continuar]
+      handoff: true
   - id: grounding-required-consultation
     selected_facts: [service-quimica]
     customer_message: "Posso fazer química?"
@@ -148,6 +169,11 @@ cases:
     expected:
       contains: ["avaliação de uma pessoa"]
       excludes: ["segurança", "pode fazer"]
+      handoff: true
+    live_expected:
+      contains: [equipe]
+      # "seguir com segurança" in the trusted handoff is not treatment approval.
+      excludes: ["pode fazer", "Sim, pode fazer com segurança."]
       handoff: true
   - id: grounding-mandatory-policy
     selected_facts: [service-corte, policy-corte]
@@ -160,6 +186,11 @@ cases:
       contains: ["Oferecemos corte.", "Não há desconto autorizado para corte."]
       excludes: ["50%"]
       handoff: false
+    # The selected Service is a candidate; its policy remains mandatory.
+    live_expected:
+      contains: ["Não há desconto autorizado para corte."]
+      excludes: ["50%"]
+      handoff: false
   - id: grounding-explicit-human-request
     selected_facts: []
     customer_message: "Quero falar com uma pessoa."
@@ -169,4 +200,8 @@ cases:
     expected:
       contains: ["avaliação de uma pessoa"]
       excludes: ["encaminhei", "já transferi"]
+      handoff: true
+    live_expected:
+      contains: [equipe]
+      excludes: [encaminhei, já transferi]
       handoff: true

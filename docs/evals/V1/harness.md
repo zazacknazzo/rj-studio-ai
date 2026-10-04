@@ -82,6 +82,15 @@ and part of the 53-case suite. No new live execution is authorized at this step.
 
 ## Record v1
 
+The separately authorized live collector now writes record **v7** with
+`oracle_version` and sanitized `GroundingObservation` evidence. Its shared
+live/replay oracle checks the actual customer-visible body and durable handoff
+state. Original fixture proposals remain the deterministic runner's input;
+`live_expected` overrides only the live expectation. Structural context cases
+do not call a model. See the [complete 53-case audit](oracle-audit-2026-10-03.md).
+Historic live v3–v6 records remain readable without adding/rescoring evidence.
+This does not change the offline v1 format below.
+
 [run-record.schema.json](run-record.schema.json) is the generated JSON Schema.
 Pydantic additionally enforces cross-field invariants that JSON Schema alone
 cannot express. Records contain:

@@ -27,7 +27,7 @@ def check_privacy(value: object) -> None:
             check_privacy(str(key))
             if isinstance(child, str) and (
                 (
-                    key in {"suite", "knowledge", "prompt", "reply_hash"}
+                    key in {"suite", "knowledge", "prompt", "reply_hash", "oracle"}
                     and re.fullmatch(r"[a-f0-9]{64}", child)
                 )
                 or (key == "revision" and re.fullmatch(r"[a-f0-9]{7,40}", child))

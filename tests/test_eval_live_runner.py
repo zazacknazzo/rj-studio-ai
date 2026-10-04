@@ -203,7 +203,7 @@ def test_reasoning_count_can_remain_unknown_with_complete_pricing_evidence(tmp_p
     attempt = record["samples"][0]["attempts"][0]
     assert attempt["response_diagnostics"]["reasoning_tokens_present"] is False
     assert attempt["usage"]["reasoning_tokens"] is None
-    assert record["schema_version"] == 6
+    assert record["schema_version"] == 7
     timing = record["samples"][0].pop("latency_breakdown")
     with pytest.raises(ValueError, match="live_missing_latency_breakdown"):
         LiveRecord.model_validate(record)
@@ -274,7 +274,7 @@ def test_paid_incomplete_output_stops_smoke_keeps_failure_and_never_starts_suite
     assert (tmp_path / "run" / "human-review.md").exists()
 
 
-def test_context_live_generation_and_pending_barrier_are_distinct(tmp_path):
+def test_structural_context_checks_are_not_billed_as_model_generation(tmp_path):
     calls = []
 
     def transport(request):
@@ -319,11 +319,11 @@ def test_context_live_generation_and_pending_barrier_are_distinct(tmp_path):
             client=client,
         )
     assert record.status == "completed"
-    assert len(calls) == 2
+    assert len(calls) == 0
     assert [s.execution_kind for s in record.samples] == [
-        "live_generation",
-        "live_generation",
-        "delivery_barrier",
+        "deterministic_adversarial",
+        "deterministic_adversarial",
+        "deterministic_adversarial",
     ]
     assert all(s.checks["context_bounds"] == "pass" for s in record.samples)
     ledger.close()

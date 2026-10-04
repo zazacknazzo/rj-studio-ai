@@ -54,7 +54,15 @@ class EvalSuite:
 _CASE_FIELDS = {
     "intent": {"id", "customer_message", "expected_intents", "forbidden_claims"},
     "persona": {"id", "customer_message", "checks"},
-    "grounding": {"id", "customer_message", "selected_facts", "proposal", "expected"},
+    "grounding": {
+        "id",
+        "customer_message",
+        "selected_facts",
+        "proposal",
+        "expected",
+        "live_expected",
+        "live_expected_intents",
+    },
     "appointment": {"id", "turns"},
     "handoff": {"id", "turns"},
     "context": {"id", "scenario", "expected"},
@@ -142,6 +150,14 @@ def _validate_case(kind, data):
         ):
             raise ValueError("eval_unknown_or_missing_expectation_field")
     if kind == "grounding":
+        if "live_expected_intents" in data:
+            fixture_decision(intents=data["live_expected_intents"])
+        if "live_expected" in data:
+            _validate_case(
+                kind,
+                {k: v for k, v in data.items() if k != "live_expected"}
+                | {"expected": data["live_expected"]},
+            )
         expected = data["expected"]
         if expected["handoff"] is not None and type(expected["handoff"]) is not bool:
             raise ValueError("eval_invalid_handoff_expectation")

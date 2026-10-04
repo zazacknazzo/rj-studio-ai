@@ -60,6 +60,34 @@ def test_nested_customer_metadata_is_rejected(tmp_path, name):
         load_suite(tmp_path / "suite")
 
 
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"live_expected": {"contains": [], "excludes": [], "handoff": False, "raw": "no"}},
+        {"live_expected": {"contains": [], "excludes": [], "handoff": "false"}},
+        {
+            "live_expected": {
+                "contains": [],
+                "excludes": [],
+                "handoff": None,
+                "allowed_fact_ids": ["not-selected"],
+            }
+        },
+        {"live_expected_intents": ["invented_intent"]},
+    ],
+)
+def test_live_expectations_use_the_same_strict_fixture_contract(tmp_path, override):
+    import shutil
+
+    shutil.copytree(SUITE, tmp_path / "suite")
+    path = tmp_path / "suite/grounding-cases.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["cases"][0].update(override)
+    path.write_text(yaml.safe_dump(data))
+    with pytest.raises(ValueError):
+        load_suite(tmp_path / "suite")
+
+
 @pytest.mark.parametrize("field", ["reply_parts", "critical_claims", "appointment_preferences"])
 def test_nested_proposal_customer_metadata_is_rejected_at_suite_load(tmp_path, field):
     import shutil

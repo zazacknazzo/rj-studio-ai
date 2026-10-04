@@ -8,6 +8,13 @@
 
 ## Product milestone and Phase B authorization (2026-10-03)
 
+Current product-owner amendment: separate actual live stimuli from explicitly
+injected adversarial proposals, audit all 53 cases offline, then freeze oracle
+v2 before fresh B1 (all 53) and conditional B2 (only after all B1 checks pass).
+Old 27-call B1 is INVALID_FOR_FINAL_GATE_DUE_TO_HARNESS_BUG; no rescore or raw
+evidence rewrite. See `docs/evals/V1/oracle-audit-2026-10-03.md` for the exact
+live/deterministic boundaries and remaining independent-review gate.
+
 **V1 Conversational Polish: COMPLETE / APPROVED**. Evidence: fresh smoke 10/10,
 critical 0/17, grounding 9/9, handoff 8/8, appointment safety 2/2 and product-owner
 qualitative human approval. Cancellation recovery, factual relevance and
