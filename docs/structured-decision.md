@@ -7,8 +7,12 @@ claims, or Human Handoff policy.
 The contract carries one or more approved `Intent` values, proposed `reply_text`,
 typed `reply_parts`, categorical `uncertainty` (`low`, `medium`, or `high`), selected
 `knowledge_refs`, structured `critical_claims`, and a proposed `handoff` plus
-reason. The reply has an 800-character hard structural limit and the Anthropic
-request has a 200-token output limit.
+reason. The reply has an 800-character hard structural limit. Generation has a
+shared 1024-token ceiling after the approved Agentic Surface Phase 1.2 amendment;
+Anthropic honors explicitly configured lower limits and keeps thinking disabled.
+Live eval uses this ceiling, including reasoning tokens, with unchanged effort
+and observation deadline. See the [Phase 1 report](architecture/v1-agentic-surface-phase-1.md)
+for advisory commercial planning and generation diagnostics.
 
 Ticket 11 adds nullable `appointment_preferences` with `desired_service`,
 `preferred_time` and optional `professional_preference`. Conversational Polish

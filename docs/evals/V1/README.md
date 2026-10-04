@@ -1,10 +1,11 @@
 # V1 eval suite
 
-Current product round: [Agentic Surface Phase 1.1](../../specs/V1-agentic-surface-phase-1.1.md).
+Current product round: [Agentic Surface Phase 1.2](../../specs/V1-agentic-surface-phase-1.2.md).
 Human conversational/product review: **NOT YET APPROVED**.
-Latest evidence: [Phase 1.1 retest and partial smoke](agentic-phase11-results-2026-10-04.md).
-Three-case retest passed; new ten-case smoke stopped at case 5 on incomplete generation.
-Review only the [four complete observed replies](agentic-phase11-human-review-2026-10-04.md).
+Latest evidence: [Phase 1.2 retest and fresh smoke](agentic-phase12-results-2026-10-04.md).
+Four-case retest and fresh ten-case smoke passed functionally; no incomplete/retry.
+Official 8s latency gate FAILED. Review the [ten complete observed replies](agentic-phase12-human-review-2026-10-04.md).
+Historical [Phase 1.1 partial smoke](agentic-phase11-results-2026-10-04.md) remains blocked and unchanged; no rescore.
 Earlier product milestone: **V1 Conversational Polish: COMPLETE / APPROVED**.
 Ticket 12 remains in-progress. **Phase B PAUSED by the product owner on
 2026-10-04**, before the case 32 oracle correction. The

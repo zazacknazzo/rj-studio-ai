@@ -215,3 +215,18 @@ and official 8s E2E gate remain unchanged. A bigger output ceiling may increase
 cost/latency and does not guarantee completion. Hitting 1024 is recorded as a
 headroom concern; another incomplete blocks the run without automatic escalation.
 Finite prose/behavior recognition and the separate human approval gate remain.
+
+### Phase 1.2 validation outcome
+
+971 offline tests (21 added) and all checks passed; four independent reviews
+approved. The [new evidence](../evals/V1/agentic-phase12-results-2026-10-04.md)
+records 4/4 targeted and 10/10 smoke complete, valid model replies with no
+incomplete/fallback/retry, 0/19 smoke critical failures. Price continued with
+a free Customer-goal/style question in both runs; no fixed CTA was introduced.
+Output max was 438 in retest and 462 in smoke, below the new ceiling.
+
+Observed p95 E2E 12.523s (retest) and 10.812s (smoke) fail 8s. No diagnostic metric
+approves that gate. Human product review and real-provider E2E remain pending;
+Phase B paused, Ticket 12 in-progress, ADR 0009 proposed. The original incomplete
+run is preserved without inferred reason or rescore. Review the ten-response
+qualitative packet before product approval; no automatic ratings are assigned.
