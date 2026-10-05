@@ -43,7 +43,11 @@ class Settings(BaseSettings):
     outbound_retry_backoff_maximum_seconds: float = Field(default=30.0, gt=0)
     processing_poll_interval_seconds: float = Field(default=0.25, gt=0)
     processing_concurrency: int = Field(default=2, ge=1, le=4)
-    llm_provider: Literal["fixed", "anthropic"] = "fixed"
+    llm_provider: Literal["fixed", "anthropic", "openai"] = "fixed"
+    openai_api_key: str = Field(default="", repr=False, exclude=True)
+    openai_model: Literal["gpt-6.1-sol"] = "gpt-6.1-sol"
+    openai_reasoning_effort: Literal["low", "medium"] = "low"
+    openai_max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=1, le=MAX_OUTPUT_TOKENS)
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=1, le=MAX_OUTPUT_TOKENS)

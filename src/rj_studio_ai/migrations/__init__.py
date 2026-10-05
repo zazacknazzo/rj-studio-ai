@@ -144,6 +144,11 @@ class MigrationManager:
                 "updated_at",
             },
             "generation_metrics": {
+                "cached_input_tokens",
+                "cache_write_tokens",
+                "reasoning_tokens",
+                "response_status",
+                "incomplete_reason",
                 "id",
                 "inbound_message_id",
                 "attempt_number",

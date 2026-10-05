@@ -7,7 +7,9 @@ WhatsApp Cloud API is the next E2E target.
 
 ## Implemented runtime
 
-Ticket 12's `evaluation` package is isolated from the production provider factory.
+Ticket 12's `evaluation` orchestration is isolated from the production provider factory.
+The Responses wire contract is shared with the OpenAI runtime adapter; see
+[OpenAI runtime promotion](architecture/v1-openai-runtime-promotion.md).
 Its OpenAI-only live collector uses synthetic SQLite, existing policy seams and
 a fake outbound sender. See [partial eval execution](evals/V1/openai-partial-2026-10-02.md)
 for billing/evidence boundaries; it does not configure production or live messaging.
@@ -25,7 +27,7 @@ Selected provider webhook
 SQLite → lifespan Processing Executor → ordered generation claim
   → start one 10-second processing budget
   → bounded Conversation Context + approved Salon Knowledge
-  → deterministic or Anthropic generation outside SQLite transaction
+  → deterministic, Anthropic or OpenAI generation outside SQLite transaction
   → validated LLMDecision and privacy-safe metrics
   → trusted reply parts rendered from selected approved facts and institutional phrases
   → one transaction persists AIReply, pending OutboundDelivery, completed processing,

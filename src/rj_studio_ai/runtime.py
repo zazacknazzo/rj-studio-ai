@@ -3,11 +3,19 @@
 from rj_studio_ai.config import Settings
 from rj_studio_ai.generation import FixedReplyGenerator, ReplyGenerator
 from rj_studio_ai.providers.anthropic import AnthropicReplyGenerator, LLMPriceTable
+from rj_studio_ai.providers.openai import OpenAIReplyGenerator
 
 
 def generator_from_settings(settings: Settings) -> ReplyGenerator:
     if settings.llm_provider == "fixed":
         return FixedReplyGenerator(settings.automatic_reply)
+    if settings.llm_provider == "openai":
+        return OpenAIReplyGenerator(
+            api_key=settings.openai_api_key,
+            model=settings.openai_model,
+            reasoning_effort=settings.openai_reasoning_effort,
+            max_output_tokens=settings.openai_max_output_tokens,
+        )
     pricing = None
     if (
         settings.anthropic_input_microusd_per_million is not None
