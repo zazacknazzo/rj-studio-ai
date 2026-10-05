@@ -20,6 +20,11 @@ class GenerationMetric:
     estimated_cost_microusd: int | None
     outcome: str
     error_code: str | None
+    cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    response_status: str | None = None
+    incomplete_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

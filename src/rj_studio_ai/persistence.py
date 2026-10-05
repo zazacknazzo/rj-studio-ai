@@ -108,6 +108,11 @@ class GenerationMetricRecord:
     estimated_cost_microusd: int | None
     outcome: str
     error_code: str | None
+    cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    response_status: str | None = None
+    incomplete_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1697,8 +1702,10 @@ class SqliteConversationStore:
                     INSERT INTO generation_metrics (
                         inbound_message_id, attempt_number, provider, model, configuration,
                         latency_ms, input_tokens, output_tokens, total_tokens,
-                        estimated_cost_microusd, outcome, error_code, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        estimated_cost_microusd, outcome, error_code, created_at,
+                        cached_input_tokens, cache_write_tokens, reasoning_tokens,
+                        response_status, incomplete_reason
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         inbound_message_id,
@@ -1714,6 +1721,11 @@ class SqliteConversationStore:
                         metric.outcome,
                         metric.error_code,
                         self._utc_time(now).isoformat(),
+                        metric.cached_input_tokens,
+                        metric.cache_write_tokens,
+                        metric.reasoning_tokens,
+                        metric.response_status,
+                        metric.incomplete_reason,
                     ),
                 )
         except sqlite3.Error as error:
@@ -1727,7 +1739,8 @@ class SqliteConversationStore:
                     SELECT
                         attempt_number, provider, model, configuration, latency_ms,
                         input_tokens, output_tokens, total_tokens, estimated_cost_microusd,
-                        outcome, error_code
+                        outcome, error_code, cached_input_tokens, cache_write_tokens,
+                        reasoning_tokens, response_status, incomplete_reason
                     FROM generation_metrics
                     WHERE inbound_message_id = ?
                     ORDER BY attempt_number
@@ -1749,6 +1762,11 @@ class SqliteConversationStore:
                 estimated_cost_microusd=None if row[8] is None else int(row[8]),
                 outcome=str(row[9]),
                 error_code=None if row[10] is None else str(row[10]),
+                cached_input_tokens=None if row[11] is None else int(row[11]),
+                cache_write_tokens=None if row[12] is None else int(row[12]),
+                reasoning_tokens=None if row[13] is None else int(row[13]),
+                response_status=None if row[14] is None else str(row[14]),
+                incomplete_reason=None if row[15] is None else str(row[15]),
             )
             for row in rows
         ]

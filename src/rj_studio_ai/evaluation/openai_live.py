@@ -1,15 +1,10 @@
 """Eval-only Responses adapter. Never constructed by the production provider factory."""
 
-import json
 from time import monotonic
 
 import httpx
 from pydantic import StrictBool, model_validator
 
-from rj_studio_ai.appointment_intake import (
-    APPOINTMENT_EXTRACTION_INSTRUCTIONS,
-    appointment_constraints,
-)
 from rj_studio_ai.evaluation.decision_trace import DecisionTraceCapture
 from rj_studio_ai.evaluation.latency import LatencyRecorder
 from rj_studio_ai.evaluation.live_billing import (
@@ -23,12 +18,17 @@ from rj_studio_ai.evaluation.live_billing import (
 from rj_studio_ai.evaluation.records import Attempt, check_privacy, fingerprint
 from rj_studio_ai.evaluation.response_diagnostics import ResponseDiagnostics
 from rj_studio_ai.generation import GeneratedReply, GenerationFailure, GenerationMetric
-from rj_studio_ai.livia_persona import LiviaPersona, reply_plan_instructions
 from rj_studio_ai.llm_decision import (
     StructuredDecisionValidationError,
-    decision_json_schema,
     validate_llm_decision,
 )
+from rj_studio_ai.providers.openai_contract import (
+    decision_instructions,
+    response_decision_proposal,
+    response_request,
+)
+
+eval_prompt = decision_instructions  # Public compatibility for frozen eval fingerprints.
 
 LIVE_CONNECT_TIMEOUT_SECONDS = 5.0
 LIVE_INPUT_COUNT_TIMEOUT_SECONDS = 5.0
@@ -50,27 +50,6 @@ class LiveAttempt(Attempt):
         if self.usage is None and (self.input_tokens is not None or self.output_tokens is not None):
             raise ValueError("attempt_usage_missing")
         return self
-
-
-def eval_prompt(context):
-    """Same institutional instructions and context as the existing runtime adapter."""
-    prompt = (
-        "Responda em português brasileiro, de forma breve. "
-        "Não invente fatos do salão; peça esclarecimento quando faltar contexto. "
-        "Produza somente a decisão estruturada, sem raciocínio textual."
-        f"\n\n{LiviaPersona().instructions}\n\n{reply_plan_instructions()}"
-        f"\n\n{APPOINTMENT_EXTRACTION_INSTRUCTIONS}"
-    )
-    prompt += "\n\n" + appointment_constraints(context.appointment_intake)
-    if context.history_may_be_incomplete:
-        prompt += (
-            " O histórico anterior pode estar incompleto; não deduza o que falta "
-            "e peça esclarecimento quando isso for relevante."
-        )
-    if context.knowledge:
-        knowledge = "\n\n".join(fact.context_text() for fact in context.knowledge)
-        prompt += f"\n\nApproved Salon Knowledge:\n{knowledge}"
-    return prompt
 
 
 class OpenAIEvalGenerator:
@@ -107,34 +86,13 @@ class OpenAIEvalGenerator:
         started = monotonic()
         with self.timing.measure("eval_bookkeeping_ms"):
             self.trace_capture.propose(None, context)
-        schema = decision_json_schema()
-        content = message.body
-        if (
-            context.appointment_intake is not None
-            and context.appointment_intake.state == "collecting"
-        ):
-            content = context.appointment_intake.context_text() + "\n\n" + content
-        payload = {
-            "model": self.ledger.pricing.model,
-            "instructions": eval_prompt(context),
-            "input": [
-                {"role": "user" if turn.role == "customer" else "assistant", "content": turn.body}
-                for turn in context.history
-            ]
-            + [{"role": "user", "content": content}],
-            "reasoning": {"effort": self.reasoning_effort},
-            "text": {
-                "format": {
-                    "type": "json_schema",
-                    "name": "rj_decision",
-                    "strict": True,
-                    "schema": schema,
-                }
-            },
-            "store": False,
-            "service_tier": "default",
-            "max_output_tokens": LIVE_MAX_OUTPUT_TOKENS,
-        }
+        payload = response_request(
+            message,
+            context,
+            model=self.ledger.pricing.model,
+            reasoning_effort=self.reasoning_effort,
+            max_output_tokens=LIVE_MAX_OUTPUT_TOKENS,
+        )
         check_privacy(payload)
         headers = {"Authorization": "Bearer " + self._api_key}
         # Counting does not generate an answer. Include exactly the same input/schema.
@@ -228,16 +186,7 @@ class OpenAIEvalGenerator:
                 pricing_verified = True
                 if data.get("status") != "completed":
                     raise ValueError("live_incomplete_output")
-                texts = [
-                    part["text"]
-                    for item in data["output"]
-                    if item["type"] == "message"
-                    for part in item["content"]
-                    if part["type"] == "output_text"
-                ]
-                if len(texts) != 1:
-                    raise ValueError("live_missing_decision")
-                raw_decision = json.loads(texts[0])
+                raw_decision = response_decision_proposal(data)
                 with self.timing.measure("eval_bookkeeping_ms"):
                     self.trace_capture.propose(raw_decision, context)
                 check_privacy(raw_decision)

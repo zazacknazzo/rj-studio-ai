@@ -49,7 +49,7 @@ def test_upgrade_preserves_all_baseline_rows_and_rolls_back_partial_rebuild(tmp_
     with sqlite3.connect(path) as connection:
         assert {t: connection.execute(f"SELECT * FROM {t}").fetchall() for t in tables} == before
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
-        expected = "0011_conversational_intake" if interrupt else "0012_agentic_intake"
+        expected = "0011_conversational_intake" if interrupt else "0013_openai_generation_metadata"
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

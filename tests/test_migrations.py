@@ -152,7 +152,7 @@ def test_fresh_database_is_migrated_and_upgrade_is_repeatable(tmp_path: Path) ->
         "delivery_attempts",
         "pending_delivery_statuses",
     }.issubset(tables)
-    assert versions == [("0012_agentic_intake",)]
+    assert versions == [("0013_openai_generation_metadata",)]
     with sqlite3.connect(database_path) as connection:
         indexes = {row[1] for row in connection.execute("PRAGMA index_list(messages)")}
     assert "ix_messages_conversation_created" in indexes
@@ -226,7 +226,7 @@ def test_twilio_status_inbox_migration_preserves_existing_outbox(tmp_path: Path)
         "received_at",
         "updated_at",
     }.issubset(columns)
-    assert version == "0012_agentic_intake"
+    assert version == "0013_openai_generation_metadata"
 
 
 def test_migration_connection_really_enforces_foreign_keys(
