@@ -165,6 +165,13 @@ smoke must use the guarded composition on a fresh isolated DB; it must not expos
 normal production startup as a smoke command. Local consent/recipient are missing
 and were not added or activated.
 
+Before wrapping, the future driver must independently require the underlying
+Twilio/Meta sender's `is_configured()` check and all credential-trust/channel gates.
+The application's concrete-type readiness checks do not inspect the adapter hidden
+inside this wrapper; a green `/ready` in guarded composition alone is insufficient
+evidence of outbound configuration. The adapter itself still rejects missing
+configuration before submission. No global readiness semantics changed here.
+
 18 guard tests cover default-off, exact flag, missing/invalid recipient, no
 fallback, both provider address forms, one submission, ambiguous outcome,
 concurrency and privacy-safe representation/errors. The two full-pipeline guard
@@ -186,7 +193,8 @@ only after documented rotation, permissions and Sandbox setup pass.
    app lifespan/executor startup. These are smoke controls, not currently Settings
    fields; adding them to `.env` alone does not fence the existing runtime. The
    smoke driver must explicitly provide these controls to LiveSmokeOutboundSender.
-3. Construct the tested LiveSmokeOutboundSender before starting any executor,
+3. Validate the underlying sender configuration and trust gates before wrapping.
+   Construct the tested LiveSmokeOutboundSender before starting any executor,
    enforcing that recipient and one submission maximum. A fresh isolated
    persistent SQLite volume must contain no customer
    records or pending production work. Never point the smoke at the normal DB.
@@ -227,12 +235,20 @@ pip check and git diff check passed. Added coverage: 14 full-pipeline cases and
 18 smoke-guard cases, all synthetic and network-controlled. No live readiness
 claim follows from these results.
 
-Review categories: messaging architecture (unchanged production flow; corrected
-outbound-only filtering statement); webhook/security (real signatures, safe ACK,
-monotonic status and early evidence); config/secrets (no values exposed; live trust
-blocked; legacy Settings dump concern disclosed); persistence/idempotency (one
-reply/delivery, unknown no-resend and restart); Standards/Spec (independent axes).
-The final independent reviews are recorded after the guarded implementation.
+Final reviews of `205b5b0...2de0217`:
+
+| Review | Result |
+| --- | --- |
+| Messaging architecture | Production flow unchanged; outbound-only filtering wording corrected; isolated DB mandatory |
+| Webhook/security | Valid signatures, safe ACK, monotonic statuses and early evidence covered; no safety relaxation |
+| Config/secrets | No values exposed; trust gates blocked; legacy Settings dump risk disclosed; underlying sender must be validated before smoke wrapping |
+| Persistence/idempotency | One logical reply/delivery preserved; unknown never automatically resent; restart/replay covered |
+| Independent Standards axis | No material blockers or hard violations |
+| Independent Spec axis | No material blockers; earlier audit wording finding resolved |
+
+The wrapper/readiness caveat is a required future-driver composition step, not a
+claim that provider credentials have been validated. No current live driver or
+live readiness claim exists.
 
 Remaining production blockers: trusted messaging credentials, Meta App Secret,
 verified account/channel/recipient eligibility and subscriptions, public TLS,
