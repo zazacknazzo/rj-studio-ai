@@ -30,7 +30,9 @@ SQLite polling → Outbound Executor → provider REST adapter → ProviderAccep
 Signed status webhook → durable evidence → monotonic delivery state
 ```
 
-`main.py` selects one provider and filters executor acquisitions by that provider.
+`main.py` selects one provider and filters outbound acquisitions by that provider.
+Processing polls pending generations across providers; it is not provider-filtered.
+Therefore a smoke must use an isolated database, never an existing backlog.
 Twilio proactive ACK is empty TwiML; Meta ACK is empty plain text. Neither ACK
 is assistant speech. Legacy TwiML is a separate rollback mode, with no proactive
 executor and a database safety check; do not switch modes with unresolved work.
@@ -129,6 +131,9 @@ service-window refusal, provider errors/timeouts, bounded retries, database
 constraints and atomic rollback, concurrent claims, provider filtering, handoff
 and intake fences, generation deadlines and migration/restart preservation.
 No prompt, oracle, generation configuration or production behavior was changed.
+First-instruction checks: **1056 tests passed**, Ruff check and format check,
+compileall, pip check and diff check passed. Standards review found no material
+issues; Spec review corrected the audit wording about outbound-only filtering.
 
 ## Next live smoke procedure — prepare only
 
