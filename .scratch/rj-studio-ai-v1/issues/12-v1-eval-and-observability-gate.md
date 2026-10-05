@@ -6,6 +6,18 @@
 
 **Status:** in-progress
 
+## Closing intelligence decision — 2026-10-05
+
+**V1 INTELLIGENCE VALIDATED ENOUGH.** Minimal exhaustion oracle v6 correction
+only; no runtime/prompt/surface change. Counter-based A/B/C live gate passed,
+critical 0/18,6 calls, zero retries/paid failures, US$0.0418503. 12 new tests;
+full suite 1014 pass and static checks passed. Intelligence eval rounds closed
+by product owner: no further B1/B2 or 17-case rerun; historical failures unchanged.
+Next mandatory separate scope: PROMOTE OPENAI LOW TO REAL RUNTIME, then integration
+smoke. Official observed 8s latency fails on this six-call population (p95 9.207s);
+no threshold waiver. Ticket stays in-progress; production/operational gates remain
+open. See docs/evals/V1/intake-exhaustion-oracle-2026-10-05.md.
+
 ## Latest lean follow-up — 2026-10-04
 
 Customer-state bounded_intake correction only, oracle v5; runtime/prompt/fixtures
@@ -148,6 +160,10 @@ V1 eval case index and run records, eval runner/reporting, metric aggregation, m
 - Automatic model switching, production alerting platform, external provider failover, real Customer conversations in fixtures, or authorization for autonomous production operation.
 
 ## Comments
+
+- 2026-10-05 closing gate at 281ed62: A count 1/no handoff, B seeded 3/terminal
+  appointment_intake_limit, C seeded 2/stays active. All 3 scenarios pass; new
+  intelligence rounds closed. No historical rescore or production promotion.
 
 - 2026-10-04 lean focused correction/retest: original Customer-day false negative
   fixed at 1dc0cda, v4 records preserved/readable. Separate handoff expectation
