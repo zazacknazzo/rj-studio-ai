@@ -6,6 +6,16 @@
 
 **Status:** in-progress
 
+## Separate runtime integration gate — 2026-10-05
+
+OpenAI Low now has a real runtime adapter, preserving frozen intelligence and
+production deadlines. Local synthetic application integration passed all eight
+cases and restart checks, using exclusively fake outbound acceptance; 8 paid
+OpenAI calls, no retry/failure, US$0.0291295 under US$0.25. No intelligence eval
+round was reopened. Runtime is validated locally; real messaging/Meta integration
+remains pending. **Status stays in-progress**, not production-ready. Load only
+`docs/architecture/v1-openai-runtime-promotion.md` for this separate gate.
+
 ## Closing intelligence decision — 2026-10-05
 
 **V1 INTELLIGENCE VALIDATED ENOUGH.** Minimal exhaustion oracle v6 correction
