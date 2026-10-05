@@ -113,7 +113,7 @@ This is a remaining production hardening concern, not evidence of a leak here.
 
 ## Offline evidence
 
-`tests/test_messaging_integration_preflight.py` adds 12 network-blocked cases:
+`tests/test_messaging_integration_preflight.py` adds 14 network-blocked cases:
 both real ingress adapters with valid/invalid signatures, duplicate inbound,
 real Processing/Outbound Executors, controlled OpenAI HTTP response and usage,
 synthetic approved Knowledge, trusted price rendering, actual sender adapters
@@ -125,6 +125,9 @@ exercise ambiguous transport failure → unknown, restart and no resend. Two
 exercise early signed status evidence, restart before correlation and subsequent
 acceptance reconciliation. The proposed untrusted price cannot change the trusted
 fixture price. Fixtures are exclusively synthetic, not Salon Knowledge changes.
+The two additional cases verify the smoke guard is checked before lifespan and
+then injected through the complete controlled pipeline. Unrecognized signed
+statuses leave accepted evidence unchanged and cannot cause another submission.
 
 Existing tests cover challenge success/failure, invalid payloads, ignored statuses,
 service-window refusal, provider errors/timeouts, bounded retries, database
@@ -134,6 +137,38 @@ No prompt, oracle, generation configuration or production behavior was changed.
 First-instruction checks: **1056 tests passed**, Ruff check and format check,
 compileall, pip check and diff check passed. Standards review found no material
 issues; Spec review corrected the audit wording about outbound-only filtering.
+
+## Executable live smoke guard — second instruction
+
+`live_messaging_smoke.LiveSmokeOutboundSender` is a smoke-only wrapper at the
+existing OutboundMessageSender seam. Construction fails closed unless the supplied
+environment has exactly `ALLOW_LIVE_MESSAGING_SMOKE=1` and a nonempty explicit
+`TEST_WHATSAPP_RECIPIENT` in canonical E.164 form. Default environment is the process
+environment, not an implicit `.env` load. Never populate it from SQLite, sender
+settings or the last Customer. Twilio prefixes the explicit recipient with
+`whatsapp:`; Meta uses its digits. A canonical outbound to any other recipient
+is rejected before delegation. Errors are safe fixed codes, with no values.
+
+The wrapper atomically reserves at most one external submission per wrapper
+instance, before calling the provider, including concurrent calls. No outcome
+releases the reservation; even a proven retryable failure stops this one-message
+smoke. It does not create a new delivery state machine or bypass core acceptance/
+unknown semantics. Database idempotency remains the durable restart protection;
+the wrapper's one-submission ceiling is process-local. Never recreate the wrapper
+to bypass the ceiling or attempt recovery of unknown work.
+
+Create this wrapper **before** app lifespan, inject it as `outbound_sender`, and
+keep the underlying adapter inaccessible to smoke submission code. The normal
+runtime factory is deliberately unchanged: the flags alone do not protect a
+default Uvicorn launch. No live driver is started in this round. Future live
+smoke must use the guarded composition on a fresh isolated DB; it must not expose
+normal production startup as a smoke command. Local consent/recipient are missing
+and were not added or activated.
+
+18 guard tests cover default-off, exact flag, missing/invalid recipient, no
+fallback, both provider address forms, one submission, ambiguous outcome,
+concurrency and privacy-safe representation/errors. The two full-pipeline guard
+cases above additionally prove composition through actual lifespan/executors.
 
 ## Next live smoke procedure — prepare only
 
@@ -149,9 +184,11 @@ only after documented rotation, permissions and Sandbox setup pass.
    `ALLOW_LIVE_MESSAGING_SMOKE=1` and `TEST_WHATSAPP_RECIPIENT` supplied privately
    as the operator's test E.164 number. Missing flag/recipient must stop before
    app lifespan/executor startup. These are smoke controls, not currently Settings
-   fields; adding them to `.env` alone does not fence the existing runtime.
-3. Use a smoke-only sender wrapper enforcing that recipient and one submission
-   maximum. A fresh isolated persistent SQLite volume must contain no customer
+   fields; adding them to `.env` alone does not fence the existing runtime. The
+   smoke driver must explicitly provide these controls to LiveSmokeOutboundSender.
+3. Construct the tested LiveSmokeOutboundSender before starting any executor,
+   enforcing that recipient and one submission maximum. A fresh isolated
+   persistent SQLite volume must contain no customer
    records or pending production work. Never point the smoke at the normal DB.
    Inject the guarded sender before starting the app; do not run a default
    unguarded Uvicorn composition for smoke. No fallback to salon/last customer.
@@ -181,3 +218,24 @@ only after documented rotation, permissions and Sandbox setup pass.
 No live smoke is authorized or executed by this preflight. Real public TLS,
 credentials, channel delivery and WhatsApp latency remain unvalidated. Intelligence
 is frozen and Ticket 12 remains in-progress. WhatsApp production-ready: **NO**.
+
+## Consolidated validation
+
+Offline preflight: **PASS**. Final suite: **1076 passed**, with one pre-existing
+Starlette/AnyIO deprecation warning. Ruff check, Ruff format check, compileall,
+pip check and git diff check passed. Added coverage: 14 full-pipeline cases and
+18 smoke-guard cases, all synthetic and network-controlled. No live readiness
+claim follows from these results.
+
+Review categories: messaging architecture (unchanged production flow; corrected
+outbound-only filtering statement); webhook/security (real signatures, safe ACK,
+monotonic status and early evidence); config/secrets (no values exposed; live trust
+blocked; legacy Settings dump concern disclosed); persistence/idempotency (one
+reply/delivery, unknown no-resend and restart); Standards/Spec (independent axes).
+The final independent reviews are recorded after the guarded implementation.
+
+Remaining production blockers: trusted messaging credentials, Meta App Secret,
+verified account/channel/recipient eligibility and subscriptions, public TLS,
+explicit guarded smoke composition, one-message real delivery evidence and
+production-safe configuration/log handling. Single-process/persistent-volume
+deployment and operational reconciliation remain required by ADR 0006.

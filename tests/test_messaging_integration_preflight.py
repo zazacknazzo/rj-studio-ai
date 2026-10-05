@@ -16,6 +16,7 @@ from twilio.request_validator import RequestValidator
 from rj_studio_ai.config import Settings
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.evaluation.suite import fixture_decision
+from rj_studio_ai.live_messaging_smoke import LiveSmokeBlocked, LiveSmokeOutboundSender
 from rj_studio_ai.main import create_app
 from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.meta import MetaOutboundMessageSender
@@ -249,6 +250,8 @@ def test_signed_webhook_openai_trusted_outbox_status_and_restart(tmp_path, provi
         assert accepted.provider_message_id == (
             "SM" + "b" * 32 if provider == "twilio" else "wamid.synthetic-outbound"
         )
+        assert post_signed(client, provider, status="future-unrecognized").status_code == 200
+        assert store.get_delivery_for_inbound(accepted.inbound_message_id) == accepted
         metric = store.get_generation_metrics(inbound_message_id=accepted.inbound_message_id)[0]
         assert metric.response_status == "completed"
         assert metric.reasoning_tokens == 5
@@ -273,6 +276,38 @@ def test_signed_webhook_openai_trusted_outbox_status_and_restart(tmp_path, provi
             is None
         )
         assert reopened.get_delivery_for_inbound(accepted.inbound_message_id) == terminal
+    assert len(model_calls) == len(outbound_calls) == 1
+    body = outbound_calls[0]["body"] if provider == "twilio" else outbound_calls[0]["text"]["body"]
+    assert body == accepted.body
+
+
+@pytest.mark.parametrize("provider", ["twilio", "meta"])
+def test_smoke_guard_is_injected_before_full_pipeline_lifespan(tmp_path, provider):
+    settings, store, generator, sender, model_calls, outbound_calls = controlled_pipeline(
+        tmp_path, provider
+    )
+    with pytest.raises(LiveSmokeBlocked, match="smoke_live_not_authorized"):
+        LiveSmokeOutboundSender(provider=provider, sender=sender, environment={})
+    assert model_calls == outbound_calls == []
+    guard = LiveSmokeOutboundSender(
+        provider=provider,
+        sender=sender,
+        environment={
+            "ALLOW_LIVE_MESSAGING_SMOKE": "1",
+            "TEST_WHATSAPP_RECIPIENT": "+5511000000001",
+        },
+    )
+    with TestClient(
+        create_app(settings, store=store, generator=generator, outbound_sender=guard)
+    ) as client:
+        assert client.get("/ready").status_code == 200
+        assert post_signed(client, provider).status_code == 200
+        accepted = await_delivery(store, provider, DeliveryState.ACCEPTED)
+        assert post_signed(client, provider, status="delivered").status_code == 200
+        assert (
+            store.get_delivery_for_inbound(accepted.inbound_message_id).state
+            == DeliveryState.DELIVERED
+        )
     assert len(model_calls) == len(outbound_calls) == 1
     body = outbound_calls[0]["body"] if provider == "twilio" else outbound_calls[0]["text"]["body"]
     assert body == accepted.body
