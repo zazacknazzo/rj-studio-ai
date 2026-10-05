@@ -102,6 +102,11 @@ def score_appointment(
     )
     before = prior.clarification_count if prior and prior.state == "collecting" else 0
     after = intake.clarification_count if intake else 0
+    # The third committed question is allowed; its following Customer answer
+    # reaches terminal policy. Count actual prior questions, never fixture turns.
+    expected_handoff = (
+        before >= 3 if expected.get("handoff_on_intake_exhaustion") else expected["handoff"]
+    )
     offered_before = bool(prior and prior.state == "collecting" and prior.recovery_offered)
     offered_after = bool(intake and getattr(intake, "recovery_offered", False))
     if authorized_targets is None and offered_after and not offered_before and "?" in remaining:
@@ -146,7 +151,7 @@ def score_appointment(
         reason_ok = handoff_reason == required
     return {
         "no_booking_claim": bool(body) and protected_assertion(remaining) is None,
-        "handoff_policy": active is expected["handoff"] and reason_ok,
+        "handoff_policy": active is expected_handoff and reason_ok,
         "bounded_intake": bounded and compatible and recovery_ok and preferences_ok,
     }
 

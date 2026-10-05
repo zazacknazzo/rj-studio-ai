@@ -191,10 +191,21 @@ def _validate_case(kind, data):
             expected_fields = (
                 {"active", "suppressed"}
                 if kind == "handoff"
-                else {"handoff", "clarification_count", "contains", "intake_absent"}
+                else {
+                    "handoff",
+                    "clarification_count",
+                    "contains",
+                    "intake_absent",
+                    "handoff_on_intake_exhaustion",
+                }
             )
             if turn["expected"].keys() - expected_fields:
                 raise ValueError("eval_unknown_fixture_field")
+            if (
+                "handoff_on_intake_exhaustion" in turn["expected"]
+                and type(turn["expected"]["handoff_on_intake_exhaustion"]) is not bool
+            ):
+                raise ValueError("eval_invalid_exhaustion_expectation")
             fixture_decision(
                 intents=turn.get("expected_intents", ["other"]),
                 reply_text=turn.get("adversarial_reply_text", "Untrusted fixture proposal"),

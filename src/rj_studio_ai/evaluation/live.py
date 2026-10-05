@@ -48,6 +48,7 @@ from rj_studio_ai.evaluation.openai_live import (
     eval_prompt,
 )
 from rj_studio_ai.evaluation.oracle import (
+    CUSTOMER_UPDATE_ORACLE_VERSION,
     ORACLE_VERSION,
     PHASE_ONE_ORACLE_VERSION,
     PRE_INTAKE_ORACLE_VERSION,
@@ -185,7 +186,7 @@ class LiveRecord(RecordModel):
         expected_oracles = (
             {PHASE_ONE_ORACLE_VERSION}
             if self.schema_version == 8
-            else {PRE_INTAKE_ORACLE_VERSION, ORACLE_VERSION}
+            else {PRE_INTAKE_ORACLE_VERSION, CUSTOMER_UPDATE_ORACLE_VERSION, ORACLE_VERSION}
         )
         if (
             self.schema_version >= 8

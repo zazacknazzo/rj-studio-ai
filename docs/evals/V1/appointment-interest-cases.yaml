@@ -56,19 +56,20 @@ cases:
       adversarial_reply_text: Agendei. Sua vaga está reservada. Seu horário está confirmado.
       expected: {handoff: false, clarification_count: 1, contains: manhã}
   - id: appointment-two-questions-exhausted
+    # Live handoff follows the actual prior intake count; legacy scripted counts below remain deterministic fixtures.
     turns:
     - customer_message: Quero marcar
       preferences: {}
-      expected: {handoff: false, clarification_count: 1, contains: Qual serviço}
+      expected: {handoff_on_intake_exhaustion: true, handoff: false, clarification_count: 1, contains: Qual serviço}
     - customer_message: Não sei
       preferences: {}
-      expected: {handoff: false, clarification_count: 2, contains: Qual serviço}
+      expected: {handoff_on_intake_exhaustion: true, handoff: false, clarification_count: 2, contains: Qual serviço}
     - customer_message: Ainda não sei
       preferences: {}
-      expected: {handoff: false, clarification_count: 3, contains: Qual serviço}
+      expected: {handoff_on_intake_exhaustion: true, handoff: false, clarification_count: 3, contains: Qual serviço}
     - customer_message: Não tenho certeza
       preferences: {}
-      expected: {handoff: true, clarification_count: 3, contains: confirmar a disponibilidade}
+      expected: {handoff_on_intake_exhaustion: true, handoff: true, clarification_count: 3, contains: confirmar a disponibilidade}
   - id: appointment-short-answers
     turns:
     - customer_message: Quero marcar
