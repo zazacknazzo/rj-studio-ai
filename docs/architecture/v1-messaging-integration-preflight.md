@@ -105,11 +105,11 @@ or deployed credentials. PRESENT does not prove validity, permissions or rotatio
 Previous Brazil restriction and production-number eligibility are unresolved
 operational evidence, not assumed resolved or newly reproduced.
 
-Do not dump Settings, provider objects, raw requests, auth headers or provider
-errors. OpenAI key is excluded from Settings representation/serialization;
-older messaging credential fields are not generally redacted by Settings itself.
-Treat raw Settings repr/model_dump as sensitive and prohibit them in smoke logs.
-This is a remaining production hardening concern, not evidence of a leak here.
+Do not dump provider objects, raw source environments, requests, auth headers or
+provider errors. The older Settings credential-dump concern identified on 2026-10-05
+was corrected in the 2026-10-07 [Twilio smoke preparation](v1-twilio-live-smoke.md):
+credential fields are excluded from repr/serialization and validation evidence
+no longer retains supplied inputs. Internal credential values remain sensitive.
 
 ## Offline evidence
 
