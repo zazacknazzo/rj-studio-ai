@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS
@@ -12,7 +12,20 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
+
+    def __init__(self, **values):
+        try:
+            super().__init__(**values)
+        except ValidationError as error:
+            # hide_input_in_errors protects str(), but not errors()/json() by itself.
+            # Retain field/type/constraint evidence without retaining supplied inputs.
+            raise ValidationError.from_exception_data(
+                type(self).__name__,
+                error.errors(include_input=False, include_url=False),
+                hide_input=True,
+            ) from None
 
     app_name: str = "RJ Studio AI"
     database_path: Path = Path("data/rj_studio_ai.db")
@@ -22,17 +35,17 @@ class Settings(BaseSettings):
     automatic_reply: str = "Olá! Recebemos sua mensagem e retornaremos em breve. ✨"
     message_retention_days: int = Field(default=90, ge=1)
     whatsapp_provider: Literal["twilio", "meta"] = "twilio"
-    twilio_auth_token: str = ""
+    twilio_auth_token: str = Field(default="", repr=False, exclude=True)
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None
     twilio_status_callback_url: str | None = None
-    twilio_account_sid: str = ""
-    twilio_api_key_sid: str = ""
-    twilio_api_key_secret: str = ""
-    meta_whatsapp_access_token: str = ""
+    twilio_account_sid: str = Field(default="", repr=False, exclude=True)
+    twilio_api_key_sid: str = Field(default="", repr=False, exclude=True)
+    twilio_api_key_secret: str = Field(default="", repr=False, exclude=True)
+    meta_whatsapp_access_token: str = Field(default="", repr=False, exclude=True)
     meta_whatsapp_phone_number_id: str = ""
-    meta_whatsapp_verify_token: str = ""
-    meta_whatsapp_app_secret: str = ""
+    meta_whatsapp_verify_token: str = Field(default="", repr=False, exclude=True)
+    meta_whatsapp_app_secret: str = Field(default="", repr=False, exclude=True)
     meta_whatsapp_api_version: str = ""
     delivery_mode: Literal["legacy", "proactive"] = "legacy"
     outbound_request_timeout_seconds: float = Field(default=5.0, gt=0, lt=30)
@@ -48,7 +61,7 @@ class Settings(BaseSettings):
     openai_model: Literal["gpt-6.1-sol"] = "gpt-6.1-sol"
     openai_reasoning_effort: Literal["low", "medium"] = "low"
     openai_max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=1, le=MAX_OUTPUT_TOKENS)
-    anthropic_api_key: str = ""
+    anthropic_api_key: str = Field(default="", repr=False, exclude=True)
     anthropic_model: str = "claude-sonnet-5"
     anthropic_max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=1, le=MAX_OUTPUT_TOKENS)
     conversation_context_maximum_messages: int = Field(default=12, ge=1)
