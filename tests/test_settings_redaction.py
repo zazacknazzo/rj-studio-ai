@@ -87,3 +87,16 @@ def test_numeric_constraints_and_nonsecret_diagnostics_are_preserved():
         Settings(_env_file=None, outbound_request_timeout_seconds=0)
     assert captured.value.errors()[0]["type"] == "greater_than"
     assert captured.value.errors()[0]["loc"] == ("outbound_request_timeout_seconds",)
+
+
+@pytest.mark.parametrize("entry", ["json", "object", "strings"])
+def test_invalid_root_inputs_are_redacted_before_instance_construction(entry):
+    with pytest.raises(ValidationError) as captured:
+        if entry == "json":
+            Settings.model_validate_json('{"openai_api_key":"synthetic-private-openai_api_key",')
+        elif entry == "object":
+            Settings.model_validate("synthetic-private-openai_api_key")
+        else:
+            Settings.model_validate_strings("synthetic-private-openai_api_key")
+    assert not contains_private_value(captured.value.json())
+    assert not contains_private_value(str(captured.value.errors()))

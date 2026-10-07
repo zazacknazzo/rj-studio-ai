@@ -447,3 +447,56 @@ def test_lost_local_acceptance_commit_is_reported_ambiguous_and_never_retried(tm
         with pytest.raises(LiveSmokeBlocked):
             driver.submit_once()
     assert len(calls) == 1
+
+
+def test_invalid_callback_during_sdk_setup_is_fenced_at_external_submission(tmp_path):
+    settings, environment = smoke_configuration(tmp_path)
+    environment["ALLOW_LIVE_MESSAGING_SMOKE"] = "1"
+    calls = []
+
+    def create(**kwargs):
+        calls.append("external-submission")
+        return SimpleNamespace(sid="SM" + "c" * 32)
+
+    def factory(_):
+        assert signed_callback(client, settings, "read", valid=False).status_code == 403
+        return SimpleNamespace(messages=SimpleNamespace(create=create))
+
+    driver = TwilioLiveSmoke(settings, environment, project_root=tmp_path, client_factory=factory)
+    with TestClient(driver.prepare()) as client:
+        driver.verify_public_callback(get=lambda *args, **kwargs: client.get("/health"))
+        result = driver.submit_once()
+        assert result["status"] == "LIVE_SMOKE_FAIL"
+        assert result["submissions"] == 0
+    assert calls == []
+
+
+def test_failed_callback_and_concurrent_report_snapshots_cannot_yield_false_pass(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    settings, environment = smoke_configuration(tmp_path)
+    environment["ALLOW_LIVE_MESSAGING_SMOKE"] = "1"
+    driver = TwilioLiveSmoke(
+        settings,
+        environment,
+        project_root=tmp_path,
+        client_factory=lambda _: SimpleNamespace(
+            messages=SimpleNamespace(create=lambda **_: SimpleNamespace(sid="SM" + "c" * 32))
+        ),
+    )
+    with TestClient(driver.prepare()) as client:
+        driver.verify_public_callback(get=lambda *args, **kwargs: client.get("/health"))
+        driver.submit_once()
+        assert signed_callback(client, settings, "sent").status_code == 200
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            failure = pool.submit(signed_callback, client, settings, "failed")
+            reports = list(pool.map(lambda _: driver.report(), range(100)))
+            assert failure.result().status_code == 200
+        for result in reports:
+            if "failed" in result["callbacks"] or result["final_state"] == "failed":
+                assert result["status"] == "LIVE_SMOKE_FAIL"
+        final = driver.report()
+        assert final["result_class"] == "delivery_failed"
+        assert final["final_state"] == "failed"
+        assert final["provider_acceptance"]
+        assert final["submissions"] == 1

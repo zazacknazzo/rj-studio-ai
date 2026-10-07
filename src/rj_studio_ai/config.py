@@ -7,6 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from rj_studio_ai.llm_decision import MAX_OUTPUT_TOKENS
 
 
+def _redact_validation_inputs(validate, *args, **kwargs):
+    try:
+        return validate(*args, **kwargs)
+    except ValidationError as error:
+        raise ValidationError.from_exception_data(
+            error.title, error.errors(include_input=False, include_url=False), hide_input=True
+        ) from None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -16,16 +25,20 @@ class Settings(BaseSettings):
     )
 
     def __init__(self, **values):
-        try:
-            super().__init__(**values)
-        except ValidationError as error:
-            # hide_input_in_errors protects str(), but not errors()/json() by itself.
-            # Retain field/type/constraint evidence without retaining supplied inputs.
-            raise ValidationError.from_exception_data(
-                type(self).__name__,
-                error.errors(include_input=False, include_url=False),
-                hide_input=True,
-            ) from None
+        # Protect both instance validation and errors raised before an instance exists.
+        _redact_validation_inputs(super().__init__, **values)
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        return _redact_validation_inputs(super().model_validate, obj, **kwargs)
+
+    @classmethod
+    def model_validate_json(cls, json_data, **kwargs):
+        return _redact_validation_inputs(super().model_validate_json, json_data, **kwargs)
+
+    @classmethod
+    def model_validate_strings(cls, obj, **kwargs):
+        return _redact_validation_inputs(super().model_validate_strings, obj, **kwargs)
 
     app_name: str = "RJ Studio AI"
     database_path: Path = Path("data/rj_studio_ai.db")

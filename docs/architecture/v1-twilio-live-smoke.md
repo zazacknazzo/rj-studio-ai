@@ -27,6 +27,8 @@ remain ordinary strings available internally to existing adapters. Nonsecret
 provider/model/configuration fields remain inspectable. Validation preserves
 field/type/constraint diagnostics but removes supplied inputs from the raised
 ValidationError, including `errors()` and `json()`, not merely its string form.
+Malformed JSON and invalid root object/string validation are protected before
+instance construction too; they cannot bypass constructor-only redaction.
 Never print `__dict__`, raw source environments, exception contexts or HTTP payloads.
 
 The smoke SDK client has a silent wire logger and zero transport retries. CLI
@@ -91,6 +93,12 @@ valid). Signed callbacks reuse TwilioProvider and durable status persistence;
 early evidence is buffered/reconciled, duplicate/reordered statuses are monotonic,
 and unrecognized statuses cannot schedule a send. Only normalized evidence is
 persisted, never raw provider payloads. Invalid callbacks stop the smoke.
+The stop fence is synchronized with callback failure handling at the final SDK
+Messages.create boundary, after database and client setup. Failures activated
+before that fence prevent delegation. Once the external call is authorized it
+is in flight; later callback failures cannot revoke it, but fail the smoke and
+never cause another submission. Report snapshots read persisted state and callback
+metadata under the same mutex; correlated failed evidence cannot yield PASS.
 
 Timeout/ambiguous response remains unknown; expired sending and lost local
 acceptance commit are also conservatively ambiguous. Acceptance is null/unknown
@@ -129,8 +137,10 @@ Once external submission started it cannot be presumed cancelled.
    Sent/delivered/read remain distinct; read is not mandatory.
 6. Preserve the private DB and allowlisted `result.json` (0600), timestamp, smoke
    ID, hashed provider ID, result class, state, callback/duplicate counts, zero
-   retries and observed submission round trip. Submission count is the local
-   adapter-attempt count, not proof of HTTP byte delivery when outcome is unknown.
+   retries and observed submission round trip. Submission count is entry into the
+   external SDK create call, not proof of HTTP byte delivery when outcome is unknown.
+   Durable delivery-attempt count is separate: a callback fence can reject a claimed
+   delivery before any external submission, yielding one claim and zero submissions.
    A process crash can prevent report creation; the DB reservation still prevents
    automatic rerun. Inspect locally without printing PII/full IDs/secrets.
 7. Shut down the callback server and disable opt-in. Remove temporary infrastructure

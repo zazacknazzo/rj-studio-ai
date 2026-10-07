@@ -11,6 +11,7 @@ from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock, Thread
 from time import monotonic, sleep
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -58,23 +59,40 @@ class TwilioLiveSmoke:
                 "ALLOW_LIVE_MESSAGING_SMOKE",
             )
         }
+        self._wire_client_factory = client_factory or self._client
         self._sender = TwilioOutboundSender(
             account_sid=self._settings.twilio_account_sid,
             api_key_sid=self._settings.twilio_api_key_sid,
             api_key_secret=self._settings.twilio_api_key_secret,
             status_callback_url=self._settings.twilio_status_callback_url or "",
-            client_factory=client_factory or self._client,
+            client_factory=self._submission_client,
         )
         self.smoke_id = uuid4().hex
         self._lock = Lock()
         self._prepared = False
         self._submitted = False
+        self._wire_started = False
         self._callback_ready = False
         self._callback_failure = Event()
         self._callback_events = set()
         self._callback_duplicates = 0
         self._ignored_callbacks = 0
         self._inbound_id = None
+
+    def _submission_client(self, timeout):
+        client = self._wire_client_factory(timeout)
+
+        def create(**kwargs):
+            # This is the external submission linearization point, after DB/SDK setup.
+            # A failure activated before this fence wins; a later callback cannot
+            # revoke an already authorized in-flight submission.
+            with self._lock:
+                if self._callback_failure.is_set():
+                    raise LiveSmokeBlocked("smoke_callback_invalid")
+                self._wire_started = True
+            return client.messages.create(**kwargs)
+
+        return SimpleNamespace(messages=SimpleNamespace(create=create))
 
     def _client(self, timeout):
         # The SDK's normal logger emits HTTP URLs/response headers. Smoke logs only metadata.
@@ -229,30 +247,31 @@ class TwilioLiveSmoke:
                 )
                 if any(not isinstance(event, DeliveryStatusReceived) for event in batch.events):
                     raise InvalidWebhookPayload("Smoke accepts status events only")
-                self._store.record_webhook_events(batch.events)
+                with self._lock:
+                    self._store.record_webhook_events(batch.events)
+                    if not batch.events:
+                        self._ignored_callbacks += 1
+                    for event in batch.events:
+                        key = (
+                            sha256(event.provider_message_id.encode()).hexdigest()[:12],
+                            event.status.value,
+                        )
+                        if key in self._callback_events:
+                            self._callback_duplicates += 1
+                        self._callback_events.add(key)
             except (
                 InvalidWebhookSignature,
                 InvalidWebhookPayload,
                 PersistenceUnavailable,
             ) as error:
-                self._callback_failure.set()
+                with self._lock:
+                    self._callback_failure.set()
                 code = (
                     403
                     if isinstance(error, InvalidWebhookSignature)
                     else (503 if isinstance(error, PersistenceUnavailable) else 400)
                 )
                 return Response(status_code=code)
-            with self._lock:
-                if not batch.events:
-                    self._ignored_callbacks += 1
-                for event in batch.events:
-                    key = (
-                        sha256(event.provider_message_id.encode()).hexdigest()[:12],
-                        event.status.value,
-                    )
-                    if key in self._callback_events:
-                        self._callback_duplicates += 1
-                    self._callback_events.add(key)
             ack = provider.acknowledge()
             return Response(ack.body, media_type=ack.media_type, status_code=ack.status_code)
 
@@ -315,27 +334,31 @@ class TwilioLiveSmoke:
         return self.report()
 
     def report(self):
-        delivery = (
-            self._store.get_delivery_for_inbound(self._inbound_id) if self._inbound_id else None
-        )
-        accepted = delivery is not None and delivery.accepted_at is not None
-        provider_id_hash = (
-            sha256(delivery.provider_message_id.encode()).hexdigest()[:12]
-            if (delivery and delivery.provider_message_id)
-            else None
-        )
         with self._lock:
+            delivery = (
+                self._store.get_delivery_for_inbound(self._inbound_id) if self._inbound_id else None
+            )
+            accepted = delivery is not None and delivery.accepted_at is not None
+            provider_id_hash = (
+                sha256(delivery.provider_message_id.encode()).hexdigest()[:12]
+                if (delivery and delivery.provider_message_id)
+                else None
+            )
             statuses = sorted(
                 status for key, status in self._callback_events if key == provider_id_hash
             )
             duplicates = self._callback_duplicates
             ignored = self._ignored_callbacks
-        failed = self._callback_failure.is_set() or (
-            delivery and delivery.state == DeliveryState.FAILED
+            callback_failure = self._callback_failure.is_set()
+            wire_started = self._wire_started
+        failed = (
+            callback_failure
+            or "failed" in statuses
+            or (delivery and delivery.state == DeliveryState.FAILED)
         )
         passed = accepted and bool(statuses) and not failed
         ambiguous = delivery and delivery.state in {DeliveryState.UNKNOWN, DeliveryState.SENDING}
-        if self._callback_failure.is_set():
+        if callback_failure:
             result_class = "callback_invalid"
         elif failed:
             result_class = "delivery_failed" if accepted else "provider_rejected"
@@ -357,7 +380,8 @@ class TwilioLiveSmoke:
             "provider_acceptance": None if ambiguous else accepted,
             "provider_id_hash": provider_id_hash,
             "final_state": delivery.state.value if delivery else None,
-            "submissions": delivery.attempt_count if delivery else 0,
+            "submissions": int(wire_started),
+            "delivery_attempts": delivery.attempt_count if delivery else 0,
             "retries": 0,
             "duplicate_sends": 0,
             "callbacks": statuses,
