@@ -158,8 +158,34 @@ Offline tests exercise repr/dumps/validation/startup logs, internal credential
 access, missing trust/flag/config, explicit recipient, sender separation, DB
 isolation/exclusive creation, HTTPS route proof, one manual submission, callback
 authentication/early correlation/monotonicity, failures, restart and lost acceptance
-commit. All provider network boundaries are mocked. Full checks and independent
-review outcomes are recorded after completion below.
+commit. All provider network boundaries are mocked.
+
+Final offline checks: **1119 passed** (43 new), one pre-existing Starlette/AnyIO
+deprecation warning. Ruff check/format check, compileall, pip check and git diff
+check passed. Network-free local driver check returned
+**BLOCKED_PENDING_TOKEN_ROTATION**: credential/URL syntax and signature settings
+pass, but trust, sender, recipient, isolated path and opt-in do not. No live DB,
+callback sidecar, HTTPS probe, Twilio request or LLM call was started.
+
+| Independent review category | Final outcome at `d7648a0` |
+| --- | --- |
+| Secrets/config | PASS; invalid JSON/object/string root errors also redacted |
+| Twilio transport | PASS offline; live still operationally blocked |
+| Idempotency/crash | PASS; no second automatic submission, no resume after lost local acceptance |
+| Live-smoke safety | PASS; final SDK submission fence and coherent status snapshots |
+| Standards axis | No material hard violations or actionable smells |
+| Spec axis | No remaining material findings or scope creep |
+
+Initial adversarial review found three material defects before any live: an
+invalid callback could arrive during DB work and miss the early stop check;
+report state/callback reads could combine into a false PASS; malformed JSON could
+bypass constructor-only redaction. All were reproduced with synthetic inputs,
+corrected, regression-tested and independently re-reviewed. Callback race recheck
+observed zero external calls and one durable claim. No intelligence policy changed.
+
+Real live result: **NOT EXECUTED**, zero submissions, zero retries, zero customer
+data or external messaging. Acceptance, delivery callbacks and live latency remain
+unmeasured; fixture outcomes are never presented as real evidence.
 
 V1 intelligence: VALIDATED ENOUGH; Agentic Surface: FROZEN; OpenAI Low runtime:
 VALIDATED LOCALLY; offline messaging preflight: PASS. Twilio live: **BLOCKED_PENDING_TOKEN_ROTATION**. WhatsApp production-ready: **NO**. Ticket 12 remains in-progress.
