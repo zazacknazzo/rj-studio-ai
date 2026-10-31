@@ -43,6 +43,8 @@ class OutboundOutcomeUnknown(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ProviderAcceptance:
+    """Submission accepted with a Message ID; not sent, delivered, or read evidence."""
+
     provider_message_id: str
 
 

@@ -19,3 +19,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [V1 Agentic Surface Phase 1.2 — Commercial Initiative + Generation Headroom](V1-agentic-surface-phase-1.2.md): approved incremental round; human approval and live gates remain separate.
 
 - [Runtime reasoning-effort A/B](V1-runtime-reasoning-ab.md): approved eval-only paired experiment; US$0.30 incremental cap.
+
+- [Coexistence Ticket 01 — neutral contracts](V1-telnyx-coexistence-ticket-01.md):
+  approved contracts/classification only; further tickets and live integration are not approved.
