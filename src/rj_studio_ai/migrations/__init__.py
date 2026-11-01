@@ -89,7 +89,11 @@ class MigrationManager:
             "pending_delivery_statuses",
             "conversation_handoffs",
             "appointment_intakes",
+            "operational_events",
+            "operational_event_aliases",
         }.issubset(inspector.get_table_names()):
+            return False
+        if not MigrationManager._operational_schema_matches(inspector):
             return False
         required_columns = {
             "appointment_intakes": {
@@ -440,6 +444,72 @@ class MigrationManager:
                 "delivery_attempt_identity_is_immutable",
                 "terminal_delivery_attempt_is_immutable",
             }.issubset(processing_triggers)
+        )
+
+    @staticmethod
+    def _operational_schema_matches(inspector: Inspector) -> bool:
+        required_columns = {
+            "operational_events": {
+                "id",
+                "provider",
+                "scope_kind",
+                "scope_id",
+                "event_id",
+                "kind",
+                "origin",
+                "occurred_at",
+                "received_at",
+                "provider_message_id",
+                "customer_address",
+                "message_occurred_at",
+                "original_namespace",
+                "original_message_id",
+                "availability",
+                "reason",
+            },
+            "operational_event_aliases": {"event_record_id", "namespace", "message_id"},
+        }
+        required_indexes = {
+            "operational_events": {
+                "uq_operational_event_scope": (
+                    ("provider", "scope_kind", "scope_id", "event_id"),
+                    True,
+                ),
+                "ix_operational_message": (
+                    ("provider", "scope_kind", "scope_id", "provider_message_id"),
+                    False,
+                ),
+            },
+            "operational_event_aliases": {
+                "uq_operational_alias": (("event_record_id", "namespace", "message_id"), True),
+                "ix_operational_alias_reference": (("namespace", "message_id"), False),
+            },
+        }
+        for table, columns in required_columns.items():
+            if not columns.issubset({item["name"] for item in inspector.get_columns(table)}):
+                return False
+            indexes = {
+                item["name"]: (tuple(item["column_names"]), bool(item["unique"]))
+                for item in inspector.get_indexes(table)
+            }
+            if any(indexes.get(name) != shape for name, shape in required_indexes[table].items()):
+                return False
+        checks = {item["name"] for item in inspector.get_check_constraints("operational_events")}
+        alias_checks = {
+            item["name"] for item in inspector.get_check_constraints("operational_event_aliases")
+        }
+        return (
+            {"ck_operational_identity", "ck_operational_scope", "ck_operational_shape"}.issubset(
+                checks
+            )
+            and "ck_operational_alias_identity" in alias_checks
+            and any(
+                item["constrained_columns"] == ["event_record_id"]
+                and item["referred_table"] == "operational_events"
+                and item["referred_columns"] == ["id"]
+                and item.get("options", {}).get("ondelete") == "CASCADE"
+                for item in inspector.get_foreign_keys("operational_event_aliases")
+            )
         )
 
     def _engine(self, *, set_journal_mode: bool) -> Engine:

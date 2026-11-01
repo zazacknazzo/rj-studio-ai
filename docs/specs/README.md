@@ -22,3 +22,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 
 - [Coexistence Ticket 01 — neutral contracts](V1-telnyx-coexistence-ticket-01.md):
   approved contracts/classification only; further tickets and live integration are not approved.
+
+- [Coexistence Ticket 02 — operational journal](V1-telnyx-coexistence-ticket-02.md):
+  approved persistence/deduplication only; Tickets 03–13 and live integration are not approved.

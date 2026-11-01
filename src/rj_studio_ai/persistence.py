@@ -19,6 +19,7 @@ from rj_studio_ai.domain import (
 from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.handoff import HandoffReason
 from rj_studio_ai.migrations import MigrationManager
+from rj_studio_ai.operational_events import OPERATIONAL_EVENT_TYPES, record_operational_event
 from rj_studio_ai.sqlite import (
     DEFAULT_BUSY_TIMEOUT_SECONDS,
     SqliteDurabilityError,
@@ -476,7 +477,9 @@ class SqliteConversationStore:
         for event in events:
             if isinstance(event, DeliveryStatusReceived):
                 self._validate_delivery_status(event)
-            elif not isinstance(event, InboundMessage):
+            elif (
+                not isinstance(event, InboundMessage) and type(event) not in OPERATIONAL_EVENT_TYPES
+            ):
                 raise ValueError("Unsupported canonical provider event")
         try:
             with self._connect(lock_timeout) as connection:
@@ -489,10 +492,13 @@ class SqliteConversationStore:
                             event=event,
                             timestamp=timestamp,
                         )
+                    elif type(event) in OPERATIONAL_EVENT_TYPES:
+                        record_operational_event(connection, event, received_at=timestamp)
                     else:
                         self._get_or_create_inbound(connection, event, timestamp)
-        except sqlite3.Error as error:
-            raise PersistenceUnavailable("Provider webhook persistence is unavailable") from error
+        except sqlite3.Error:
+            # SQL errors may contain external identifiers (including trigger messages).
+            raise PersistenceUnavailable("Provider webhook persistence is unavailable") from None
 
     def meta_free_form_is_eligible(
         self,

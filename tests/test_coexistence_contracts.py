@@ -279,17 +279,15 @@ def test_legacy_positional_constructors_and_missing_metadata_remain_valid():
 
 
 @pytest.mark.parametrize("make_event", [human, edit, revoke, lifecycle])
-def test_current_store_rejects_whole_unsupported_batch_before_admitting_customer(
-    tmp_path, make_event
-):
+def test_store_persists_operational_batch_without_extra_customer_work(tmp_path, make_event):
     path = tmp_path / "synthetic.db"
     store = SqliteConversationStore(path)
     store.initialize()
-    with pytest.raises(ValueError, match="Unsupported canonical provider event"):
-        store.record_webhook_events((inbound(), make_event()))
+    store.record_webhook_events((inbound(), make_event()))
     with sqlite3.connect(path) as connection:
-        for table in ("messages", "message_processing", "outbound_deliveries"):
-            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+        for table in ("messages", "message_processing", "operational_events"):
+            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM outbound_deliveries").fetchone()[0] == 0
 
 
 class _CanonicalFixtureAdapter(WhatsAppProvider):
@@ -321,7 +319,7 @@ class _NoGeneration:
 
 @pytest.mark.parametrize("make_event", [human, edit, revoke, lifecycle])
 @pytest.mark.parametrize("mode", ["legacy", "proactive"])
-def test_runtime_never_autoresponds_to_unimplemented_operational_events(tmp_path, make_event, mode):
+def test_runtime_never_autoresponds_to_operational_events(tmp_path, make_event, mode):
     path = tmp_path / "synthetic.db"
     store = SqliteConversationStore(path)
     sender = DeterministicFakeOutboundSender(outcomes=[])
@@ -332,11 +330,9 @@ def test_runtime_never_autoresponds_to_unimplemented_operational_events(tmp_path
         generator=_NoGeneration(),
         outbound_sender=sender,
     )
-    # Proactive raises the existing unsupported-event error. No new handler is installed.
     with TestClient(app) as client:
         if mode == "proactive":
-            with pytest.raises(ValueError, match="Unsupported canonical provider event"):
-                client.post("/webhooks/whatsapp", json={})
+            assert client.post("/webhooks/whatsapp", json={}).status_code == 200
         else:
             assert client.post("/webhooks/whatsapp", json={}).status_code == 400
     assert sender.calls == []
