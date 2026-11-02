@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from rj_studio_ai.domain import InboundMessage
 from rj_studio_ai.migrations import MigrationManager
-from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
+from rj_studio_ai.persistence import SqliteConversationStore
 
 
 def baseline(path):
@@ -25,26 +25,40 @@ def baseline(path):
     engine.dispose()
     with sqlite3.connect(path) as connection:
         connection.execute("PRAGMA journal_mode=WAL")
-    store = SqliteConversationStore(path)
-    claim = store.claim_generation(
-        InboundMessage(
-            "meta",
-            "wamid.synthetic",
-            "synthetic-customer",
-            "synthetic-channel",
-            "synthetic inbound",
-        )
-    )
-    assert store.complete_generation(
-        inbound_message_id=claim.inbound_message_id,
-        owner_token=claim.owner_token,
-        reply_body="synthetic reply",
-        delivery_state=DeliveryState.PENDING,
-    )
+    # Populate the historical schema directly; the current runtime requires the
+    # current schema and must not gain a bypass for missing pause protections.
+    timestamp = "2026-10-02T10:00:00+00:00"
     with sqlite3.connect(path) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            "INSERT INTO conversations VALUES (1, 'meta', 'synthetic-customer', ?, ?)",
+            (timestamp, timestamp),
+        )
+        connection.execute(
+            "INSERT INTO messages (id, conversation_id, provider, provider_message_id, "
+            "recipient_address, direction, body, created_at) VALUES "
+            "(1, 1, 'meta', 'wamid.synthetic', 'synthetic-channel', 'inbound', "
+            "'synthetic inbound', ?)",
+            (timestamp,),
+        )
+        connection.execute(
+            "INSERT INTO messages (id, conversation_id, provider, direction, body, "
+            "created_at, in_reply_to_message_id) VALUES "
+            "(2, 1, 'meta', 'outbound', 'synthetic reply', ?, 1)",
+            (timestamp,),
+        )
+        connection.execute(
+            "INSERT INTO outbound_deliveries (outbound_message_id, provider, "
+            "provider_channel_id, recipient_address, state, attempt_count, "
+            "next_attempt_at, created_at, updated_at) VALUES "
+            "(2, 'meta', 'synthetic-channel', 'synthetic-customer', 'pending', 0, ?, ?, ?)",
+            (timestamp, timestamp, timestamp),
+        )
+        connection.execute("UPDATE message_processing SET state='completed', attempt_count=1")
         connection.execute(
             "INSERT INTO conversation_handoffs VALUES (1, 1, 'synthetic-episode', "
-            "'explicit_human_request', '2026-10-02T10:00:00+00:00', NULL)"
+            "'explicit_human_request', ?, NULL)",
+            (timestamp,),
         )
     return config
 
@@ -76,9 +90,11 @@ def test_upgrade_preserves_all_existing_data_and_rolls_back_ddl_failure(tmp_path
         manager.upgrade()
         assert manager.is_current()
     with sqlite3.connect(path) as connection:
-        assert {
-            table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables
-        } == before
+        after = {table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables}
+        if not failing_upgrade:
+            assert all(row[-1] == 0 for row in after["message_processing"])
+            after["message_processing"] = [row[:-1] for row in after["message_processing"]]
+        assert after == before
         if failing_upgrade:
             assert (
                 connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]

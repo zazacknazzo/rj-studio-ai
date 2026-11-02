@@ -65,6 +65,9 @@ def test_polish_upgrade_preserves_legacy_state_or_rolls_back_replacement(
             if table == "appointment_intakes" and not fail_after_table_replacement:
                 assert [r[:11] for r in actual] == before[table]
                 assert actual[0][11:] == (None, "interest", 0)
+            elif table == "message_processing" and not fail_after_table_replacement:
+                assert [row[:-1] for row in actual] == before[table]
+                assert all(row[-1] == 0 for row in actual)
             else:
                 assert actual == before[table]
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []

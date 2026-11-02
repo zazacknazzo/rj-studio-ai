@@ -546,7 +546,7 @@ def test_in_flight_outbound_keeps_its_owner_and_can_finalize_after_pause(pausedb
     assert complete(store, claim)
     delivery = store.claim_next_delivery(now=NOW)
     assert store.authorize_delivery_submission(
-        delivery_id=delivery.id, owner_token=delivery.owner_token, now=NOW
+        delivery_id=delivery.delivery_id, owner_token=delivery.owner_token, now=NOW
     )
     before = rows(path, "outbound_deliveries")
     attempts = rows(path, "delivery_attempts")
@@ -554,7 +554,7 @@ def test_in_flight_outbound_keeps_its_owner_and_can_finalize_after_pause(pausedb
     assert rows(path, "outbound_deliveries") == before
     assert rows(path, "delivery_attempts") == attempts
     assert store.finalize_delivery(
-        delivery_id=delivery.id,
+        delivery_id=delivery.delivery_id,
         owner_token=delivery.owner_token,
         outcome=DeliveryState.UNKNOWN,
         safe_error_code="synthetic_unknown",
