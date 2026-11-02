@@ -384,7 +384,9 @@ def test_revision_is_checked_even_if_paused_flag_is_cleared_outside_runtime(paus
     # Fault injection: revision changes without normal suppression. There is no resume API.
     with sqlite3.connect(path) as connection:
         connection.execute(
-            "INSERT INTO conversation_automation_controls VALUES (1, 'studio', 0, 1, ?)",
+            "INSERT INTO conversation_automation_controls "
+            "(conversation_id, channel_id, paused, revision, updated_at) "
+            "VALUES (1, 'studio', 0, 1, ?)",
             (NOW.isoformat(),),
         )
     assert not complete(store, claim)

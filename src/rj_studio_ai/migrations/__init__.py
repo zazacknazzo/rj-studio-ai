@@ -93,7 +93,11 @@ class MigrationManager:
             "operational_event_aliases",
             "conversation_automation_controls",
             "human_pause_effects",
+            "conversation_operation_ids",
+            "automation_operation_receipts",
         }.issubset(inspector.get_table_names()):
+            return False
+        if not MigrationManager._operations_schema_matches(connection, inspector):
             return False
         if not MigrationManager._pause_schema_matches(inspector):
             return False
@@ -462,6 +466,62 @@ class MigrationManager:
                 "terminal_delivery_attempt_is_immutable",
             }.issubset(processing_triggers)
         )
+
+    @staticmethod
+    def _operations_schema_matches(connection: Connection, inspector: Inspector) -> bool:
+        structures = {
+            "conversation_operation_ids": ({"conversation_id", "opaque_id"}, "CASCADE"),
+            "automation_operation_receipts": (
+                {
+                    "operation_id",
+                    "conversation_id",
+                    "operator_id",
+                    "action",
+                    "expected_revision",
+                    "result_json",
+                    "created_at",
+                },
+                "RESTRICT",
+            ),
+        }
+        for table, (columns, deletion) in structures.items():
+            if not columns.issubset({c["name"] for c in inspector.get_columns(table)}):
+                return False
+            if not any(
+                f["constrained_columns"] == ["conversation_id"]
+                and f["referred_table"] == "conversations"
+                and f["options"].get("ondelete") == deletion
+                for f in inspector.get_foreign_keys(table)
+            ):
+                return False
+        for table, check in (
+            ("conversation_operation_ids", "ck_operation_identity"),
+            ("automation_operation_receipts", "ck_operation_receipt"),
+        ):
+            if check not in {c["name"] for c in inspector.get_check_constraints(table)}:
+                return False
+        if inspector.get_pk_constraint("automation_operation_receipts")["constrained_columns"] != [
+            "operation_id"
+        ]:
+            return False
+        if not any(
+            u["column_names"] == ["opaque_id"]
+            for u in inspector.get_unique_constraints("conversation_operation_ids")
+        ):
+            return False
+        triggers = {
+            row[0]
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+        return {
+            "conversation_operation_identity",
+            "conversation_operation_identity_immutable",
+            "automation_receipt_immutable",
+        }.issubset(triggers) and "resumed_at" in {
+            c["name"] for c in inspector.get_columns("conversation_automation_controls")
+        }
 
     @staticmethod
     def _pause_schema_matches(inspector: Inspector) -> bool:

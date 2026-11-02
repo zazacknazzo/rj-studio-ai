@@ -31,3 +31,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 
 - [Coexistence Ticket 04 — outbound fencing](V1-telnyx-coexistence-ticket-04.md):
   approved cancellation/authorization only; Tickets 05–13 and live integration not authorized.
+
+- [Ticket 05](V1-telnyx-coexistence-ticket-05.md): explicitly authorized authenticated operations.

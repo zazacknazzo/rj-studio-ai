@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     def model_validate_strings(cls, obj, **kwargs):
         return _redact_validation_inputs(super().model_validate_strings, obj, **kwargs)
 
+    operator_secret_sha256: str = Field(default="", repr=False, exclude=True)
+    operator_id: str = ""
+    operator_permissions: tuple[str, ...] = ()
+    operator_conversations: tuple[str, ...] = ()
+
     app_name: str = "RJ Studio AI"
     database_path: Path = Path("data/rj_studio_ai.db")
     sqlite_busy_timeout_seconds: float = Field(default=5.0, gt=0)

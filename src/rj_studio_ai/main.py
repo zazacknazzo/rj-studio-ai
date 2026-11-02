@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from rj_studio_ai.admin_api import admin_router
 from rj_studio_ai.application import MessageResponder, RetryableWebhookError
 from rj_studio_ai.config import Settings
 from rj_studio_ai.conversation_context import ConversationContextBuilder, ConversationContextLimits
@@ -176,6 +177,7 @@ def create_app(
                 outbound_executor.stop()
 
     app = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
+    app.include_router(admin_router(resolved_settings, resolved_store))
     app.state.outbound_sender = resolved_outbound_sender
     app.state.outbound_executor = outbound_executor
     app.state.processing_executor = resolved_processing_executor

@@ -18,3 +18,5 @@ Read an ADR only when a task touches its decision.
 | [0012](0012-operational-outbound-pause.md) | Cancel proven-unsubmitted deliveries and fence authorization under operational pause |
 
 Add an ADR only for a hard-to-reverse choice that would be surprising without its trade-off. Keep it concise and update this index.
+
+- [0013](0013-authenticated-automation-operations.md): authenticated operations and future-only resume.

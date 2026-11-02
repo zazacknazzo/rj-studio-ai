@@ -516,6 +516,19 @@ def test_migration_backfills_existing_pauses_atomically_without_replaying_effect
             lambda config, _: original(config, "0015_operational_generation_pause"),
         )
         MigrationManager(path).upgrade()
+    # Seed the historical schema without invoking current admission of a new Message.
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO conversations VALUES (1,'synthetic','customer',?,?)",
+            (NOW.isoformat(), NOW.isoformat()),
+        )
+        connection.execute(
+            "INSERT INTO messages (conversation_id,provider,provider_message_id,"
+            "recipient_address,direction,body,created_at) "
+            "VALUES (1,'synthetic','message-customer','studio','inbound',"
+            "'Synthetic',?)",
+            (NOW.isoformat(),),
+        )
     store = SqliteConversationStore(path)
     delivery = pending(store)
     claim = store.claim_next_delivery(now=NOW)
@@ -542,7 +555,9 @@ def test_migration_backfills_existing_pauses_atomically_without_replaying_effect
     finally:
         if interrupt:
             sqlalchemy_event.remove(Engine, "after_cursor_execute", fault)
-    assert controls(path) == before_controls
+    assert [
+        {k: v for k, v in row.items() if k != "resumed_at"} for row in controls(path)
+    ] == before_controls
     assert rows(path, "human_pause_effects") == before_effects
     if interrupt:
         assert rows(path, "outbound_deliveries") == before_outbox
@@ -563,7 +578,9 @@ def test_migration_backfills_existing_pauses_atomically_without_replaying_effect
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     store.initialize()
-    assert controls(path) == before_controls
+    assert [
+        {k: v for k, v in row.items() if k != "resumed_at"} for row in controls(path)
+    ] == before_controls
 
 
 @pytest.mark.parametrize(

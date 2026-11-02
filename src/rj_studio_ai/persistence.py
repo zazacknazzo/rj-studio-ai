@@ -1010,7 +1010,12 @@ class SqliteConversationStore:
                         WHERE outbound.id = delivery.outbound_message_id
                         AND NOT EXISTS (
                             SELECT 1 FROM conversation_automation_controls
-                            WHERE conversation_id = outbound.conversation_id AND paused = 1
+                            WHERE conversation_id = outbound.conversation_id AND (
+                                paused = 1 OR revision != (
+                                    SELECT automation_revision FROM message_processing
+                                    WHERE inbound_message_id = outbound.in_reply_to_message_id
+                                )
+                            )
                         )
                         AND (
                             (delivery.handoff_token IS NULL AND NOT EXISTS (
@@ -1052,7 +1057,12 @@ class SqliteConversationStore:
                         WHERE outbound.id = delivery.outbound_message_id
                         AND NOT EXISTS (
                             SELECT 1 FROM conversation_automation_controls
-                            WHERE conversation_id = outbound.conversation_id AND paused = 1
+                            WHERE conversation_id = outbound.conversation_id AND (
+                                paused = 1 OR revision != (
+                                    SELECT automation_revision FROM message_processing
+                                    WHERE inbound_message_id = outbound.in_reply_to_message_id
+                                )
+                            )
                         )
                         AND (
                             (delivery.handoff_token IS NULL AND NOT EXISTS (
@@ -1071,6 +1081,55 @@ class SqliteConversationStore:
                 return updated == 1
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Legacy reply authorization is unavailable") from error
+
+    def change_automation(
+        self,
+        opaque_id: str,
+        action: str,
+        operation_id: str,
+        expected_revision: int,
+        operator_id: str,
+    ) -> dict:
+        from rj_studio_ai.automation_operations import apply_operation
+
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                return apply_operation(
+                    connection,
+                    opaque_id,
+                    action,
+                    operation_id,
+                    expected_revision,
+                    operator_id,
+                    self._utc_time(None).isoformat(),
+                )
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Operational change unavailable") from error
+
+    def automation_identifier(self, inbound_message_id: int) -> str:
+        try:
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT opaque_id FROM conversation_operation_ids JOIN messages "
+                    "USING(conversation_id) WHERE messages.id=?",
+                    (inbound_message_id,),
+                ).fetchone()
+                if row is None:
+                    raise LookupError("conversation_not_found")
+                return str(row[0])
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Operational state unavailable") from error
+
+    def get_automation_state(self, opaque_id: str) -> dict:
+        from rj_studio_ai.automation_operations import automation_state
+
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN")
+                return automation_state(connection, opaque_id)
+        except sqlite3.Error as error:
+            raise PersistenceUnavailable("Operational state unavailable") from error
 
     def finalize_delivery(
         self,
@@ -1124,7 +1183,12 @@ class SqliteConversationStore:
                         SELECT 1 FROM conversation_automation_controls AS control
                         JOIN messages AS outbound
                           ON outbound.conversation_id = control.conversation_id
-                        WHERE outbound.id = delivery.outbound_message_id AND control.paused = 1
+                        WHERE outbound.id = delivery.outbound_message_id AND (
+                            control.paused = 1 OR control.revision != (
+                                SELECT automation_revision FROM message_processing
+                                WHERE inbound_message_id = outbound.in_reply_to_message_id
+                            )
+                        )
                     ) AS paused
                     FROM outbound_deliveries AS delivery
                     WHERE delivery.id = ?
@@ -2693,6 +2757,25 @@ class SqliteConversationStore:
             provider=message.provider,
             customer_address=message.customer_address,
         )
+        cutoff = connection.execute(
+            "SELECT resumed_at FROM conversation_automation_controls WHERE conversation_id=?",
+            (conversation_id,),
+        ).fetchone()
+        if cutoff is not None and cutoff[0] is not None:
+            metadata = getattr(message, "metadata", None)
+            source = None if metadata is None else metadata.message_occurred_at
+            if not (
+                source is not None
+                and datetime.fromisoformat(cutoff[0])
+                < source
+                <= metadata.occurred_at
+                <= datetime.fromisoformat(timestamp)
+            ):
+                connection.execute(
+                    "UPDATE message_processing SET state='suppressed', owner_token=NULL, "
+                    "lease_expires_at=NULL WHERE inbound_message_id=? AND state='retryable'",
+                    (inbound_message_id,),
+                )
         return inbound_message_id
 
     def _generation_result(
