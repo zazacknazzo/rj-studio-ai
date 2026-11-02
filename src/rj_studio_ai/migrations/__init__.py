@@ -91,7 +91,11 @@ class MigrationManager:
             "appointment_intakes",
             "operational_events",
             "operational_event_aliases",
+            "conversation_automation_controls",
+            "human_pause_effects",
         }.issubset(inspector.get_table_names()):
+            return False
+        if not MigrationManager._pause_schema_matches(inspector):
             return False
         if not MigrationManager._operational_schema_matches(inspector):
             return False
@@ -139,6 +143,7 @@ class MigrationManager:
                 "in_reply_to_message_id",
             },
             "message_processing": {
+                "automation_revision",
                 "inbound_message_id",
                 "state",
                 "owner_token",
@@ -345,6 +350,13 @@ class MigrationManager:
                 for item in inspector.get_foreign_keys("appointment_intakes")
             )
             and {
+                "operational_pause_suppresses_insert",
+                "operational_pause_suppresses_update",
+                "operational_pause_rejects_reply_insert",
+                "operational_pause_rejects_reply_update",
+                "operational_pause_rejects_claim_insert",
+                "operational_pause_rejects_claim_update",
+                "operational_pause_suppresses_admission",
                 "ai_reply_rejects_active_handoff",
                 "processing_rejects_active_handoff",
                 "submission_evidence_is_immutable",
@@ -374,7 +386,7 @@ class MigrationManager:
                 "ck_message_processing_state",
                 "ck_message_processing_attempt_count",
                 "ck_message_processing_claim_shape",
-                "ck_message_processing_suppressed_attempts",
+                "ck_processing_automation_revision",
             }.issubset(processing_checks)
             and {
                 "message_processing_requires_inbound_insert",
@@ -444,6 +456,48 @@ class MigrationManager:
                 "delivery_attempt_identity_is_immutable",
                 "terminal_delivery_attempt_is_immutable",
             }.issubset(processing_triggers)
+        )
+
+    @staticmethod
+    def _pause_schema_matches(inspector: Inspector) -> bool:
+        for table, columns, check in (
+            (
+                "conversation_automation_controls",
+                {"conversation_id", "channel_id", "paused", "revision", "updated_at"},
+                "ck_automation_control",
+            ),
+            (
+                "human_pause_effects",
+                {
+                    "event_record_id",
+                    "conversation_id",
+                    "provider",
+                    "channel_id",
+                    "customer_address",
+                    "provider_message_id",
+                    "applied_at",
+                    "revision",
+                },
+                "ck_human_pause_revision",
+            ),
+        ):
+            if not columns.issubset({item["name"] for item in inspector.get_columns(table)}):
+                return False
+            if check not in {item["name"] for item in inspector.get_check_constraints(table)}:
+                return False
+            if not any(
+                item["constrained_columns"] == ["conversation_id"]
+                and item["referred_table"] == "conversations"
+                and item["options"].get("ondelete") == "RESTRICT"
+                for item in inspector.get_foreign_keys(table)
+            ):
+                return False
+        return any(
+            item["name"] == "uq_human_pause_message"
+            and item["unique"]
+            and item["column_names"]
+            == ["provider", "channel_id", "customer_address", "provider_message_id"]
+            for item in inspector.get_indexes("human_pause_effects")
         )
 
     @staticmethod

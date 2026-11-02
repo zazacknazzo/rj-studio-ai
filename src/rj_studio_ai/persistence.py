@@ -11,12 +11,14 @@ from rj_studio_ai.appointment_intake import AppointmentIntake, AppointmentIntake
 from rj_studio_ai.domain import (
     DeliveryStatus,
     DeliveryStatusReceived,
+    HumanMessageObserved,
     InboundMessage,
     MessageRecord,
     OutboundMessage,
     ProviderWebhookEvent,
 )
 from rj_studio_ai.generation import GenerationMetric
+from rj_studio_ai.generation_pause import apply_pending_human_pauses
 from rj_studio_ai.handoff import HandoffReason
 from rj_studio_ai.migrations import MigrationManager
 from rj_studio_ai.operational_events import OPERATIONAL_EVENT_TYPES, record_operational_event
@@ -221,6 +223,12 @@ class SqliteConversationStore:
 
     def initialize(self) -> None:
         self._migrations.upgrade()
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                apply_pending_human_pauses(connection, timestamp=self._utc_time(None).isoformat())
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Operational pause recovery is unavailable") from None
 
     def get_appointment_intake(
         self,
@@ -494,6 +502,13 @@ class SqliteConversationStore:
                         )
                     elif type(event) in OPERATIONAL_EVENT_TYPES:
                         record_operational_event(connection, event, received_at=timestamp)
+                        if isinstance(event, HumanMessageObserved):
+                            apply_pending_human_pauses(
+                                connection,
+                                timestamp=timestamp,
+                                provider=event.provider,
+                                customer_address=event.customer_address,
+                            )
                     else:
                         self._get_or_create_inbound(connection, event, timestamp)
         except sqlite3.Error:
@@ -1806,6 +1821,10 @@ class SqliteConversationStore:
                         SELECT 1 FROM conversation_handoffs
                         WHERE conversation_id = conversations.id AND active = 1
                     )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM conversation_automation_controls
+                        WHERE conversation_id = conversations.id
+                    )
                     """
                 ).rowcount
         except sqlite3.Error as error:
@@ -2108,6 +2127,11 @@ class SqliteConversationStore:
                 """
                 UPDATE message_processing
                 SET state = 'processing',
+                    automation_revision = COALESCE((
+                        SELECT control.revision FROM conversation_automation_controls AS control
+                        JOIN messages ON messages.conversation_id = control.conversation_id
+                        WHERE messages.id = message_processing.inbound_message_id
+                    ), 0),
                     owner_token = ?,
                     lease_expires_at = ?,
                     attempt_count = attempt_count + 1,
@@ -2156,7 +2180,7 @@ class SqliteConversationStore:
                 return False
             processing = connection.execute(
                 """
-                SELECT state, owner_token, lease_expires_at
+                SELECT state, owner_token, lease_expires_at, automation_revision
                 FROM message_processing
                 WHERE inbound_message_id = ?
                 """,
@@ -2172,6 +2196,15 @@ class SqliteConversationStore:
                 return False
 
             conversation_id = int(inbound[0])
+            control = connection.execute(
+                "SELECT paused, revision FROM conversation_automation_controls "
+                "WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if (control is not None and control[0]) or processing[3] != (
+                0 if control is None else control[1]
+            ):
+                return False
             if connection.execute(
                 "SELECT 1 FROM conversation_handoffs WHERE conversation_id = ? AND active = 1",
                 (conversation_id,),
@@ -2483,6 +2516,11 @@ class SqliteConversationStore:
                 """
                 UPDATE message_processing
                 SET state = 'processing',
+                    automation_revision = COALESCE((
+                        SELECT control.revision FROM conversation_automation_controls AS control
+                        JOIN messages ON messages.conversation_id = control.conversation_id
+                        WHERE messages.id = message_processing.inbound_message_id
+                    ), 0),
                     owner_token = ?,
                     lease_expires_at = ?,
                     updated_at = ?
@@ -2551,6 +2589,14 @@ class SqliteConversationStore:
         message: InboundMessage,
         timestamp: str,
     ) -> int:
+        control = connection.execute(
+            "SELECT control.channel_id FROM conversation_automation_controls AS control "
+            "JOIN conversations ON conversations.id = control.conversation_id "
+            "WHERE conversations.provider = ? AND conversations.customer_address = ?",
+            (message.provider, message.customer_address),
+        ).fetchone()
+        if control is not None and control[0] != message.recipient_address:
+            raise sqlite3.IntegrityError("Controlled Conversation channel mismatch")
         existing = connection.execute(
             """
             SELECT id
@@ -2605,6 +2651,12 @@ class SqliteConversationStore:
         connection.execute(
             "UPDATE conversations SET updated_at = ? WHERE id = ?",
             (timestamp, conversation_id),
+        )
+        apply_pending_human_pauses(
+            connection,
+            timestamp=timestamp,
+            provider=message.provider,
+            customer_address=message.customer_address,
         )
         return inbound_message_id
 

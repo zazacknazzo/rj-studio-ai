@@ -25,3 +25,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 
 - [Coexistence Ticket 02 — operational journal](V1-telnyx-coexistence-ticket-02.md):
   approved persistence/deduplication only; Tickets 03–13 and live integration are not approved.
+
+- [Coexistence Ticket 03 — generation pause](V1-telnyx-coexistence-ticket-03.md):
+  approved pause and generation fencing only; Ticket 04 and live integration not authorized.

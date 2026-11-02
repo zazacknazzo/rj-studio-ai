@@ -47,9 +47,15 @@ def test_upgrade_preserves_all_baseline_rows_and_rolls_back_partial_rebuild(tmp_
         if interrupt:
             event.remove(Engine, "after_cursor_execute", fault)
     with sqlite3.connect(path) as connection:
-        assert {t: connection.execute(f"SELECT * FROM {t}").fetchall() for t in tables} == before
+        after = {t: connection.execute(f"SELECT * FROM {t}").fetchall() for t in tables}
+        if not interrupt:
+            assert all(row[-1] == 0 for row in after["message_processing"])
+            after["message_processing"] = [row[:-1] for row in after["message_processing"]]
+        assert after == before
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
-        expected = "0011_conversational_intake" if interrupt else "0014_operational_event_journal"
+        expected = (
+            "0011_conversational_intake" if interrupt else "0015_operational_generation_pause"
+        )
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

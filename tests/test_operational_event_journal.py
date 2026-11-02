@@ -76,8 +76,8 @@ def test_identical_duplicate_keeps_first_receipt_and_has_no_work(journal, make_e
     store.record_webhook_events((event,), now=NOW + timedelta(days=10))
     assert len(rows(path)) == 1
     assert rows(path)[0]["received_at"] == NOW.isoformat()
+    assert len(rows(path, "conversations")) == (1 if make_event is human else 0)
     for table in (
-        "conversations",
         "messages",
         "message_processing",
         "outbound_deliveries",
@@ -175,7 +175,7 @@ def test_out_of_order_revocation_original_and_lifecycle_remain_observations(jour
     ]
     assert rows(path)[2]["occurred_at"] < rows(path)[1]["occurred_at"]
     assert len(rows(path, "messages")) == 1
-    assert rows(path, "message_processing")[0]["state"] == "retryable"
+    assert rows(path, "message_processing")[0]["state"] == "suppressed"
 
 
 def test_mixed_batch_commits_old_paths_and_all_operational_kinds(journal):
@@ -256,7 +256,8 @@ def test_restart_replay_and_explicit_message_purge_preserve_operational_evidence
     restarted = SqliteConversationStore(path)
     restarted.initialize()
     restarted.purge_messages_older_than(NOW)
-    restarted.delete_conversation(provider="synthetic", customer_address="customer")
+    with pytest.raises(PersistenceUnavailable):
+        restarted.delete_conversation(provider="synthetic", customer_address="customer")
     restarted.record_webhook_events((aliased(human()),), now=NOW)
     assert len(rows(path)) == 1
     assert rows(path)[0]["received_at"] == old.isoformat()
@@ -347,7 +348,10 @@ def test_legacy_upgrade_preserves_every_existing_row_and_unknown(tmp_path, monke
     before = {table: rows(path, table) for table in tables}
     store = SqliteConversationStore(path)
     store.initialize()
-    assert {table: rows(path, table) for table in tables} == before
+    after = {table: rows(path, table) for table in tables}
+    for row in after["message_processing"]:
+        assert row.pop("automation_revision") == 0
+    assert after == before
     assert rows(path, "outbound_deliveries")[0]["state"] == "unknown"
     assert rows(path) == rows(path, "operational_event_aliases") == []
     assert store.migrations_are_current()
