@@ -53,9 +53,7 @@ def test_upgrade_preserves_all_baseline_rows_and_rolls_back_partial_rebuild(tmp_
             after["message_processing"] = [row[:-1] for row in after["message_processing"]]
         assert after == before
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
-        expected = (
-            "0011_conversational_intake" if interrupt else "0015_operational_generation_pause"
-        )
+        expected = "0011_conversational_intake" if interrupt else "0016_operational_outbound_fence"
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

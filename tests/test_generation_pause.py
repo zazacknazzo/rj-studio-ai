@@ -294,10 +294,9 @@ def test_other_conversation_and_provider_continue_independently(pausedb):
 def test_policy_handoff_and_release_do_not_release_operational_pause(pausedb):
     store, path = pausedb
     claim, handoff = _activate(store, message=inbound(), now=NOW)
-    before = rows(path, "outbound_deliveries")
     pause(store)
     assert store.list_active_handoffs() == [handoff]
-    assert rows(path, "outbound_deliveries") == before
+    assert rows(path, "outbound_deliveries")[0]["state"] == "cancelled"
     assert controls(path)[0]["paused"] == 1
     assert store.release_handoff(
         conversation_id=handoff.conversation_id, owner_token=handoff.owner_token, now=NOW
@@ -316,7 +315,7 @@ def test_policy_handoff_and_release_do_not_release_operational_pause(pausedb):
 
 
 @pytest.mark.parametrize("state", [DeliveryState.PENDING, DeliveryState.UNKNOWN])
-def test_already_persisted_reply_and_outbound_state_remain_unchanged(pausedb, state):
+def test_persisted_reply_survives_and_pause_cancels_only_pending_outbound(pausedb, state):
     store, path = pausedb
     claim = store.claim_generation(inbound(), now=NOW)
     assert store.complete_generation(
@@ -329,11 +328,12 @@ def test_already_persisted_reply_and_outbound_state_remain_unchanged(pausedb, st
     before = rows(path, "outbound_deliveries")
     messages = rows(path, "messages")
     pause(store)
-    assert rows(path, "outbound_deliveries") == before
+    if state is DeliveryState.UNKNOWN:
+        assert rows(path, "outbound_deliveries") == before
+    else:
+        assert rows(path, "outbound_deliveries")[0]["state"] == "cancelled"
     assert rows(path, "messages") == messages
-    delivery = store.claim_next_delivery(now=NOW)
-    assert (delivery is not None) == (state is DeliveryState.PENDING)
-    # Pending outbound is deliberately NOT fenced until Ticket 04.
+    assert store.claim_next_delivery(now=NOW) is None
 
 
 @pytest.mark.parametrize("pause_first", [False, True])
@@ -480,7 +480,14 @@ def test_migration_preserves_leaf_rows_and_triggers_or_rolls_back(tmp_path, monk
         current = dict(
             connection.execute("SELECT name, sql FROM sqlite_master WHERE type='trigger'")
         )
-        assert all(current[name] == sql for name, sql in triggers.items())
+        # Ticket 04 extends this one attempt guard for operational cancellation.
+        assert all(
+            current[name] == sql
+            for name, sql in triggers.items()
+            if name != "delivery_attempt_finalization_requires_current_claim"
+        )
+        if interrupt:
+            assert current == triggers
     if not interrupt:
         pause(SqliteConversationStore(path))
         assert rows(path, "message_processing")[0]["attempt_count"] == 2

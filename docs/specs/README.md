@@ -28,3 +28,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 
 - [Coexistence Ticket 03 — generation pause](V1-telnyx-coexistence-ticket-03.md):
   approved pause and generation fencing only; Ticket 04 and live integration not authorized.
+
+- [Coexistence Ticket 04 — outbound fencing](V1-telnyx-coexistence-ticket-04.md):
+  approved cancellation/authorization only; Tickets 05–13 and live integration not authorized.

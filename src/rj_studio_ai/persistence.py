@@ -354,7 +354,11 @@ class SqliteConversationStore:
                 delivery.state IN ('pending', 'retryable')
                 OR (delivery.state = 'sending' AND delivery.submission_started_at IS NULL)
                 OR (delivery.state = 'unknown' AND delivery.safe_error_code = 'legacy_unverified'
-                    AND delivery.submission_started_at IS NULL AND delivery.attempt_count = 0)
+                    AND delivery.submission_started_at IS NULL AND delivery.attempt_count = 0
+                    AND NOT EXISTS (
+                        SELECT 1 FROM conversation_automation_controls
+                        WHERE conversation_id = outbound.conversation_id AND paused = 1
+                    ))
               )
             """,
             (conversation_id, except_handoff_token, except_handoff_token),
@@ -841,6 +845,10 @@ class SqliteConversationStore:
                       AND (? IS NULL OR delivery.provider = ?)
                       AND delivery.next_attempt_at <= ?
                       AND processing.state = 'completed'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM conversation_automation_controls
+                        WHERE conversation_id = outbound.conversation_id AND paused = 1
+                      )
                       AND (
                         (delivery.handoff_token IS NULL AND NOT EXISTS (
                             SELECT 1 FROM conversation_handoffs WHERE active = 1
@@ -958,6 +966,10 @@ class SqliteConversationStore:
                           AND delivery.state = 'sending'
                           AND delivery.owner_token = ?
                           AND delivery.lease_expires_at > ?
+                          AND NOT EXISTS (
+                            SELECT 1 FROM conversation_automation_controls
+                            WHERE conversation_id = outbound.conversation_id AND paused = 1
+                          )
                           AND (
                             (delivery.handoff_token IS NULL AND NOT EXISTS (
                                 SELECT 1 FROM conversation_handoffs WHERE active = 1
@@ -983,7 +995,7 @@ class SqliteConversationStore:
         owner_token: str,
         now: datetime | None = None,
     ) -> bool:
-        """Fence owner and handoff immediately before possibly irreversible HTTP."""
+        """Fence owner, lease, handoff and operational pause before irreversible HTTP."""
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -996,6 +1008,10 @@ class SqliteConversationStore:
                       AND EXISTS (
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
+                        AND NOT EXISTS (
+                            SELECT 1 FROM conversation_automation_controls
+                            WHERE conversation_id = outbound.conversation_id AND paused = 1
+                        )
                         AND (
                             (delivery.handoff_token IS NULL AND NOT EXISTS (
                                 SELECT 1 FROM conversation_handoffs WHERE active = 1
@@ -1019,7 +1035,7 @@ class SqliteConversationStore:
     def authorize_legacy_reply(
         self, *, delivery_id: int, lock_timeout: float | None = None
     ) -> bool:
-        """Fence the rollback-mode HTTP submission using the same handoff policy."""
+        """Fence rollback-mode HTTP with handoff and operational pause policy."""
         try:
             with self._connect(lock_timeout) as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -1034,6 +1050,10 @@ class SqliteConversationStore:
                     ) AND EXISTS (
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
+                        AND NOT EXISTS (
+                            SELECT 1 FROM conversation_automation_controls
+                            WHERE conversation_id = outbound.conversation_id AND paused = 1
+                        )
                         AND (
                             (delivery.handoff_token IS NULL AND NOT EXISTS (
                                 SELECT 1 FROM conversation_handoffs WHERE active = 1

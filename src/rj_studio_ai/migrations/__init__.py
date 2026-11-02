@@ -350,6 +350,11 @@ class MigrationManager:
                 for item in inspector.get_foreign_keys("appointment_intakes")
             )
             and {
+                "operational_pause_cancels_outbound_insert",
+                "operational_pause_cancels_outbound_update",
+                "operational_pause_cancels_ready_delivery_insert",
+                "operational_pause_cancels_ready_delivery_update",
+                "operational_pause_rejects_delivery_authorization",
                 "operational_pause_suppresses_insert",
                 "operational_pause_suppresses_update",
                 "operational_pause_rejects_reply_insert",

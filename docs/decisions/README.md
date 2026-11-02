@@ -16,4 +16,6 @@ Read an ADR only when a task touches its decision.
 | [0010](0010-operational-observation-journal.md) | Journal scoped operational observations independently of Messages and future effects |
 | [0011](0011-operational-generation-pause.md) | Persist operational pause and fence generation independently of Human Handoff and outbound |
 
+| [0012](0012-operational-outbound-pause.md) | Cancel proven-unsubmitted deliveries and fence authorization under operational pause |
+
 Add an ADR only for a hard-to-reverse choice that would be surprising without its trade-off. Keep it concise and update this index.
