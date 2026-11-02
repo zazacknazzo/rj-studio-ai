@@ -718,3 +718,116 @@ def test_submission_lease_expiry_and_late_acceptance_remain_conservative(db):
     )
     assert restarted.get_delivery(claim.delivery_id).state is DeliveryState.UNKNOWN
     assert rows(path, "delivery_attempts")[0]["safe_error_code"] == "sending_lease_expired"
+
+
+@pytest.mark.parametrize("maximum_attempts", [1, 3])
+def test_paused_last_retryable_attempt_is_cancelled_without_erasing_rejection(db, maximum_attempts):
+    store, path = db
+    pending(store)
+    calls = []
+
+    class RetryableSender:
+        def send(self, message, *, timeout_seconds):
+            calls.append(message)
+            if len(calls) == maximum_attempts:
+                pause(SqliteConversationStore(path))
+            raise OutboundRetryableError("Synthetic rejection")
+
+    runner = OutboundDeliveryRunner(
+        store, RetryableSender(), timeout_seconds=1, maximum_attempts=maximum_attempts
+    )
+    for attempt in range(maximum_attempts):
+        result = runner.run_once(now=NOW + timedelta(seconds=attempt * 10))
+        assert result.state is (
+            DeliveryState.CANCELLED if attempt == maximum_attempts - 1 else DeliveryState.RETRYABLE
+        )
+    attempts = rows(path, "delivery_attempts")
+    assert len(attempts) == maximum_attempts
+    assert all(attempt["outcome"] == "retryable" for attempt in attempts)
+    assert all(attempt["safe_error_code"] == "provider_retryable" for attempt in attempts)
+    assert result.safe_error_code == "operational_pause_cancelled"
+    assert result.next_attempt_at is None
+    restarted = SqliteConversationStore(path)
+    restarted.initialize()
+    assert delivery_runner(restarted).run_once(now=NOW + timedelta(days=1)) is None
+
+
+@pytest.mark.parametrize("pause_first", [False, True])
+def test_pause_and_retry_exhaustion_resolve_in_one_finalization_transaction(
+    db, monkeypatch, pause_first
+):
+    store, path = db
+    pending(store)
+    claim = store.claim_next_delivery(now=NOW)
+    assert authorize(store, claim)
+    entered, release, contender = Event(), Event(), Event()
+    original = store._connect
+    needle = "INSERT INTO human_pause_effects" if pause_first else "UPDATE delivery_attempts"
+
+    @contextmanager
+    def gated(*args, **kwargs):
+        with original(*args, **kwargs) as connection:
+
+            def trace(sql):
+                if needle in sql:
+                    entered.set()
+                    release.wait(timeout=5)
+
+            connection.set_trace_callback(trace)
+            yield connection
+
+    monkeypatch.setattr(store, "_connect", gated)
+    other = SqliteConversationStore(path)
+
+    def finalize(target):
+        return finished(
+            target,
+            claim,
+            DeliveryState.RETRYABLE,
+            safe_error_code="provider_retryable",
+            retry_exhausted=True,
+            retry_at=NOW + timedelta(seconds=1),
+        )
+
+    def second():
+        contender.set()
+        return finalize(other) if pause_first else pause(other)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(pause, store) if pause_first else pool.submit(finalize, store)
+        try:
+            assert entered.wait(timeout=5)
+            second_future = pool.submit(second)
+            assert contender.wait(timeout=5)
+        finally:
+            release.set()
+        first_result, second_result = first.result(timeout=5), second_future.result(timeout=5)
+    assert (second_result if pause_first else first_result) is True
+    assert store.get_delivery(claim.delivery_id).state is (
+        DeliveryState.CANCELLED if pause_first else DeliveryState.FAILED
+    )
+    attempt = rows(path, "delivery_attempts")[0]
+    assert attempt["outcome"] == ("retryable" if pause_first else "failed")
+    assert attempt["safe_error_code"] == (
+        "provider_retryable" if pause_first else "provider_retry_exhausted"
+    )
+    assert delivery_runner(other).run_once(now=NOW + timedelta(days=1)) is None
+
+
+def test_retry_exhaustion_cannot_reinterpret_unknown_evidence(db):
+    store, path = db
+    pending(store)
+    claim = store.claim_next_delivery(now=NOW)
+    assert authorize(store, claim)
+    pause(store)
+    before = rows(path, "outbound_deliveries")
+    with pytest.raises(ValueError, match="proven retryable"):
+        finished(
+            store,
+            claim,
+            DeliveryState.UNKNOWN,
+            safe_error_code="provider_outcome_unknown",
+            retry_exhausted=True,
+        )
+    assert rows(path, "outbound_deliveries") == before
+    assert finished(store, claim, DeliveryState.UNKNOWN, safe_error_code="provider_outcome_unknown")

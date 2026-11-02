@@ -67,26 +67,19 @@ class OutboundDeliveryRunner:
         try:
             acceptance = self.sender.send(message, timeout_seconds=self.timeout_seconds)
         except OutboundRetryableError:
-            if claim.attempt_count >= self.maximum_attempts:
-                self._finalize(
-                    claim,
-                    outcome=DeliveryState.FAILED,
-                    safe_error_code="provider_retry_exhausted",
-                    now=now,
-                )
-            else:
-                current_time = now or datetime.now(UTC)
-                backoff_seconds = min(
-                    self.retry_backoff_base_seconds * (2 ** (claim.attempt_count - 1)),
-                    self.retry_backoff_maximum_seconds,
-                )
-                self._finalize(
-                    claim,
-                    outcome=DeliveryState.RETRYABLE,
-                    safe_error_code="provider_retryable",
-                    retry_at=current_time + timedelta(seconds=backoff_seconds),
-                    now=now,
-                )
+            current_time = now or datetime.now(UTC)
+            backoff_seconds = min(
+                self.retry_backoff_base_seconds * (2 ** (claim.attempt_count - 1)),
+                self.retry_backoff_maximum_seconds,
+            )
+            self._finalize(
+                claim,
+                outcome=DeliveryState.RETRYABLE,
+                safe_error_code="provider_retryable",
+                retry_at=current_time + timedelta(seconds=backoff_seconds),
+                retry_exhausted=claim.attempt_count >= self.maximum_attempts,
+                now=now,
+            )
         except OutboundPermanentError:
             self._finalize(
                 claim,
@@ -122,6 +115,7 @@ class OutboundDeliveryRunner:
         provider_message_id: str | None = None,
         safe_error_code: str | None = None,
         retry_at: datetime | None = None,
+        retry_exhausted: bool = False,
         now: datetime | None,
     ) -> None:
         if claim.owner_token is None:
@@ -133,6 +127,7 @@ class OutboundDeliveryRunner:
             provider_message_id=provider_message_id,
             safe_error_code=safe_error_code,
             retry_at=retry_at,
+            retry_exhausted=retry_exhausted,
             now=now,
         )
         if not finalized:

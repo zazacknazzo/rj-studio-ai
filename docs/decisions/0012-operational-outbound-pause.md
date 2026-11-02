@@ -31,3 +31,10 @@ results, monotonic callbacks and conservative unknown expiry; never resend to
 compensate. This local transaction cannot promise external exactly-once or recall.
 Authenticated commands remain Ticket 05. Journal/control retention on hold is
 still a release blocker; this change neither purges data nor enables Telnyx.
+
+Retry exhaustion is a neutral finalization input, not inferred from a diagnostic
+error string. For a proven retryable result, finalization resolves it against the
+paused state under the same writer transaction. Pause first: retain retryable
+attempt evidence and cancel, including the final allowed attempt. Exhaustion
+first while unpaused: retain existing failed/provider_retry_exhausted behavior;
+a later pause preserves that terminal failure. Unknown cannot use this input.

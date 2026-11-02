@@ -1081,6 +1081,7 @@ class SqliteConversationStore:
         provider_message_id: str | None = None,
         safe_error_code: str | None = None,
         retry_at: datetime | None = None,
+        retry_exhausted: bool = False,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -1093,6 +1094,8 @@ class SqliteConversationStore:
             DeliveryState.FAILED,
         }:
             raise ValueError("Invalid Outbound Delivery finalization outcome")
+        if retry_exhausted and outcome is not DeliveryState.RETRYABLE:
+            raise ValueError("Retry exhaustion requires a proven retryable outcome")
         if outcome is DeliveryState.ACCEPTED:
             if provider_message_id is None or not provider_message_id.strip():
                 raise ValueError("Provider Acceptance requires a provider Message ID")
@@ -1117,17 +1120,29 @@ class SqliteConversationStore:
                     next_attempt_at = None
                 current = connection.execute(
                     """
-                    SELECT attempt_count, provider
-                    FROM outbound_deliveries
-                    WHERE id = ?
-                      AND state = 'sending'
-                      AND owner_token = ?
-                      AND lease_expires_at > ?
+                    SELECT delivery.attempt_count, delivery.provider, EXISTS (
+                        SELECT 1 FROM conversation_automation_controls AS control
+                        JOIN messages AS outbound
+                          ON outbound.conversation_id = control.conversation_id
+                        WHERE outbound.id = delivery.outbound_message_id AND control.paused = 1
+                    ) AS paused
+                    FROM outbound_deliveries AS delivery
+                    WHERE delivery.id = ?
+                      AND delivery.state = 'sending'
+                      AND delivery.owner_token = ?
+                      AND delivery.lease_expires_at > ?
                     """,
                     (delivery_id, owner_token, timestamp),
                 ).fetchone()
                 if current is None:
                     return False
+                # Resolve exhaustion against pause in this same writer transaction.
+                # A paused proven-retryable result retains its attempt evidence;
+                # the ready-state trigger cancels the delivery before commit.
+                if retry_exhausted and not current[2]:
+                    outcome = DeliveryState.FAILED
+                    safe_error_code = "provider_retry_exhausted"
+                    next_attempt_at = None
                 attempt_number = int(current[0])
                 provider = str(current[1])
                 accepted_at = timestamp if outcome is DeliveryState.ACCEPTED else None

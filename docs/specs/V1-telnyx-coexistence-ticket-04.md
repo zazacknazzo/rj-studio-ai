@@ -64,3 +64,10 @@ handoff confirmation/release, two concurrent Conversations, privacy and legacy
 Meta/Twilio. All send calls are in-memory fakes with IP network disabled. Run full
 suite, Ruff, formatting, compilation, diff checks and independent Standards/Spec
 reviews; fix material findings and add regressions before delivery.
+
+Retry exhaustion is a neutral finalization input, not inferred from a diagnostic
+error string. For a proven retryable result, finalization resolves it against the
+paused state under the same writer transaction. Pause first: retain retryable
+attempt evidence and cancel, including the final allowed attempt. Exhaustion
+first while unpaused: retain existing failed/provider_retry_exhausted behavior;
+a later pause preserves that terminal failure. Unknown cannot use this input.
