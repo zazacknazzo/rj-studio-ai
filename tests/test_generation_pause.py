@@ -594,3 +594,43 @@ def test_readiness_requires_pause_integrity_structures(pausedb, missing):
     with sqlite3.connect(path) as connection:
         connection.execute(f"DROP {'INDEX' if missing.startswith('uq_') else 'TRIGGER'} {missing}")
     assert not store.migrations_are_current()
+
+
+def test_two_conversations_generate_in_parallel_and_only_paused_one_loses_reply(pausedb):
+    store, path = pausedb
+    store.record_webhook_events((inbound(),))
+    generator_a, generator_b = _BlockingGenerator(), _BlockingGenerator()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(runner(store, generator_a).run_once)
+        try:
+            assert generator_a.entered.wait(timeout=5)
+            store.record_webhook_events(
+                (
+                    replace(
+                        inbound(), provider_message_id="parallel-b", customer_address="customer-b"
+                    ),
+                )
+            )
+            second = pool.submit(runner(SqliteConversationStore(path), generator_b).run_once)
+            assert generator_b.entered.wait(timeout=5)
+            # Both generators are live; only A's exact identity receives the echo.
+            pause(SqliteConversationStore(path), now=None)
+            generator_b.release.set()
+            completed_b = second.result(timeout=5)
+            assert completed_b is not None
+            assert completed_b.state is GenerationState.COMPLETED
+            assert not first.done()
+            assert len(rows(path, "outbound_deliveries")) == 1
+            generator_a.release.set()
+            assert first.result(timeout=5) is None
+        finally:
+            generator_a.release.set()
+            generator_b.release.set()
+    assert (
+        store.get_generation(
+            provider="synthetic", provider_message_id=inbound().provider_message_id
+        ).state
+        is GenerationState.SUPPRESSED
+    )
+    assert len(controls(path)) == 1
+    assert len(rows(path, "outbound_deliveries")) == 1
