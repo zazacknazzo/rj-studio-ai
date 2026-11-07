@@ -1,9 +1,12 @@
 import hashlib
 import sqlite3
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import timedelta
-from threading import Barrier
+from threading import Barrier, Event
 from uuid import uuid4
 
 import pytest
@@ -39,7 +42,11 @@ def test_authenticated_query_is_private_and_read_only(tmp_path):
     )
     client = TestClient(create_app(settings, store=store))
     url = f"/admin/conversations/{opaque}/automation"
-    assert client.get(url).status_code == 401
+    with sqlite3.connect(tmp_path / "operations.db") as connection:
+        before = tuple(connection.iterdump())
+    anonymous = client.get(url)
+    assert anonymous.status_code == 401
+    assert anonymous.headers["www-authenticate"] == "Bearer"
     response = client.get(url, headers={"Authorization": f"Bearer {SECRET}"})
     assert response.status_code == 200
     assert response.json() == {
@@ -52,6 +59,8 @@ def test_authenticated_query_is_private_and_read_only(tmp_path):
     }
     assert "customer" not in response.text and SECRET not in response.text
     assert client.get(url, headers={"Authorization": f"Bearer {SECRET}"}).json() == response.json()
+    with sqlite3.connect(tmp_path / "operations.db") as connection:
+        assert tuple(connection.iterdump()) == before
 
 
 def test_pause_resume_are_durable_cas_and_idempotent(tmp_path):
@@ -62,15 +71,55 @@ def test_pause_resume_are_durable_cas_and_idempotent(tmp_path):
     claim = store.claim_generation(inbound())
     opaque = store.automation_identifier(claim.inbound_message_id)
     key = uuid4().hex
-    first = store.change_automation(opaque, "pause", key, 0, "operator-test")
+    first = store.change_automation(opaque, "pause", key, 0, "operator-test", now=NOW)
     assert first["paused"] and first["revision"] == 1
-    assert store.change_automation(opaque, "pause", key, 0, "operator-test") == first
-    resumed = store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    assert store.change_automation(opaque, "pause", key, 0, "operator-test", now=NOW) == first
+    resumed = store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert not resumed["paused"] and resumed["revision"] == 2
     assert not store.claim_generation(inbound()).acquired
     reopened = SqliteConversationStore(tmp_path / "ops.db")
     reopened.initialize()
     assert reopened.get_automation_state(opaque) == resumed
+
+
+@pytest.mark.parametrize("interleaved_echo", [False, True])
+def test_resume_cutoff_never_moves_backwards_after_clock_regression(ops, interleaved_echo):
+    store, opaque, _ = ops
+    operations = (
+        (("pause", 0, 20), ("echo", 1, 5), ("resume", 2, 6))
+        if interleaved_echo
+        else (
+            ("pause", 0, 10),
+            ("resume", 1, 20),
+            ("pause", 2, 5),
+            ("resume", 3, 6),
+        )
+    )
+    for action, revision, seconds in operations:
+        if action == "echo":
+            store.record_webhook_events((human(),), now=NOW + timedelta(seconds=seconds))
+            continue
+        store.change_automation(
+            opaque,
+            action,
+            uuid4().hex,
+            revision,
+            "operator-test",
+            now=NOW + timedelta(seconds=seconds),
+        )
+    old = replace(
+        inbound(),
+        provider_message_id="backlog-before-first-resume",
+        metadata=replace(
+            inbound().metadata,
+            occurred_at=NOW + timedelta(seconds=15),
+            message_occurred_at=NOW + timedelta(seconds=15),
+        ),
+    )
+    assert (
+        store.claim_generation(old, now=NOW + timedelta(seconds=30)).state
+        is GenerationState.SUPPRESSED
+    )
 
 
 @pytest.fixture
@@ -162,7 +211,7 @@ def test_api_commands_receipts_conflicts_and_redaction(ops, caplog):
 @pytest.mark.parametrize("mode", ["same_key", "resume_race", "pause_resume"])
 def test_concurrent_commands_have_single_cas_winner(ops, mode):
     store, opaque, path = ops
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
     barrier = Barrier(2)
     key = uuid4().hex
 
@@ -185,13 +234,129 @@ def test_concurrent_commands_have_single_cas_winner(ops, mode):
     assert store.get_automation_state(opaque)["revision"] == 2
 
 
+@pytest.mark.parametrize("activity", ["pause", "echo"])
+@pytest.mark.parametrize("resume_first", [False, True])
+def test_resume_and_human_intervention_serialize_in_both_orders(
+    ops, monkeypatch, activity, resume_first
+):
+    store, opaque, path = ops
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    entered, release, contender = Event(), Event(), Event()
+    original = store._connect
+
+    @contextmanager
+    def hold_writer(*args, **kwargs):
+        with original(*args, **kwargs) as connection:
+
+            def trace(statement):
+                if statement == "COMMIT":
+                    entered.set()
+                    assert release.wait(timeout=5)
+
+            connection.set_trace_callback(trace)
+            yield connection
+
+    monkeypatch.setattr(store, "_connect", hold_writer)
+
+    def act(target, action):
+        if action == "echo":
+            target.record_webhook_events((human(),), now=NOW)
+            return True
+        try:
+            return target.change_automation(
+                opaque, action, uuid4().hex, 1, "operator-test", now=NOW
+            )
+        except OperationConflict:
+            return None
+
+    def second():
+        contender.set()
+        return act(SqliteConversationStore(path), activity if resume_first else "resume")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(act, store, "resume" if resume_first else activity)
+        try:
+            assert entered.wait(timeout=5)
+            following = pool.submit(second)
+            assert contender.wait(timeout=5)
+        finally:
+            release.set()
+        assert first.result(timeout=5) is not None
+        second_result = following.result(timeout=5)
+    reopened = SqliteConversationStore(path)
+    reopened.initialize()
+    state = reopened.get_automation_state(opaque)
+    if activity == "echo" and resume_first:
+        assert second_result is True
+        assert state["paused"] and state["revision"] == 3
+    else:
+        assert second_result is None
+        assert state["paused"] == (not resume_first)
+        assert state["revision"] == 2
+
+
+@pytest.mark.parametrize("crash_before_commit", [False, True])
+def test_resume_recovers_after_process_crash_or_lost_response(ops, crash_before_commit):
+    store, opaque, path = ops
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    key = uuid4().hex
+    script = """
+import os, sys
+from contextlib import contextmanager
+from datetime import datetime
+from rj_studio_ai.persistence import SqliteConversationStore
+path, opaque, key, timestamp, before = sys.argv[1:]
+store = SqliteConversationStore(path)
+original = store._connect
+@contextmanager
+def crashing_connection(*args, **kwargs):
+    with original(*args, **kwargs) as connection:
+        def crash(statement):
+            if statement == "COMMIT":
+                os._exit(75)
+        connection.set_trace_callback(crash)
+        yield connection
+if before == "True":
+    store._connect = crashing_connection
+store.change_automation(
+    opaque, "resume", key, 1, "operator-test", now=datetime.fromisoformat(timestamp)
+)
+os._exit(76)
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(path),
+            opaque,
+            key,
+            (NOW + timedelta(seconds=1)).isoformat(),
+            str(crash_before_commit),
+        ],
+        capture_output=True,
+        timeout=15,
+    )
+    assert result.returncode == (75 if crash_before_commit else 76), result.stderr
+    reopened = SqliteConversationStore(path)
+    reopened.initialize()
+    state = reopened.get_automation_state(opaque)
+    assert state["paused"] == crash_before_commit
+    assert state["revision"] == (1 if crash_before_commit else 2)
+    retried = reopened.change_automation(
+        opaque, "resume", key, 1, "operator-test", now=NOW + timedelta(seconds=2)
+    )
+    assert not retried["paused"] and retried["revision"] == 2
+    assert reopened.claim_generation(inbound(), now=NOW).state is GenerationState.SUPPRESSED
+
+
 @pytest.mark.parametrize(
     "kind", ["duplicate", "other_envelope", "old_timestamp", "new", "ambiguous_alias"]
 )
 def test_echo_resolution_after_resume_is_conservative(ops, kind):
     store, opaque, _ = ops
     store.record_webhook_events((human(),), now=NOW)
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     event = human()
     if kind == "other_envelope":
         event = identified(event, "other-envelope")
@@ -220,13 +385,11 @@ def test_echo_resolution_after_resume_is_conservative(ops, kind):
 def test_pause_fences_generation_and_resume_only_allows_new_inbound(ops):
     store, opaque, _ = ops
     claim = store.claim_generation(inbound())
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
     assert not complete(store, claim)
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert store.claim_generation(inbound()).state is GenerationState.SUPPRESSED
-    from datetime import UTC, datetime
-
-    now = datetime.now(UTC)
+    now = NOW + timedelta(seconds=1)
     future = replace(
         inbound(),
         provider_message_id="future",
@@ -245,12 +408,12 @@ def test_manual_pause_fences_claimed_outbound_and_preserves_possible_submission(
         assert store.authorize_delivery_submission(
             delivery_id=delivery.delivery_id, owner_token=delivery.owner_token, now=NOW
         )
-    result = store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
+    result = store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
     assert result["in_flight_possible"] == marked
     assert not store.authorize_delivery_submission(
         delivery_id=delivery.delivery_id, owner_token=delivery.owner_token, now=NOW
     )
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert store.get_delivery(delivery.delivery_id).state is (
         DeliveryState.SENDING if marked else DeliveryState.CANCELLED
     )
@@ -268,8 +431,8 @@ def test_handoff_and_unknown_are_not_released(ops):
         handoff_reason="explicit_human_request",
     )
     before = store.list_active_handoffs()
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
-    resumed = store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    resumed = store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert resumed["handoff_active"] and resumed["unresolved_delivery"]
     assert store.list_active_handoffs() == before
     assert store.get_delivery_for_inbound(claim.inbound_message_id).state is DeliveryState.UNKNOWN
@@ -285,7 +448,7 @@ def test_operation_receipt_failure_rolls_back_pause_and_cancellation(ops):
             "BEGIN SELECT RAISE(ABORT,'private-sentinel'); END"
         )
     with pytest.raises(PersistenceUnavailable) as error:
-        store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
+        store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
     assert "private-sentinel" not in str(error.value)
     assert store.get_automation_state(opaque)["revision"] == 0
     assert store.get_delivery_for_inbound(claim.inbound_message_id).state is DeliveryState.PENDING
@@ -311,8 +474,8 @@ def test_old_authorized_delivery_cannot_retry_after_pause_resume(ops):
     assert store.authorize_delivery_submission(
         delivery_id=delivery.delivery_id, owner_token=delivery.owner_token, now=NOW
     )
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert store.finalize_delivery(
         delivery_id=delivery.delivery_id,
         owner_token=delivery.owner_token,
@@ -327,12 +490,10 @@ def test_old_authorized_delivery_cannot_retry_after_pause_resume(ops):
 
 @pytest.mark.parametrize("timestamp_case", ["absent", "old", "future", "new"])
 def test_resume_suppresses_ambiguous_or_delayed_inbound(ops, timestamp_case):
-    from datetime import UTC, datetime
-
     store, opaque, _ = ops
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
-    now = datetime.now(UTC) + timedelta(seconds=1)
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
+    now = NOW + timedelta(seconds=1)
     msg = replace(inbound(), provider_message_id="after-resume")
     if timestamp_case == "absent":
         msg = replace(msg, metadata=None)
@@ -401,7 +562,7 @@ def test_manual_pause_races_delivery_authorization_in_both_orders(ops, monkeypat
     monkeypatch.setattr(store, "_connect", gated)
 
     def pause(target):
-        return target.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
+        return target.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
 
     def authorize(target):
         return target.authorize_delivery_submission(
@@ -454,8 +615,8 @@ def test_legacy_messages_keep_unresumed_behavior_but_require_source_time_after_r
     claim = store.claim_generation(message)
     assert claim.acquired
     opaque = store.automation_identifier(claim.inbound_message_id)
-    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test")
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "pause", uuid4().hex, 0, "operator-test", now=NOW)
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     assert (
         store.claim_generation(replace(message, provider_message_id="late")).state
         is GenerationState.SUPPRESSED
@@ -523,6 +684,15 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
             (NOW.isoformat(),),
         )
     store = SqliteConversationStore(path)
+    claim = store.claim_generation(inbound(), now=NOW)
+    assert store.complete_generation(
+        inbound_message_id=claim.inbound_message_id,
+        owner_token=claim.owner_token,
+        reply_body="Synthetic historical reply",
+        delivery_state=DeliveryState.UNKNOWN,
+        handoff_reason="explicit_human_request",
+        now=NOW,
+    )
     store.record_webhook_events((human(),), now=NOW)
     tables = (
         "conversations",
@@ -530,6 +700,9 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
         "message_processing",
         "human_pause_effects",
         "operational_events",
+        "conversation_handoffs",
+        "outbound_deliveries",
+        "delivery_attempts",
     )
     from test_operational_event_journal import rows
 
@@ -568,8 +741,11 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
     assert store.migrations_are_current()
     opaque = store.automation_identifier(1)
     assert store.get_automation_state(opaque)["paused"]
-    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test")
+    store.change_automation(opaque, "resume", uuid4().hex, 1, "operator-test", now=NOW)
     reopened = SqliteConversationStore(path)
     reopened.initialize()
     assert reopened.automation_identifier(1) == opaque
     assert reopened.get_automation_state(opaque)["revision"] == 2
+    assert reopened.get_automation_state(opaque)["handoff_active"]
+    assert reopened.get_automation_state(opaque)["unresolved_delivery"]
+    assert reopened.get_delivery_for_inbound(1).state is DeliveryState.UNKNOWN

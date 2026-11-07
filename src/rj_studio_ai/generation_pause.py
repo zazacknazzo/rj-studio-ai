@@ -68,7 +68,8 @@ def apply_pending_human_pauses(
                 (conversation_id, channel_id, paused, revision, updated_at)
             VALUES (?, ?, 1, 1, ?)
             ON CONFLICT(conversation_id) DO UPDATE SET paused = 1,
-                revision = revision + 1, updated_at = excluded.updated_at
+                revision = revision + 1,
+                updated_at = MAX(updated_at, excluded.updated_at)
             RETURNING revision
             """,
             (conversation_id, channel, timestamp),

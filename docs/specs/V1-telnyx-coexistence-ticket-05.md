@@ -47,3 +47,10 @@ messages without source metadata after resume are conservatively suppressed unti
 an adapter supplies trustworthy message_occurred_at. No receipt time substitutes it.
 Late proven-retryable delivery from an older operational revision is cancelled even
 after resume, using its existing generation revision; acceptance/unknown remain valid.
+
+The cutoff is monotonic across local clock regressions and interleaved echoes.
+Clock regressions may prolong suppression; they cannot lower an already retained
+boundary. Plausible but incorrect remote timestamps remain a documented limitation.
+Tests inject the local clock for admission boundaries, force both writer orders for
+pause/resume and echo/resume, and abruptly terminate a child process before and after
+resume commit to verify rollback and operation receipt replay.

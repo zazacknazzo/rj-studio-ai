@@ -34,7 +34,9 @@ def admin_router(settings, store):
             or len(token) > 512
             or not hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), digest)
         ):
-            raise HTTPException(401, "authentication_required")
+            raise HTTPException(
+                401, "authentication_required", headers={"WWW-Authenticate": "Bearer"}
+            )
         if permission not in settings.operator_permissions or (
             "*" not in scopes and opaque_id not in scopes
         ):

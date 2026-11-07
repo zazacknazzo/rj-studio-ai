@@ -23,6 +23,13 @@ Meta/Twilio payloads without source provenance remain compatible before any resu
 but are conservatively suppressed afterwards. Supporting trustworthy source time in
 those adapters requires separate adapter work; receipt time cannot stand in for it.
 
+Local operational timestamps and resume cutoff never regress across operator
+operations and human observations. Compare revisions for concurrency, never wall
+clock time. Retain the largest previously observed local boundary when the clock
+is corrected backwards. Reliable local/provider clocks and authenticated source
+provenance are still deployment assumptions; this cannot reconstruct true remote
+chronology or detect a provider timestamp that is plausible but incorrect.
+
 Retain generation revision as the delivery's existing authorization lineage: a
 late proven-retryable result whose generation predates pause/resume is cancelled,
 even when pause is currently clear. Accepted/unknown evidence is never discarded.

@@ -1089,6 +1089,8 @@ class SqliteConversationStore:
         operation_id: str,
         expected_revision: int,
         operator_id: str,
+        *,
+        now: datetime | None = None,
     ) -> dict:
         from rj_studio_ai.automation_operations import apply_operation
 
@@ -1102,7 +1104,7 @@ class SqliteConversationStore:
                     operation_id,
                     expected_revision,
                     operator_id,
-                    self._utc_time(None).isoformat(),
+                    self._utc_time(now).isoformat(),
                 )
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Operational change unavailable") from error

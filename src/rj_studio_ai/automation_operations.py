@@ -3,6 +3,7 @@
 import json
 import re
 import sqlite3
+from datetime import datetime
 
 
 class OperationConflict(ValueError):
@@ -76,6 +77,18 @@ def apply_operation(
     ).fetchall()
     if len(channels) != 1 or not channels[0][0]:
         raise OperationConflict("channel_identity_unresolved")
+    previous_times = connection.execute(
+        "SELECT updated_at, resumed_at FROM conversation_automation_controls "
+        "WHERE conversation_id=?",
+        (conversation_id,),
+    ).fetchone()
+    # A wall-clock correction must never lower the future-only admission cutoff.
+    # Revisions, not these times, order concurrent operator/human decisions.
+    timestamp = max(
+        datetime.fromisoformat(value)
+        for value in (timestamp, *(previous_times or ()))
+        if value is not None
+    ).isoformat()
     connection.execute(
         """INSERT INTO conversation_automation_controls
         (conversation_id,channel_id,paused,revision,updated_at) VALUES (?,?,?,?,?)

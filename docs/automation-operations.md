@@ -52,6 +52,10 @@ changing. These are deployment instructions; no credentials were provisioned her
 ## Resume and delayed events
 
 Only new eligible Messages with reliable origin time after resume can generate.
+The persisted cutoff never decreases, including with a backwards local clock
+correction and interleaved echoes. Revisions serialize decisions; timestamps do
+not establish external event order. Incorrect but plausible remote timestamps
+cannot be perfectly detected, so reliable clocks remain a deployment requirement.
 Missing/old/future/contradictory timestamps are suppressed permanently. Legacy
 Meta/Twilio messages lacking that provenance after resume will also be suppressed;
 this ticket does not invent timestamps or enable an adapter. Known echoes stay
@@ -63,3 +67,21 @@ Unknown is never resent. Sending already authorized can escape pause in the gap
 before HTTP; in_flight_possible reports that evidence. Resume cannot recall it,
 release handoff, revive cancelled/suppressed work or erase audit evidence. Journal,
 controls and receipts remain held without purge; retention remains a release blocker.
+
+Example payload for either POST (synthetic operation identifier):
+
+```json
+{"operation_id":"0123456789abcdef0123456789abcdef","expected_revision":1}
+```
+
+Example response (synthetic Conversation identifier):
+
+```json
+{"conversation_id":"abcdef0123456789abcdef0123456789","paused":false,"revision":2,"handoff_active":true,"in_flight_possible":false,"unresolved_delivery":false}
+```
+
+This response still reports an active policy handoff. Its existing trusted local
+release operation remains separate; the API never exposes or accepts episode tokens.
+No general `automation_active` promise is made: future inbound admission, ordering,
+handoff, delivery and provider eligibility remain separate gates. The journal's
+channel lifecycle observations are not an implemented channel gate yet (Ticket 09).
