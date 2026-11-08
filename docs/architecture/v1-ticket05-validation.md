@@ -61,3 +61,52 @@ Echo remains best-effort. Previously unseen delayed human activity repauses; kno
 logical duplicates do not. A request authorized before pause can cross HTTP later.
 Journal/control/receipt retention remains unbounded. Production and pilot remain
 blocked, and Ticket 06 needs separate authorization.
+
+## Final validation — 2026-11-08
+
+Implementation reviewed: `fe8de5e6dbe527512f82fe754a51200bfbbac905`.
+The final documentation commit changes no runtime or test behavior.
+
+- Full pytest suite: **1368 passed, 1 skipped**, 67.26 seconds. The existing skip is
+  `test_historical_v8_record_remains_loadable`, whose local historical evidence is
+  not checked into Git. No operational or provider test was skipped.
+- `ruff check .`, `ruff format --check .` (261 files), `compileall -q src tests`
+  and `git diff --check`: passed.
+- Environment sanitized, commercial `.env` absent from this isolated worktree,
+  pytest plugin auto-loading disabled, Python audit hook blocks IPv4/IPv6 socket
+  connect/sendto, including child processes. No live sender, onboarding or paid call.
+- Matrix includes migration rollback, real SQLite concurrency and process crash
+  recovery. No temporary database, validation XML or machine metadata is committed.
+
+## Independent Standards review
+
+A separate reviewer read the full base-to-implementation diff, AGENTS, local
+standards, architecture and relevant ADRs. **0 findings; no pending P1/P2.**
+Confirmed separate authentication and resource authorization, atomic controls and
+receipts, lateral migration, retained handoff/unknown/submission evidence, monotonic
+cutoff including interleaved echo, and unchanged intelligence. Independently ran
+**61 operational tests**, all passing offline; diff check passed.
+
+## Independent Spec review
+
+The initial independent review found **1 P2**: a backwards wall clock could lower
+the resume cutoff and admit old inbound work. A failing regression reproduced it;
+the correction preserves local temporal boundaries in operator and echo paths.
+The final independent reviewer read the actual diff and confirmed the fix plus
+both writer orders and subprocess crash/replay coverage. **0 pending P1/P2.**
+Independently ran **162 operations/generation/outbound tests**, all passing offline.
+The documented Meta/Twilio limitation remains; no live resumption is claimed.
+
+## Publication audit
+
+Reviewed each new commit and its changed file versions. Only Python and Markdown
+files are introduced/changed; no `.env`, private keys, session, database, binary,
+commercial credential or real customer record is included. Pattern scanning and
+manual diff review found no new credential/PII exposure. Phone-pattern matches in
+the existing migration test file are unchanged baseline synthetic fixtures, not
+new data. Synthetic operator test secrets are explicitly test-only.
+
+Frozen providers, prompts/persona, grounding, handoff policy, business knowledge,
+generation/application behavior and evaluation code match the approved base.
+Baileys HEAD, status and all 272 tracked-file hashes match the pre-work snapshot.
+Only the isolated Ticket 05 branch is to be pushed normally, without force or merge.
