@@ -8,8 +8,9 @@ import re
 import time
 from collections.abc import Callable
 
-from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from nacl.bindings import crypto_core_ed25519_is_valid_point
+from nacl.exceptions import CryptoError
+from nacl.signing import VerifyKey
 
 from rj_studio_ai.config import Settings
 from rj_studio_ai.providers.base import (
@@ -56,8 +57,13 @@ class TelnyxWebhookAuthenticator:
 
     def __init__(self, settings: Settings, *, clock: Callable[[], float] = time.time) -> None:
         try:
-            key = Ed25519PublicKey.from_public_bytes(_decode_base64(settings.telnyx_public_key, 32))
-        except (ValueError, TypeError, binascii.Error, UnsupportedAlgorithm):
+            raw_key = _decode_base64(settings.telnyx_public_key, 32)
+            # Length alone admits degenerate keys that can validate forgeries.
+            # libsodium checks canonical encoding, curve, subgroup and small order.
+            if not crypto_core_ed25519_is_valid_point(raw_key):
+                raise ValueError("Invalid public key")
+            key = VerifyKey(raw_key)
+        except (ValueError, TypeError, binascii.Error, CryptoError):
             raise TelnyxConfigurationError("Invalid Telnyx ingress configuration") from None
         if (
             settings.delivery_mode != "proactive"
@@ -118,9 +124,9 @@ class TelnyxWebhookAuthenticator:
             if not math.isfinite(now) or abs(now - int(timestamp)) > self._tolerance_seconds:
                 raise ValueError("Invalid timestamp")
             self._key.verify(
-                _decode_base64(signature, 64), timestamp.encode("ascii") + b"|" + webhook.body
+                timestamp.encode("ascii") + b"|" + webhook.body, _decode_base64(signature, 64)
             )
-        except (InvalidSignature, ValueError, TypeError, OverflowError, binascii.Error):
+        except (CryptoError, ValueError, TypeError, OverflowError, binascii.Error):
             raise InvalidWebhookSignature("Invalid Telnyx webhook signature") from None
         self._require_scope(webhook.body)
         return webhook.body

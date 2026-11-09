@@ -9,7 +9,8 @@ and durable effects exist. No Telnyx runtime selection or route is enabled.
 
 Authenticate Ed25519 against the trusted configured raw public key using the
 original timestamp text, a pipe and original bytes, before JSON inspection. Pin
-the cryptographic implementation; reject invalid/missing inputs without logging
+PyNaCl 1.6.2 with its bundled libsodium and validate public points with
+`crypto_core_ed25519_is_valid_point`, not length-only key import; reject invalid/missing inputs without logging
 values or exposing underlying parsing exceptions. Scope authorization is separate
 from signature validity: check the configured channel/profile/organization or
 WABA according to the documented envelope. No Message or lifecycle semantics are

@@ -501,3 +501,44 @@ def test_settings_errors_and_logs_never_expose_private_values(settings, private_
     for value in values:
         assert all(value not in surface for surface in surfaces)
     assert not caplog.records
+
+
+@pytest.mark.parametrize(
+    "raw_key",
+    [
+        bytes(32),
+        b"\x01" + bytes(31),
+        b"\xff" * 32,
+        (2**255 - 19).to_bytes(32, "little"),
+        b"\x02" + bytes(31),
+    ],
+)
+def test_invalid_curve_keys_reject_forgery_before_authentication(settings, raw_key, private_key):
+    # Identity/zero points can accept forgeries with length-only Ed25519 key import.
+    # All keys here are deliberately invalid, not private or production material.
+    settings.telnyx_public_key = base64.b64encode(raw_key).decode()
+    forged = signed(private_key, lifecycle())
+    forged.headers["telnyx-signature-ed25519"] = base64.b64encode(b"\x01" + bytes(63)).decode()
+    with pytest.raises(TelnyxConfigurationError):
+        authenticator(settings).authenticate(forged)
+
+
+def test_unavailable_point_validation_fails_closed(settings, monkeypatch):
+    from nacl.exceptions import UnavailableError
+
+    monkeypatch.setattr(
+        "rj_studio_ai.providers.telnyx.crypto_core_ed25519_is_valid_point",
+        Mock(side_effect=UnavailableError("synthetic-private-input")),
+    )
+    with pytest.raises(TelnyxConfigurationError) as error:
+        authenticator(settings)
+    assert "synthetic-private-input" not in "".join(traceback.format_exception(error.value))
+
+
+def test_signature_over_body_without_timestamp_prefix_is_rejected(settings, private_key):
+    webhook = signed(private_key)
+    webhook.headers["telnyx-signature-ed25519"] = base64.b64encode(
+        private_key.sign(webhook.body)
+    ).decode()
+    with pytest.raises(InvalidWebhookSignature):
+        authenticator(settings).authenticate(webhook)

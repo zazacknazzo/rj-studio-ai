@@ -58,7 +58,8 @@ local conservative implementation choices, not claims about provider delivery SL
   its original text for signing. Accept absolute clock difference <= tolerance;
   reject expired, too-far-future, missing, malformed and non-finite clock values.
 - Verify Ed25519 over `timestamp.encode('ascii') + b'|' + original_body`, using
-  strict canonical Base64 and a 64-byte signature. Library: `cryptography==50.0.2`.
+  strict canonical Base64 and a 64-byte signature. Verifier: `PyNaCl==1.6.2` (bundled libsodium). Reject noncanonical, off-curve,
+  small-order and non-main-subgroup public keys before creating a verifier.
 - Only after successful verification, inspect UTF-8 JSON and scope. Reject
   malformed envelopes, duplicate JSON keys, nonstandard constants and excessive
   nesting with generic errors. Never log request bodies, headers, signatures,
@@ -105,5 +106,7 @@ echo best-effort and the marker-to-HTTP race remain unchanged release blockers/l
 - [Webhook fundamentals](https://developers.telnyx.com/docs/development/api-fundamentals/webhooks/receiving-webhooks): exact raw bytes and product-specific signature contracts.
 - [Messaging signature contract](https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks): Ed25519, Base64, timestamp-pipe-body and five-minute replay guidance. Its JSON-reserializing example is not used.
 - [Coexistence webhooks](https://developers.telnyx.com/docs/messaging/whatsapp/coexistence/webhooks): message/echo scope, organization/profile fields, WABA lifecycle envelope and redundant WABA messages route.
-- [PyCA Ed25519](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/): raw public-key import and signature verification.
-- [Pinned package](https://pypi.org/project/cryptography/50.0.2/): version selected for reproducible verifier behavior.
+- [PyNaCl signatures](https://pynacl.readthedocs.io/en/latest/signing/): detached Ed25519 verification.
+- [libsodium point validation](https://libsodium.gitbook.io/doc/advanced/point-arithmetic): reject invalid public points, not just wrong lengths.
+- [PyNaCl 1.6.2 changelog](https://pynacl.readthedocs.io/en/latest/changelog/): bundled libsodium 1.0.20-stable (2025-12-31) includes the subgroup-validation security fix. Use the bundled build, not an older system libsodium.
+- [PyCA Ed25519](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/): the test-only independent signer is pinned to `cryptography==50.0.2`; it is not the production verifier.
