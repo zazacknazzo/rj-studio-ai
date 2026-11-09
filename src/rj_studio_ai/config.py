@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     automatic_reply: str = "Olá! Recebemos sua mensagem e retornaremos em breve. ✨"
     message_retention_days: int = Field(default=90, ge=1)
     whatsapp_provider: Literal["twilio", "meta"] = "twilio"
+    # Dormant ingress only: Telnyx is deliberately not a selectable runtime provider.
+    telnyx_public_key: str = Field(default="", repr=False, exclude=True)
+    telnyx_phone_number: str = Field(default="", repr=False, exclude=True)
+    telnyx_messaging_profile_id: str = Field(default="", repr=False, exclude=True)
+    telnyx_waba_id: str = Field(default="", repr=False, exclude=True)
+    telnyx_organization_id: str = Field(default="", repr=False, exclude=True)
+    telnyx_webhook_max_body_bytes: int = Field(default=262_144, ge=1, le=1_048_576)
+    telnyx_webhook_tolerance_seconds: int = Field(default=300, ge=1, le=300)
     twilio_auth_token: str = Field(default="", repr=False, exclude=True)
     twilio_validate_signature: bool = True
     twilio_public_webhook_url: str | None = None

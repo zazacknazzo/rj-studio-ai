@@ -33,3 +33,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
   approved cancellation/authorization only; Tickets 05–13 and live integration not authorized.
 
 - [Ticket 05](V1-telnyx-coexistence-ticket-05.md): explicitly authorized authenticated operations.
+
+- [Ticket 06](V1-telnyx-coexistence-ticket-06.md): approved dormant Telnyx webhook authentication/configuration only; Ticket 07 awaits direct GitHub audit and authorization.
