@@ -89,6 +89,7 @@ class MigrationManager:
             "pending_delivery_statuses",
             "conversation_handoffs",
             "appointment_intakes",
+            "inbound_event_receipts",
             "operational_events",
             "operational_event_aliases",
             "conversation_automation_controls",
@@ -103,6 +104,30 @@ class MigrationManager:
             return False
         if not MigrationManager._operational_schema_matches(inspector):
             return False
+        inbound_columns = {item["name"] for item in inspector.get_columns("inbound_event_receipts")}
+        if not {
+            "id",
+            "provider",
+            "channel_id",
+            "customer_address",
+            "event_id",
+            "provider_message_id",
+            "occurred_at",
+            "received_at",
+            "aliases_json",
+            "message_occurred_at",
+        }.issubset(inbound_columns):
+            return False
+        inbound_indexes = {
+            item["name"]: item for item in inspector.get_indexes("inbound_event_receipts")
+        }
+        for name, columns, unique in (
+            ("uq_inbound_event_scope", ["provider", "channel_id", "event_id"], True),
+            ("ix_inbound_event_message", ["provider", "provider_message_id"], False),
+        ):
+            index = inbound_indexes.get(name)
+            if index is None or index["column_names"] != columns or bool(index["unique"]) != unique:
+                return False
         required_columns = {
             "appointment_intakes": {
                 "preferred_day",

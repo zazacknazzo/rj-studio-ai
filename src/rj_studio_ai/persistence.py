@@ -8,11 +8,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from rj_studio_ai.appointment_intake import AppointmentIntake, AppointmentIntakeUpdate
+from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.domain import (
     DeliveryStatus,
     DeliveryStatusReceived,
     HumanMessageObserved,
     InboundMessage,
+    InboundMessageReceived,
     MessageRecord,
     OutboundMessage,
     ProviderWebhookEvent,
@@ -20,6 +22,7 @@ from rj_studio_ai.domain import (
 from rj_studio_ai.generation import GenerationMetric
 from rj_studio_ai.generation_pause import apply_pending_human_pauses
 from rj_studio_ai.handoff import HandoffReason
+from rj_studio_ai.inbound_events import record_inbound_event, validate_message_scope
 from rj_studio_ai.migrations import MigrationManager
 from rj_studio_ai.operational_events import OPERATIONAL_EVENT_TYPES, record_operational_event
 from rj_studio_ai.sqlite import (
@@ -484,6 +487,8 @@ class SqliteConversationStore:
         *,
         now: datetime | None = None,
         lock_timeout: float | None = None,
+        deadline: ExecutionDeadline | None = None,
+        require_message_provenance: bool = False,
     ) -> None:
         """Persist one authenticated provider batch atomically before its ACK."""
         for event in events:
@@ -493,11 +498,26 @@ class SqliteConversationStore:
                 not isinstance(event, InboundMessage) and type(event) not in OPERATIONAL_EVENT_TYPES
             ):
                 raise ValueError("Unsupported canonical provider event")
+
+        def require_budget() -> None:
+            if deadline is not None and deadline.is_expired():
+                raise PersistenceUnavailable("Webhook ingress deadline expired")
+
+        require_budget()
+        if deadline is not None:
+            remaining = deadline.remaining_budget()
+            lock_timeout = remaining if lock_timeout is None else min(lock_timeout, remaining)
         try:
             with self._connect(lock_timeout) as connection:
+                if deadline is not None:
+                    connection.set_progress_handler(lambda: int(deadline.is_expired()), 1000)
                 connection.execute("BEGIN IMMEDIATE")
                 timestamp = self._utc_time(now).isoformat()
+                require_budget()
                 for event in events:
+                    require_budget()
+                    if require_message_provenance:
+                        validate_message_scope(connection, event)
                     if isinstance(event, DeliveryStatusReceived):
                         self._record_delivery_status_in_transaction(
                             connection,
@@ -513,8 +533,31 @@ class SqliteConversationStore:
                                 provider=event.provider,
                                 customer_address=event.customer_address,
                             )
+                            if (
+                                require_message_provenance
+                                and connection.execute(
+                                    "SELECT 1 FROM human_pause_effects WHERE provider=? "
+                                    "AND channel_id=? AND customer_address=? "
+                                    "AND provider_message_id=?",
+                                    (
+                                        event.provider,
+                                        event.channel_id,
+                                        event.customer_address,
+                                        event.provider_message_id,
+                                    ),
+                                ).fetchone()
+                                is None
+                            ):
+                                raise ValueError("Unresolved human activity")
                     else:
+                        if (
+                            isinstance(event, InboundMessageReceived)
+                            and require_message_provenance
+                            and not record_inbound_event(connection, event, received_at=timestamp)
+                        ):
+                            continue
                         self._get_or_create_inbound(connection, event, timestamp)
+                require_budget()
         except sqlite3.Error:
             # SQL errors may contain external identifiers (including trigger messages).
             raise PersistenceUnavailable("Provider webhook persistence is unavailable") from None
