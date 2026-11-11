@@ -46,14 +46,15 @@ def _customer(address: object, body: dict) -> str:
     opaque = body.get("from_user_id")
     if opaque is not None:
         _identifier(opaque)
+        if body_from in (None, ""):
+            if address not in (None, "", opaque):
+                raise ValueError("Contradictory opaque customer")
+            return "bsuid:" + opaque
     if _phone(address):
         if body_from not in (None, "", address):
             raise ValueError("Contradictory customer")
         return address
-    if body_from not in (None, "") or opaque is None or address not in (None, "", opaque):
-        raise ValueError("Unresolved customer")
-    # Namespace the opaque address so even a phone-shaped BSUID cannot merge identities.
-    return "bsuid:" + _identifier(opaque)
+    raise ValueError("Unresolved customer")
 
 
 def _event_time(value: object) -> datetime:
@@ -66,7 +67,7 @@ def _event_time(value: object) -> datetime:
     return datetime.fromisoformat(value).astimezone(UTC)
 
 
-def _source_time(value: object, occurred_at: datetime, received_at: datetime) -> datetime | None:
+def _source_time(value: object, occurred_at: datetime) -> datetime | None:
     # No fallback to envelope time, signature time, received_at or local wall time.
     if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,12}", value):
         return None
@@ -74,7 +75,9 @@ def _source_time(value: object, occurred_at: datetime, received_at: datetime) ->
         source = datetime.fromtimestamp(int(value), UTC)
     except (ValueError, OverflowError, OSError):
         return None
-    return source if source <= occurred_at <= received_at else None
+    # Receipt-relative eligibility belongs to the admission transaction. A replay
+    # must retain identical provenance even when the local clock catches up.
+    return source if source <= occurred_at else None
 
 
 class TelnyxMessageAdapter(InboundWebhookAdapter):
@@ -82,7 +85,6 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
 
     def __init__(self, settings: Settings, *, clock: Callable[[], float]) -> None:
         self._authenticator = TelnyxWebhookAuthenticator(settings, clock=clock)
-        self._clock = clock
 
     def is_configured(self) -> bool:
         # Local ingress configuration only, not channel or delivery readiness.
@@ -105,8 +107,11 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
                 raise ValueError("Invalid body")
             if "id" in body and body["id"] != message_id:
                 raise ValueError("Contradictory message identity")
-            customer = _customer(payload["to"] if echo else payload["from"]["phone_number"], body)
-            channel = payload["from"]["phone_number"] if echo else payload["to"]
+            sender = payload.get("from", {})
+            if not isinstance(sender, dict):
+                raise ValueError("Invalid sender")
+            customer = _customer(payload["to"] if echo else sender.get("phone_number"), body)
+            channel = sender["phone_number"] if echo else payload["to"]
             if customer == channel:
                 raise ValueError("Ambiguous customer")
             occurred_at = _event_time(data["occurred_at"])
@@ -120,9 +125,7 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
                 origin=EventOrigin.HUMAN_OPERATOR if echo else EventOrigin.CUSTOMER,
                 occurred_at=occurred_at,
                 message_aliases=aliases,
-                message_occurred_at=_source_time(
-                    body.get("timestamp"), occurred_at, datetime.fromtimestamp(self._clock(), UTC)
-                ),
+                message_occurred_at=_source_time(body.get("timestamp"), occurred_at),
             )
             if echo:
                 event = HumanMessageObserved("telnyx", message_id, channel, customer, metadata)

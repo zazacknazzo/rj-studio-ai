@@ -690,3 +690,74 @@ def test_upgrade_preserves_previous_journal_and_rolls_back_atomically(tmp_path, 
                 ).fetchall()
                 == []
             )
+
+
+@pytest.mark.parametrize("opaque", ["US.synthetic-123", "+15555550123"])
+def test_paired_hidden_phone_inbound_and_echo_share_one_pause(ingress, private_key, opaque):
+    for kind in ("text", "echo"):
+        payload = wire(kind)
+        p = payload["data"]["payload"]
+        p["body"]["from"] = ""
+        p["body"]["from_user_id"] = opaque
+        if kind == "text":
+            p["from"]["phone_number"] = ""
+        else:
+            p["to"] = opaque
+        receive(ingress, private_key, payload)
+    assert len(rows(ingress[2], "conversations")) == 1
+    assert rows(ingress[2], "conversations")[0]["customer_address"] == "bsuid:" + opaque
+    assert rows(ingress[2], "message_processing")[0]["state"] == "suppressed"
+    assert len(rows(ingress[2], "human_pause_effects")) == 1
+
+
+@pytest.mark.parametrize("kind", ["text", "echo", "edit", "revoke"])
+def test_future_event_replay_retains_provenance_after_clock_catches_up(
+    ingress, private_key, settings, kind
+):
+    if kind == "text":
+        resumed(ingress, private_key)
+    payload = wire(
+        kind, source=NOW, occurred=NOW + 1, event_id="future-event", message_id="future-message"
+    )
+    request = signed(private_key, payload)
+    original_event = ingress[0].receive(request).events[0]
+    receive(ingress, private_key, payload)
+    table = "inbound_event_receipts" if kind == "text" else "operational_events"
+    before = rows(ingress[2], table)
+    adapter = TelnyxMessageAdapter(settings, clock=lambda: NOW + 2)
+    assert adapter.receive(request).events[0] == original_event
+    receive(
+        (adapter, ingress[1], ingress[2]), private_key, payload, now=TIME + timedelta(seconds=2)
+    )
+    assert rows(ingress[2], table) == before
+    if kind == "text":
+        assert rows(ingress[2], "message_processing")[0]["state"] == "suppressed"
+
+
+@pytest.mark.parametrize("sender", [{}, None])
+def test_hidden_phone_accepts_absent_optional_phone_field(ingress, private_key, sender):
+    payload = wire()
+    p = payload["data"]["payload"]
+    if sender is None:
+        p.pop("from")
+    else:
+        p["from"] = sender
+    p["body"]["from"] = ""
+    p["body"]["from_user_id"] = "US.synthetic-absent-phone"
+    receive(ingress, private_key, payload)
+    assert (
+        rows(ingress[2], "conversations")[0]["customer_address"]
+        == "bsuid:US.synthetic-absent-phone"
+    )
+
+
+@pytest.mark.parametrize("sender", [None, [], "malformed"])
+def test_explicit_malformed_sender_is_rejected_with_opaque_identity(ingress, private_key, sender):
+    payload = wire()
+    p = payload["data"]["payload"]
+    p["from"] = sender
+    p["body"]["from"] = ""
+    p["body"]["from_user_id"] = "US.synthetic-absent-phone"
+    with pytest.raises(InvalidWebhookPayload):
+        receive(ingress, private_key, payload)
+    assert rows(ingress[2], "messages") == []

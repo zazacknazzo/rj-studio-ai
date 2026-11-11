@@ -25,8 +25,10 @@ opaque, namespaced Customer address (`bsuid:`). Never merge phone and BSUID iden
 Event identity is data.id; logical Message identity is payload.id; body.foreign_id
 is an optional alias in namespace `meta`. Aliases never identify a Conversation or
 collapse logical Messages. Event time is data.occurred_at. Source Message time is
-only body.timestamp (ASCII Unix-seconds string), valid when source <= event <= local
-receipt. Invalid/missing/contradictory source becomes unavailable; never substitute
+only body.timestamp (ASCII Unix-seconds string), parsed when source <= event. Local
+receipt is checked by admission, not canonical parsing, so replay provenance is stable
+as clocks advance. Eligibility after resume requires source <= event <= local receipt.
+Invalid/missing/internally contradictory source becomes unavailable; never substitute
 signature/receipt/envelope time. Existing Ticket 05 policy permanently suppresses
 old/unproven inbound after resume; only source strictly newer than cutoff is eligible.
 No positive skew allowance at the resume gate. Plausibly wrong remote times remain

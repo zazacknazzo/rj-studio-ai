@@ -85,3 +85,31 @@ release operation remains separate; the API never exposes or accepts episode tok
 No general `automation_active` promise is made: future inbound admission, ordering,
 handoff, delivery and provider eligibility remain separate gates. The journal's
 channel lifecycle observations are not an implemented channel gate yet (Ticket 09).
+
+## Telnyx offline ingress evidence (Ticket 07)
+
+The dormant Message adapter now supplies source timestamps and preserves Message,
+event and Meta alias identities separately. It is not selected by configuration and
+has no external route. Telnyx ingress credentials alone still cannot enable delivery.
+
+For a future authorized deployment, the operator procedure must be usable before
+manual replies: select the intended Conversation through a trusted client, GET its
+current revision, POST pause with the dedicated Bearer and operation identifier,
+then confirm the durable paused state and inspect in_flight_possible. If the pause
+fails or identity is unresolved, do not assume takeover protection. Absence of echo
+never confirms that automation is paused. The mobile selection/client/deployment
+workflow remains CX-07/CX-08 and requires a separate release gate.
+
+An unseen delayed echo can pause again after resume. Fetch current state and assess
+new manual activity before another explicit resume; do not automatically resume on
+a timer or discard the event based on its timestamp. A known logical echo replay
+keeps its original applied effect and does not repause. Clock correction never lowers
+the local cutoff. Validate NTP and real timestamp provenance before pilot; future or
+unproven inbound is suppressed after resume, including once the clock catches up.
+
+Unsupported inbound media/location/files and unknown events currently receive no
+successful ACK. Status/lifecycle await Tickets 08/09. Before enabling Ticket 12's
+route, define durable handling and operational visibility for unsupported formats,
+verify profile subscriptions, raw duplicate-header rejection and streaming limits.
+No unsupported event may be silently discarded under a 2xx response. Ticket 07's
+local multi-envelope test interface does not assert Telnyx sends HTTP batches.

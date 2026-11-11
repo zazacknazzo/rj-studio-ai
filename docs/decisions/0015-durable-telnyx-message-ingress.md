@@ -17,8 +17,10 @@ ACK. Same logical human Message does not repause; an unseen one does, regardless
 apparent age. Preserve the marker-to-HTTP limitation of ADR 0012.
 
 Source provenance uses only a validated Meta timestamp carried in the authenticated
-Telnyx body. It must not exceed event/local time, with no positive skew allowance at
-resume. Missing/invalid time remains unavailable and Ticket 05 suppresses it after
+Telnyx body. Parsing requires source <= event; admission requires event <= local
+receipt after resume, with no positive skew allowance. Receipt-relative checks never
+change canonical evidence on replay as clocks advance. Missing/invalid time remains
+unavailable and Ticket 05 suppresses it after
 resume. A phone-hidden Customer is namespaced as bsuid without mapping it to a phone;
 future sender support must explicitly decode the address and validate eligibility.
 
