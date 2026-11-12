@@ -681,7 +681,7 @@ def test_upgrade_preserves_previous_journal_and_rolls_back_atomically(tmp_path, 
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == (
-            "0017_automation_operations" if interrupt else "0018_inbound_event_receipts"
+            "0017_automation_operations" if interrupt else "0019_scoped_delivery_status"
         )
         if interrupt:
             assert (

@@ -20,3 +20,4 @@ Read an ADR only when a task touches its decision.
 Add an ADR only for a hard-to-reverse choice that would be surprising without its trade-off. Keep it concise and update this index.
 
 - [0013](0013-authenticated-automation-operations.md): authenticated operations and future-only resume.
+- [0016](0016-scoped-delivery-status-evidence.md): scoped delivery receipts and explicit success/failure conflicts for Telnyx.

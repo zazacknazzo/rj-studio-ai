@@ -113,3 +113,15 @@ route, define durable handling and operational visibility for unsupported format
 verify profile subscriptions, raw duplicate-header rejection and streaming limits.
 No unsupported event may be silently discarded under a 2xx response. Ticket 07's
 local multi-envelope test interface does not assert Telnyx sends HTTP batches.
+
+## Ticket 08: contradictory delivery evidence (offline)
+
+Telnyx failure plus delivered/read is shown by `list-blocked-deliveries` with reason
+`provider_status_conflict`, retaining state delivered/read. The authenticated state
+reports `unresolved_delivery=true`. This is a durable block for subsequent ordered
+processing/submission, even after pause/resume or restart. Do not retry or create a
+replacement delivery to clear it. Ticket 08 adds no conflict-resolution command;
+future recovery requires an explicitly approved policy. Unknown/unconfirmed provider
+observations likewise never justify retry. The status ledger retains private routing
+IDs under CX-01; it stores no message text or raw provider errors. Existing purge and
+Conversation deletion reject unresolved conflicts instead of hiding them.

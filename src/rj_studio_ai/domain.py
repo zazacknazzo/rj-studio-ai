@@ -79,10 +79,26 @@ class InboundMessageReceived(InboundMessage):
 
 
 class DeliveryStatus(StrEnum):
+    UNKNOWN = "unknown"
     SENT = "sent"
     DELIVERED = "delivered"
     READ = "read"
     FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderDeliveryEvidence:
+    """Verified routing and classification only; never payload/error content."""
+
+    account_id: str
+    profile_id: str
+    event_type: str
+    recipient_status: str
+
+    def __post_init__(self) -> None:
+        _require_identifiers(
+            self.account_id, self.profile_id, self.event_type, self.recipient_status
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +112,7 @@ class DeliveryStatusReceived:
     metadata: ProviderEventMetadata | None = field(default=None, kw_only=True)
     channel_id: str | None = field(default=None, kw_only=True)
     customer_address: str | None = field(default=None, kw_only=True)
+    evidence: ProviderDeliveryEvidence | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         if self.metadata is not None:

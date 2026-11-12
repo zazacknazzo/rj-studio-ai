@@ -87,6 +87,7 @@ class MigrationManager:
             "outbound_deliveries",
             "delivery_attempts",
             "pending_delivery_statuses",
+            "delivery_status_events",
             "conversation_handoffs",
             "appointment_intakes",
             "inbound_event_receipts",
@@ -202,7 +203,25 @@ class MigrationManager:
                 "error_code",
                 "created_at",
             },
+            "delivery_status_events": {
+                "acceptance_token",
+                "id",
+                "provider",
+                "event_id",
+                "provider_message_id",
+                "channel_id",
+                "customer_address",
+                "account_id",
+                "profile_id",
+                "event_type",
+                "recipient_status",
+                "status",
+                "occurred_at",
+                "received_at",
+                "delivery_id",
+            },
             "outbound_deliveries": {
+                "status_conflict",
                 "handoff_token",
                 "submission_started_at",
                 "id",
@@ -247,6 +266,15 @@ class MigrationManager:
             if not required.issubset(actual):
                 return False
 
+        if not any(
+            item["column_names"] == ["provider", "event_id"]
+            for item in inspector.get_unique_constraints("delivery_status_events")
+        ) or not any(
+            item["name"] == "ix_delivery_status_message"
+            and item["column_names"] == ["provider", "provider_message_id"]
+            for item in inspector.get_indexes("delivery_status_events")
+        ):
+            return False
         handoff_checks = {
             item["name"] for item in inspector.get_check_constraints("conversation_handoffs")
         }
@@ -485,6 +513,8 @@ class MigrationManager:
                 "outbound_delivery_identity_is_immutable",
                 "outbound_delivery_acceptance_evidence_is_immutable",
                 "outbound_delivery_state_transition",
+                "telnyx_status_evidence_monotonic",
+                "delivery_conflict_rejects_submission",
                 "delivery_attempt_requires_current_claim",
                 "delivery_attempt_finalization_requires_current_claim",
                 "delivery_attempt_identity_is_immutable",

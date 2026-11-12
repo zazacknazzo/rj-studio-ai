@@ -23,7 +23,7 @@ def automation_state(connection: sqlite3.Connection, opaque_id: str) -> dict:
     if row is None:
         raise LookupError("conversation_not_found")
     states = connection.execute(
-        """SELECT delivery.state, delivery.submission_started_at
+        """SELECT delivery.state, delivery.submission_started_at, delivery.status_conflict
         FROM outbound_deliveries AS delivery
         JOIN messages ON messages.id=delivery.outbound_message_id
         WHERE messages.conversation_id=?""",
@@ -34,8 +34,10 @@ def automation_state(connection: sqlite3.Connection, opaque_id: str) -> dict:
         paused=bool(row[1]),
         revision=row[2],
         handoff_active=bool(row[3]),
-        in_flight_possible=any(s == "sending" and marker is not None for s, marker in states),
-        unresolved_delivery=any(s in ("unknown", "failed") for s, _ in states),
+        in_flight_possible=any(s == "sending" and marker is not None for s, marker, _ in states),
+        unresolved_delivery=any(
+            s in ("unknown", "failed") or conflict for s, _, conflict in states
+        ),
     )
 
 

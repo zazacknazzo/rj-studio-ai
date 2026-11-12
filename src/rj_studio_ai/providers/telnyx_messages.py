@@ -7,12 +7,15 @@ from datetime import UTC, datetime
 
 from rj_studio_ai.config import Settings
 from rj_studio_ai.domain import (
+    DeliveryStatus,
+    DeliveryStatusReceived,
     EventOrigin,
     HumanMessageObserved,
     InboundMessageReceived,
     MessageEdited,
     MessageReference,
     MessageRevoked,
+    ProviderDeliveryEvidence,
     ProviderEventMetadata,
     ProviderWebhookEventBatch,
 )
@@ -81,7 +84,7 @@ def _source_time(value: object, occurred_at: datetime) -> datetime | None:
 
 
 class TelnyxMessageAdapter(InboundWebhookAdapter):
-    """Only Ticket 07 contracts; unsupported callbacks raise, never empty-success."""
+    """Offline Tickets 07–08 contracts; unsupported callbacks never empty-success."""
 
     def __init__(self, settings: Settings, *, clock: Callable[[], float]) -> None:
         self._authenticator = TelnyxWebhookAuthenticator(settings, clock=clock)
@@ -95,6 +98,8 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
         try:
             data = json.loads(raw)["data"]
             event_type = data["event_type"]
+            if event_type in ("message.sent", "message.finalized", "message.read"):
+                return ProviderWebhookEventBatch((_delivery_status(data),))
             if event_type not in ("message.received", "message.echo"):
                 raise ValueError("Unsupported event")
             payload = data["payload"]
@@ -157,3 +162,65 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
 
     def acknowledge(self) -> ProviderWebhookResponse:
         return ProviderWebhookResponse("", "application/json", 204)
+
+
+def _delivery_status(data: dict) -> DeliveryStatusReceived:
+    payload = data["payload"]
+    recipients = payload["to"]
+    if (
+        not isinstance(recipients, list)
+        or len(recipients) != 1
+        or not isinstance(recipients[0], dict)
+        or not _phone(recipients[0].get("phone_number"))
+        or payload.get("cc") not in (None, [])
+        or payload.get("origin") is not None
+    ):
+        raise ValueError("Invalid delivery recipient or origin")
+    recipient = recipients[0]
+    source_status = recipient["status"]
+    allowed = {
+        "message.sent": {"sent", "queued", "sending"},
+        "message.finalized": {
+            "sent",
+            "delivered",
+            "read",
+            "sending_failed",
+            "delivery_failed",
+            "failed",
+            "delivery_unconfirmed",
+            "expired",
+            "queued",
+            "sending",
+        },
+        "message.read": {"read"},
+    }
+    if not isinstance(source_status, str) or source_status not in allowed[data["event_type"]]:
+        raise ValueError("Unsupported delivery status")
+    status = {
+        "sent": DeliveryStatus.SENT,
+        "delivered": DeliveryStatus.DELIVERED,
+        "read": DeliveryStatus.READ,
+        "sending_failed": DeliveryStatus.FAILED,
+        "delivery_failed": DeliveryStatus.FAILED,
+        "failed": DeliveryStatus.FAILED,
+    }.get(source_status, DeliveryStatus.UNKNOWN)
+    channel = payload["from"]["phone_number"]
+    if channel == recipient["phone_number"]:
+        raise ValueError("Ambiguous delivery recipient")
+    return DeliveryStatusReceived(
+        "telnyx",
+        _identifier(payload["id"]),
+        status,
+        "provider_delivery_failed" if status is DeliveryStatus.FAILED else None,
+        metadata=ProviderEventMetadata(
+            _identifier(data["id"]), EventOrigin.PROVIDER, _event_time(data["occurred_at"])
+        ),
+        channel_id=channel,
+        customer_address=recipient["phone_number"],
+        evidence=ProviderDeliveryEvidence(
+            payload["organization_id"],
+            payload["messaging_profile_id"],
+            data["event_type"],
+            source_status,
+        ),
+    )

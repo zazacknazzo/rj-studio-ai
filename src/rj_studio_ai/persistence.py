@@ -9,6 +9,11 @@ from uuid import uuid4
 
 from rj_studio_ai.appointment_intake import AppointmentIntake, AppointmentIntakeUpdate
 from rj_studio_ai.deadline import ExecutionDeadline
+from rj_studio_ai.delivery_status_events import (
+    reconcile_statuses,
+    record_status,
+    validate_status,
+)
 from rj_studio_ai.domain import (
     DeliveryStatus,
     DeliveryStatusReceived,
@@ -516,7 +521,7 @@ class SqliteConversationStore:
                 require_budget()
                 for event in events:
                     require_budget()
-                    if require_message_provenance:
+                    if require_message_provenance and not isinstance(event, DeliveryStatusReceived):
                         validate_message_scope(connection, event)
                     if isinstance(event, DeliveryStatusReceived):
                         self._record_delivery_status_in_transaction(
@@ -844,7 +849,7 @@ class SqliteConversationStore:
                         delivery.updated_at
                     FROM outbound_deliveries AS delivery
                     JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
-                    WHERE delivery.state IN ('unknown', 'failed')
+                    WHERE delivery.state IN ('unknown', 'failed') OR delivery.status_conflict = 1
                     ORDER BY delivery.updated_at, delivery.id
                     """
                 ).fetchall()
@@ -921,6 +926,7 @@ class SqliteConversationStore:
                                     predecessor_processing.state = 'completed'
                                     AND (
                                         predecessor_delivery.id IS NULL
+                                        OR predecessor_delivery.status_conflict = 1
                                         OR predecessor_delivery.state NOT IN (
                                             'accepted', 'sent', 'delivered', 'read',
                                             'accepted_legacy', 'cancelled'
@@ -1052,6 +1058,12 @@ class SqliteConversationStore:
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
                         AND NOT EXISTS (
+                            SELECT 1 FROM outbound_deliveries AS conflict
+                            JOIN messages AS prior ON prior.id=conflict.outbound_message_id
+                            WHERE prior.conversation_id=outbound.conversation_id
+                              AND conflict.status_conflict=1
+                        )
+                        AND NOT EXISTS (
                             SELECT 1 FROM conversation_automation_controls
                             WHERE conversation_id = outbound.conversation_id AND (
                                 paused = 1 OR revision != (
@@ -1098,6 +1110,12 @@ class SqliteConversationStore:
                     ) AND EXISTS (
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
+                        AND NOT EXISTS (
+                            SELECT 1 FROM outbound_deliveries AS conflict
+                            JOIN messages AS prior ON prior.id=conflict.outbound_message_id
+                            WHERE prior.conversation_id=outbound.conversation_id
+                              AND conflict.status_conflict=1
+                        )
                         AND NOT EXISTS (
                             SELECT 1 FROM conversation_automation_controls
                             WHERE conversation_id = outbound.conversation_id AND (
@@ -1332,7 +1350,17 @@ class SqliteConversationStore:
                             timestamp,
                             except_handoff_token=str(policy[3]) if policy[2] == 1 else None,
                         )
-                if outcome is DeliveryState.ACCEPTED and provider_message_id is not None:
+                if (
+                    outcome is DeliveryState.ACCEPTED
+                    and provider_message_id is not None
+                    and provider == "telnyx"
+                ):
+                    reconcile_statuses(connection, provider, provider_message_id, timestamp)
+                if (
+                    outcome is DeliveryState.ACCEPTED
+                    and provider_message_id is not None
+                    and provider != "telnyx"
+                ):
                     pending_status = connection.execute(
                         """
                         SELECT status, safe_error_code
@@ -1359,8 +1387,8 @@ class SqliteConversationStore:
                             (provider, provider_message_id),
                         )
             return True
-        except sqlite3.Error as error:
-            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from None
 
     def record_delivery_status(
         self,
@@ -1379,11 +1407,15 @@ class SqliteConversationStore:
                     event=event,
                     timestamp=timestamp,
                 )
-        except sqlite3.Error as error:
-            raise PersistenceUnavailable("Delivery status persistence is unavailable") from error
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Delivery status persistence is unavailable") from None
 
     @staticmethod
     def _validate_delivery_status(event: DeliveryStatusReceived) -> None:
+        if event.provider == "telnyx":
+            validate_status(event)
+        elif event.status is DeliveryStatus.UNKNOWN:
+            raise ValueError("Unsupported delivery status")
         if not event.provider.strip() or not event.provider_message_id.strip():
             raise ValueError("Delivery status requires provider identity")
         if event.status is DeliveryStatus.FAILED:
@@ -1399,6 +1431,8 @@ class SqliteConversationStore:
         event: DeliveryStatusReceived,
         timestamp: str,
     ) -> DeliveryStatusDisposition:
+        if event.provider == "telnyx":
+            return DeliveryStatusDisposition(record_status(connection, event, timestamp))
         delivery = connection.execute(
             """
             SELECT id
@@ -1730,6 +1764,7 @@ class SqliteConversationStore:
                                       predecessor_processing.state = 'completed'
                                       AND (
                                           predecessor_delivery.id IS NULL
+                                          OR predecessor_delivery.status_conflict = 1
                                           OR predecessor_delivery.state NOT IN (
                                               'accepted', 'sent', 'delivered', 'read',
                                               'accepted_legacy', 'cancelled'
@@ -1805,6 +1840,7 @@ class SqliteConversationStore:
                                       predecessor_processing.state = 'completed'
                                       AND (
                                           predecessor_delivery.id IS NULL
+                                          OR predecessor_delivery.status_conflict = 1
                                           OR predecessor_delivery.state NOT IN (
                                               'accepted', 'sent', 'delivered', 'read',
                                               'accepted_legacy', 'cancelled'
@@ -2005,10 +2041,10 @@ class SqliteConversationStore:
                         JOIN messages AS outbound
                           ON outbound.id = delivery.outbound_message_id
                         WHERE outbound.conversation_id = ?
-                          AND delivery.state NOT IN (
+                          AND (delivery.status_conflict = 1 OR delivery.state NOT IN (
                               'accepted', 'sent', 'delivered', 'read',
                               'failed', 'cancelled', 'accepted_legacy'
-                          )
+                          ))
                     )
                     """,
                     (conversation_id,),
@@ -2068,6 +2104,7 @@ class SqliteConversationStore:
             JOIN messages AS inbound ON inbound.id = outbound.in_reply_to_message_id
             WHERE inbound.created_at < ?
               AND outbound.created_at < ?
+              AND delivery.status_conflict = 0
               AND delivery.state IN (
                   'accepted', 'sent', 'delivered', 'read',
                   'cancelled', 'accepted_legacy'
@@ -2092,6 +2129,7 @@ class SqliteConversationStore:
                   ON inbound.id = outbound.in_reply_to_message_id
                 WHERE inbound.created_at < ?
                   AND outbound.created_at < ?
+                  AND delivery.status_conflict = 0
                   AND delivery.state IN (
                       'accepted', 'sent', 'delivered', 'read',
                       'cancelled', 'accepted_legacy'
@@ -2244,6 +2282,7 @@ class SqliteConversationStore:
                           predecessor_processing.state = 'completed'
                           AND (
                               predecessor_delivery.id IS NULL
+                              OR predecessor_delivery.status_conflict = 1
                               OR predecessor_delivery.state NOT IN (
                                   'accepted', 'sent', 'delivered', 'read',
                                   'accepted_legacy', 'cancelled'
@@ -2696,6 +2735,7 @@ class SqliteConversationStore:
                                 predecessor_processing.state = 'completed'
                                 AND (
                                     predecessor_delivery.id IS NULL
+                                    OR predecessor_delivery.status_conflict = 1
                                     OR predecessor_delivery.state NOT IN (
                                         'accepted', 'sent', 'delivered', 'read',
                                         'accepted_legacy', 'cancelled'

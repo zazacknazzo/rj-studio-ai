@@ -88,6 +88,12 @@ def validate_message_scope(connection: sqlite3.Connection, event: object) -> Non
         raise ValueError("Unsupported Message observation")
     if event.metadata is None:
         raise ValueError("Message observation requires provenance")
+    if connection.execute(
+        "SELECT 1 FROM delivery_status_events WHERE provider=? "
+        "AND (provider_message_id=? OR event_id=?) LIMIT 1",
+        (event.provider, event.provider_message_id, event.metadata.event_id),
+    ).fetchone():
+        raise ValueError("Conflicting Message observation")
     kind = classify_provider_event(event).value
     channel = (
         event.recipient_address if isinstance(event, InboundMessageReceived) else event.channel_id

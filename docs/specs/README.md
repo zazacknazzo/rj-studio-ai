@@ -37,3 +37,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [Ticket 06](V1-telnyx-coexistence-ticket-06.md): approved dormant Telnyx webhook authentication/configuration only; Ticket 07 awaits direct GitHub audit and authorization.
 
 - [Telnyx Coexistence Ticket 07](V1-telnyx-coexistence-ticket-07.md): authorized offline Message parsing and durable ACK.
+
+- [Telnyx Coexistence Ticket 08](V1-telnyx-coexistence-ticket-08.md): authorized offline delivery status and scoped early correlation.

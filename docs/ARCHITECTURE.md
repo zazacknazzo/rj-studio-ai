@@ -347,3 +347,22 @@ Load only its section of that report when changing this boundary.
 - CRM, scheduling, multimodal, Google Ads, or campaign messaging.
 - Automatic retry of unknown outbound outcomes.
 - A promise of exactly-once external delivery.
+
+## Ticket 08 offline Telnyx delivery evidence
+
+The dormant Telnyx Message adapter also accepts authenticated delivery callbacks.
+`delivery_status_events.py` stores scoped receipts in `delivery_status_events`,
+separate from the legacy Meta/Twilio `pending_delivery_statuses` inbox. Local Provider
+Acceptance validates and links early receipts in the same writer transaction as
+attempt finalization. The accepted attempt owner token prevents reassociation when
+SQLite numeric IDs are reused after content purge. This internal token is neither
+provider authentication nor an operational credential and is never exposed in logs.
+
+Telnyx confirmed success progresses sent → delivered → read. A simultaneous failure
+is retained as `status_conflict`, blocks later automation and appears in private
+operational inspection. A failure without delivered/read remains failed. Unknown
+provider observations never authorize submission or promote local acceptance.
+ADR 0016 narrows the legacy failure precedence for Telnyx only; Meta/Twilio keep
+ADR 0006's existing behavior. Public route, sender, lifecycle, readiness of a Telnyx
+channel and real-account integration remain absent. Existing schema validation now
+checks the status table/index/guards; this is not channel readiness.
