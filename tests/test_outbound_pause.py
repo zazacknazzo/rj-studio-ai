@@ -530,8 +530,10 @@ def test_migration_backfills_existing_pauses_atomically_without_replaying_effect
             (NOW.isoformat(),),
         )
     store = SqliteConversationStore(path)
-    delivery = pending(store)
-    claim = store.claim_next_delivery(now=NOW)
+    from historical_delivery import seed_reply
+
+    seed_reply(path, NOW, sending=True)
+    delivery = claim = store.get_delivery(1)
     pause(store)
     before_controls, before_effects = controls(path), rows(path, "human_pause_effects")
     before_outbox, before_attempts = (

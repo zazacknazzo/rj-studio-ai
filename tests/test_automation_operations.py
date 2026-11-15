@@ -684,15 +684,9 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
             (NOW.isoformat(),),
         )
     store = SqliteConversationStore(path)
-    claim = store.claim_generation(inbound(), now=NOW)
-    assert store.complete_generation(
-        inbound_message_id=claim.inbound_message_id,
-        owner_token=claim.owner_token,
-        reply_body="Synthetic historical reply",
-        delivery_state=DeliveryState.UNKNOWN,
-        handoff_reason="explicit_human_request",
-        now=NOW,
-    )
+    from historical_delivery import seed_reply
+
+    seed_reply(path, NOW, handoff=True)
     store.record_webhook_events((human(),), now=NOW)
     tables = (
         "conversations",
@@ -737,7 +731,11 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
             ).fetchall()
         MigrationManager(path).upgrade()
     for t, values in before.items():
-        assert rows(path, t) == values
+        actual = rows(path, t)
+        if t == "outbound_deliveries":
+            assert all(row["status_conflict"] == 0 for row in actual)
+            actual = [{k: v for k, v in row.items() if k != "status_conflict"} for row in actual]
+        assert actual == values
     assert store.migrations_are_current()
     opaque = store.automation_identifier(1)
     assert store.get_automation_state(opaque)["paused"]

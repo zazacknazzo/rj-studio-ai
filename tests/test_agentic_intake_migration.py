@@ -51,6 +51,9 @@ def test_upgrade_preserves_all_baseline_rows_and_rolls_back_partial_rebuild(tmp_
         if not interrupt:
             assert all(row[-1] == 0 for row in after["message_processing"])
             after["message_processing"] = [row[:-1] for row in after["message_processing"]]
+        if not interrupt:
+            assert all(row[-1] == 0 for row in after["outbound_deliveries"])
+            after["outbound_deliveries"] = [row[:-1] for row in after["outbound_deliveries"]]
         assert after == before
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         expected = "0011_conversational_intake" if interrupt else "0019_scoped_delivery_status"

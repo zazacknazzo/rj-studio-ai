@@ -482,11 +482,15 @@ def test_migration_preserves_leaf_rows_and_triggers_or_rolls_back(tmp_path, monk
         current = dict(
             connection.execute("SELECT name, sql FROM sqlite_master WHERE type='trigger'")
         )
-        # Ticket 04 extends this one attempt guard for operational cancellation.
+        # Tickets 04/08 extend the attempt and delivery-state guards, respectively.
         assert all(
             current[name] == sql
             for name, sql in triggers.items()
-            if name != "delivery_attempt_finalization_requires_current_claim"
+            if name
+            not in {
+                "delivery_attempt_finalization_requires_current_claim",
+                "outbound_delivery_state_transition",
+            }
         )
         if interrupt:
             assert current == triggers

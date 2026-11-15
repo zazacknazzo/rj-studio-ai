@@ -62,7 +62,7 @@ def test_openai_metrics_upgrade_preserves_old_evidence_and_rolls_back(tmp_path, 
             if table == "generation_metrics" and not interrupt:
                 assert [row[:-5] for row in rows] == before[table]
                 assert rows[0][-5:] == (None,) * 5
-            elif table == "message_processing" and not interrupt:
+            elif table in ("message_processing", "outbound_deliveries") and not interrupt:
                 assert [row[:-1] for row in rows] == before[table]
                 assert all(row[-1] == 0 for row in rows)
             else:
