@@ -94,6 +94,12 @@ def validate_message_scope(connection: sqlite3.Connection, event: object) -> Non
         (event.provider, event.provider_message_id, event.metadata.event_id),
     ).fetchone():
         raise ValueError("Conflicting Message observation")
+    if connection.execute(
+        "SELECT 1 FROM operational_events WHERE provider=? AND event_id=? "
+        "AND kind='channel_lifecycle' LIMIT 1",
+        (event.provider, event.metadata.event_id),
+    ).fetchone():
+        raise ValueError("Conflicting Message event identity")
     kind = classify_provider_event(event).value
     channel = (
         event.recipient_address if isinstance(event, InboundMessageReceived) else event.channel_id

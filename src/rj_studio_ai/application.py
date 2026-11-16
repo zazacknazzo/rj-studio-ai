@@ -185,6 +185,10 @@ class MessageResponder:
             context = self._build_context(claim, message, deadline)
         except ConversationContextTooLarge:
             return self._complete_failure(claim, message, deadline)
+        if not self._store.generation_channel_is_available(
+            inbound_message_id=claim.inbound_message_id, lock_timeout=deadline.remaining_budget()
+        ):
+            raise RetryableWebhookError("Channel is unavailable for generation")
         try:
             generated = self._generator.generate(
                 message,

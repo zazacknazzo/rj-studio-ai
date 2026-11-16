@@ -21,3 +21,5 @@ Add an ADR only for a hard-to-reverse choice that would be surprising without it
 
 - [0013](0013-authenticated-automation-operations.md): authenticated operations and future-only resume.
 - [0016](0016-scoped-delivery-status-evidence.md): scoped delivery receipts and explicit success/failure conflicts for Telnyx.
+
+- [0017: Durable channel lifecycle](0017-durable-channel-lifecycle.md) — explicit WABA binding, blocked defaults and replay-safe lifecycle effects.

@@ -8,6 +8,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from rj_studio_ai.appointment_intake import AppointmentIntake, AppointmentIntakeUpdate
+from rj_studio_ai.channel_lifecycle import (
+    TelnyxChannelBinding,
+    apply_pending_lifecycle,
+    bind_channel,
+    channel_allows_automation,
+    validate_lifecycle_scope,
+)
 from rj_studio_ai.deadline import ExecutionDeadline
 from rj_studio_ai.delivery_status_events import (
     reconcile_statuses,
@@ -15,6 +22,7 @@ from rj_studio_ai.delivery_status_events import (
     validate_status,
 )
 from rj_studio_ai.domain import (
+    ChannelAvailabilityChanged,
     DeliveryStatus,
     DeliveryStatusReceived,
     HumanMessageObserved,
@@ -235,6 +243,7 @@ class SqliteConversationStore:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 apply_pending_human_pauses(connection, timestamp=self._utc_time(None).isoformat())
+                apply_pending_lifecycle(connection, self._utc_time(None).isoformat())
         except sqlite3.Error:
             raise PersistenceUnavailable("Operational pause recovery is unavailable") from None
 
@@ -363,6 +372,10 @@ class SqliteConversationStore:
                 OR (delivery.state = 'sending' AND delivery.submission_started_at IS NULL)
                 OR (delivery.state = 'unknown' AND delivery.safe_error_code = 'legacy_unverified'
                     AND delivery.submission_started_at IS NULL AND delivery.attempt_count = 0
+                    AND (delivery.provider!='telnyx' OR EXISTS (
+                        SELECT 1 FROM eligible_telnyx_channels
+                        WHERE channel_id=delivery.provider_channel_id
+                    ))
                     AND NOT EXISTS (
                         SELECT 1 FROM conversation_automation_controls
                         WHERE conversation_id = outbound.conversation_id AND paused = 1
@@ -486,6 +499,21 @@ class SqliteConversationStore:
         except sqlite3.Error as error:
             raise PersistenceUnavailable("Conversation persistence is unavailable") from error
 
+    def generation_channel_is_available(
+        self, *, inbound_message_id: int, lock_timeout: float | None = None
+    ) -> bool:
+        """Recheck the durable channel immediately before starting generation I/O."""
+        try:
+            with self._connect(lock_timeout) as connection:
+                row = connection.execute(
+                    "SELECT provider,recipient_address FROM messages "
+                    "WHERE id=? AND direction='inbound'",
+                    (inbound_message_id,),
+                ).fetchone()
+                return row is not None and channel_allows_automation(connection, *row)
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Channel eligibility is unavailable") from None
+
     def record_webhook_events(
         self,
         events: tuple[ProviderWebhookEvent, ...],
@@ -494,6 +522,7 @@ class SqliteConversationStore:
         lock_timeout: float | None = None,
         deadline: ExecutionDeadline | None = None,
         require_message_provenance: bool = False,
+        channel_binding: TelnyxChannelBinding | None = None,
     ) -> None:
         """Persist one authenticated provider batch atomically before its ACK."""
         for event in events:
@@ -519,9 +548,15 @@ class SqliteConversationStore:
                 connection.execute("BEGIN IMMEDIATE")
                 timestamp = self._utc_time(now).isoformat()
                 require_budget()
+                if channel_binding is not None:
+                    bind_channel(connection, channel_binding, timestamp)
                 for event in events:
                     require_budget()
-                    if require_message_provenance and not isinstance(event, DeliveryStatusReceived):
+                    if isinstance(event, ChannelAvailabilityChanged) and event.provider == "telnyx":
+                        validate_lifecycle_scope(connection, event)
+                    elif require_message_provenance and not isinstance(
+                        event, DeliveryStatusReceived
+                    ):
                         validate_message_scope(connection, event)
                     if isinstance(event, DeliveryStatusReceived):
                         self._record_delivery_status_in_transaction(
@@ -531,6 +566,11 @@ class SqliteConversationStore:
                         )
                     elif type(event) in OPERATIONAL_EVENT_TYPES:
                         record_operational_event(connection, event, received_at=timestamp)
+                        if (
+                            isinstance(event, ChannelAvailabilityChanged)
+                            and event.provider == "telnyx"
+                        ):
+                            apply_pending_lifecycle(connection, timestamp)
                         if isinstance(event, HumanMessageObserved):
                             apply_pending_human_pauses(
                                 connection,
@@ -893,6 +933,10 @@ class SqliteConversationStore:
                       AND (? IS NULL OR delivery.provider = ?)
                       AND delivery.next_attempt_at <= ?
                       AND processing.state = 'completed'
+                      AND (delivery.provider!='telnyx' OR EXISTS (
+                        SELECT 1 FROM eligible_telnyx_channels
+                        WHERE channel_id=delivery.provider_channel_id
+                      ))
                       AND NOT EXISTS (
                         SELECT 1 FROM conversation_automation_controls
                         WHERE conversation_id = outbound.conversation_id AND paused = 1
@@ -1015,6 +1059,10 @@ class SqliteConversationStore:
                           AND delivery.state = 'sending'
                           AND delivery.owner_token = ?
                           AND delivery.lease_expires_at > ?
+                          AND (delivery.provider!='telnyx' OR EXISTS (
+                            SELECT 1 FROM eligible_telnyx_channels
+                            WHERE channel_id=delivery.provider_channel_id
+                          ))
                           AND NOT EXISTS (
                             SELECT 1 FROM conversation_automation_controls
                             WHERE conversation_id = outbound.conversation_id AND paused = 1
@@ -1057,6 +1105,10 @@ class SqliteConversationStore:
                       AND EXISTS (
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
+                        AND (delivery.provider!='telnyx' OR EXISTS (
+                            SELECT 1 FROM eligible_telnyx_channels
+                            WHERE channel_id=delivery.provider_channel_id
+                        ))
                         AND NOT EXISTS (
                             SELECT 1 FROM outbound_deliveries AS conflict
                             JOIN messages AS prior ON prior.id=conflict.outbound_message_id
@@ -1110,6 +1162,10 @@ class SqliteConversationStore:
                     ) AND EXISTS (
                         SELECT 1 FROM messages AS outbound
                         WHERE outbound.id = delivery.outbound_message_id
+                        AND (delivery.provider!='telnyx' OR EXISTS (
+                            SELECT 1 FROM eligible_telnyx_channels
+                            WHERE channel_id=delivery.provider_channel_id
+                        ))
                         AND NOT EXISTS (
                             SELECT 1 FROM outbound_deliveries AS conflict
                             JOIN messages AS prior ON prior.id=conflict.outbound_message_id
@@ -1252,7 +1308,10 @@ class SqliteConversationStore:
                                 WHERE inbound_message_id = outbound.in_reply_to_message_id
                             )
                         )
-                    ) AS paused
+                    ) OR (delivery.provider='telnyx' AND NOT EXISTS (
+                        SELECT 1 FROM eligible_telnyx_channels
+                        WHERE channel_id=delivery.provider_channel_id
+                    )) AS paused
                     FROM outbound_deliveries AS delivery
                     WHERE delivery.id = ?
                       AND delivery.state = 'sending'
@@ -2378,6 +2437,8 @@ class SqliteConversationStore:
             ):
                 return False
 
+            if not channel_allows_automation(connection, str(inbound[1]), str(inbound[2])):
+                return False
             conversation_id = int(inbound[0])
             control = connection.execute(
                 "SELECT paused, revision FROM conversation_automation_controls "

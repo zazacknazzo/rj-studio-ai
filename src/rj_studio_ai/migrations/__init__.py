@@ -88,6 +88,8 @@ class MigrationManager:
             "delivery_attempts",
             "pending_delivery_statuses",
             "delivery_status_events",
+            "channel_lifecycle",
+            "channel_lifecycle_effects",
             "conversation_handoffs",
             "appointment_intakes",
             "inbound_event_receipts",
@@ -98,6 +100,8 @@ class MigrationManager:
             "conversation_operation_ids",
             "automation_operation_receipts",
         }.issubset(inspector.get_table_names()):
+            return False
+        if not MigrationManager._channel_schema_matches(connection, inspector):
             return False
         if not MigrationManager._operations_schema_matches(connection, inspector):
             return False
@@ -520,6 +524,56 @@ class MigrationManager:
                 "delivery_attempt_identity_is_immutable",
                 "terminal_delivery_attempt_is_immutable",
             }.issubset(processing_triggers)
+        )
+
+    @staticmethod
+    def _channel_schema_matches(connection: Connection, inspector: Inspector) -> bool:
+        if not {
+            "provider",
+            "waba_id",
+            "channel_id",
+            "organization_id",
+            "profile_id",
+            "state",
+            "revision",
+            "verification_evidence",
+            "last_event_record_id",
+            "updated_at",
+        }.issubset({c["name"] for c in inspector.get_columns("channel_lifecycle")}):
+            return False
+        if "ck_channel_lifecycle" not in {
+            c["name"] for c in inspector.get_check_constraints("channel_lifecycle")
+        }:
+            return False
+        objects = {
+            r[0]
+            for r in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type IN ('trigger','view')"
+            )
+        }
+        return {
+            "eligible_telnyx_channels",
+            "channel_binding_immutable",
+            "channel_lifecycle_retained",
+            "channel_lifecycle_effects_retained",
+            "channel_effect_immutable",
+            "channel_lifecycle_fences_insert",
+            "channel_lifecycle_fences_update",
+            "channel_rejects_generation_insert",
+            "channel_rejects_generation_update",
+            "channel_rejects_reply_insert",
+            "channel_rejects_reply_update",
+            "channel_cancels_ready_delivery_insert",
+            "channel_cancels_ready_delivery_update",
+            "channel_suppresses_admission",
+            "channel_rejects_submission",
+        }.issubset(objects) and all(
+            any(
+                f["referred_table"] == "operational_events"
+                and f["options"].get("ondelete") == "RESTRICT"
+                for f in inspector.get_foreign_keys(table)
+            )
+            for table in ("channel_lifecycle", "channel_lifecycle_effects")
         )
 
     @staticmethod

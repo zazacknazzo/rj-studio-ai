@@ -29,7 +29,11 @@ def receive_telnyx_messages(
             raise PersistenceUnavailable("Webhook ingress deadline expired")
         events.extend(adapter.receive(request).events)
     store.record_webhook_events(
-        tuple(events), now=now, deadline=deadline, require_message_provenance=True
+        tuple(events),
+        now=now,
+        deadline=deadline,
+        require_message_provenance=True,
+        channel_binding=adapter.channel_binding,
     )
     if deadline.is_expired():
         # Commit may have completed as the budget elapsed; replay is durable/idempotent.

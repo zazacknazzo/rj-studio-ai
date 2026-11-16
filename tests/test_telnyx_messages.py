@@ -11,6 +11,7 @@ from threading import Barrier, Event
 from uuid import uuid4
 
 import pytest
+from telnyx_channel_fixture import verified_channel
 from test_generation_pause import complete, runner
 from test_operational_event_journal import rows
 from test_outbound_pause import authorize
@@ -73,6 +74,7 @@ def ingress(settings, private_key, tmp_path):
     path = tmp_path / "telnyx.db"
     store = SqliteConversationStore(path)
     store.initialize()
+    verified_channel(path)
     adapter = TelnyxMessageAdapter(settings, clock=lambda: NOW)
     return adapter, store, path
 
@@ -681,7 +683,7 @@ def test_upgrade_preserves_previous_journal_and_rolls_back_atomically(tmp_path, 
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == (
-            "0017_automation_operations" if interrupt else "0019_scoped_delivery_status"
+            "0017_automation_operations" if interrupt else "0020_channel_lifecycle"
         )
         if interrupt:
             assert (

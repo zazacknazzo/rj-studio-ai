@@ -5,8 +5,13 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from rj_studio_ai.channel_lifecycle import TelnyxChannelBinding
 from rj_studio_ai.config import Settings
 from rj_studio_ai.domain import (
+    ChannelAvailability,
+    ChannelAvailabilityChanged,
+    ChannelLifecycleReason,
+    ChannelScope,
     DeliveryStatus,
     DeliveryStatusReceived,
     EventOrigin,
@@ -84,10 +89,16 @@ def _source_time(value: object, occurred_at: datetime) -> datetime | None:
 
 
 class TelnyxMessageAdapter(InboundWebhookAdapter):
-    """Offline Tickets 07–08 contracts; unsupported callbacks never empty-success."""
+    """Offline Tickets 07–09 contracts; unsupported callbacks never empty-success."""
 
     def __init__(self, settings: Settings, *, clock: Callable[[], float]) -> None:
         self._authenticator = TelnyxWebhookAuthenticator(settings, clock=clock)
+        self.channel_binding = TelnyxChannelBinding(
+            settings.telnyx_waba_id,
+            settings.telnyx_phone_number,
+            settings.telnyx_organization_id,
+            settings.telnyx_messaging_profile_id,
+        )
 
     def is_configured(self) -> bool:
         # Local ingress configuration only, not channel or delivery readiness.
@@ -98,6 +109,8 @@ class TelnyxMessageAdapter(InboundWebhookAdapter):
         try:
             data = json.loads(raw)["data"]
             event_type = data["event_type"]
+            if event_type == "whatsapp.account.update":
+                return ProviderWebhookEventBatch((_lifecycle(data),))
             if event_type in ("message.sent", "message.finalized", "message.read"):
                 return ProviderWebhookEventBatch((_delivery_status(data),))
             if event_type not in ("message.received", "message.echo"):
@@ -222,5 +235,27 @@ def _delivery_status(data: dict) -> DeliveryStatusReceived:
             payload["messaging_profile_id"],
             data["event_type"],
             source_status,
+        ),
+    )
+
+
+def _lifecycle(data: dict) -> ChannelAvailabilityChanged:
+    payload = data["payload"]
+    # Unknown transitions reject before persistence/ACK; no guessed reconnect.
+    reason = {
+        "ACCOUNT_OFFBOARDED": ChannelLifecycleReason.OFFBOARDED,
+        "PARTNER_REMOVED": ChannelLifecycleReason.DISCONNECTED,
+        "ACCOUNT_RECONNECTED": ChannelLifecycleReason.RECONNECTED,
+    }[payload["event"]]
+    return ChannelAvailabilityChanged(
+        "telnyx",
+        ChannelScope.ACCOUNT,
+        _identifier(payload["waba_id"]),
+        ChannelAvailability.VERIFICATION_REQUIRED
+        if reason is ChannelLifecycleReason.RECONNECTED
+        else ChannelAvailability.BLOCKED,
+        reason,
+        ProviderEventMetadata(
+            _identifier(data["id"]), EventOrigin.PROVIDER, _event_time(data["occurred_at"])
         ),
     )

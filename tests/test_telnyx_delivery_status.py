@@ -11,6 +11,7 @@ from threading import Barrier
 
 import pytest
 from alembic import command
+from telnyx_channel_fixture import verified_channel
 from test_operational_event_journal import rows
 from test_telnyx_authentication import NOW, ORG, PHONE, PRIVATE_TEXT, PROFILE, message, signed
 from test_telnyx_authentication import private_key as private_key
@@ -263,14 +264,27 @@ def test_conflicting_same_event_is_rejected(ingress, private_key, settings, chan
 
 @pytest.mark.parametrize("early", [False, True])
 @pytest.mark.parametrize("mismatch", ["channel", "recipient"])
-def test_outbox_scope_mismatch_never_correlates(ingress, private_key, early, mismatch):
-    _, store, path = ingress
-    pending(
-        store,
-        **({"channel": "+15555550109"} if mismatch == "channel" else {"customer": "+15555550109"}),
-    )
+def test_outbox_scope_mismatch_never_correlates(ingress, private_key, settings, early, mismatch):
+    adapter, store, path = ingress
+    pending(store)
+    payload = status_wire()
+    if mismatch == "channel":
+        # Exercise Ticket 08 correlation directly after authenticated parsing under
+        # another synthetic binding. Ticket 09 ingress separately rejects rebinding.
+        from rj_studio_ai.providers.telnyx_messages import TelnyxMessageAdapter
+
+        settings.telnyx_phone_number = "+15555550109"
+        adapter = TelnyxMessageAdapter(settings, clock=lambda: NOW)
+        payload["data"]["payload"]["from"]["phone_number"] = settings.telnyx_phone_number
+    else:
+        payload["data"]["payload"]["to"][0]["phone_number"] = "+15555550109"
+    event = adapter.receive(signed(private_key, payload)).events[0]
+
+    def callback():
+        store.record_delivery_status(event, now=TIME)
+
     if early:
-        receive(ingress, private_key, status_wire())
+        callback()
         claim = claim_delivery(store)
         with pytest.raises(ValueError, match="scope mismatch"):
             accept(store, claim)
@@ -281,7 +295,7 @@ def test_outbox_scope_mismatch_never_correlates(ingress, private_key, early, mis
     else:
         accept(store)
         with pytest.raises(ValueError, match="scope mismatch"):
-            receive(ingress, private_key, status_wire())
+            callback()
         assert rows(path, "outbound_deliveries")[0]["state"] == "accepted"
         assert rows(path, "delivery_status_events") == []
 
@@ -508,6 +522,7 @@ def test_migration_preserves_legacy_inbox_and_does_not_promote_telnyx_rows(tmp_p
     manager.upgrade()
     manager.upgrade()
     store = SqliteConversationStore(path)
+    verified_channel(path)
     pending(store)
     assert accept(store).state == DeliveryState.ACCEPTED
     assert len(rows(path, "pending_delivery_statuses")) == 3

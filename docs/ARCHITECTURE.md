@@ -366,3 +366,14 @@ ADR 0016 narrows the legacy failure precedence for Telnyx only; Meta/Twilio keep
 ADR 0006's existing behavior. Public route, sender, lifecycle, readiness of a Telnyx
 channel and real-account integration remain absent. Existing schema validation now
 checks the status table/index/guards; this is not channel readiness.
+
+## Offline Telnyx channel lifecycle (Ticket 09)
+
+The dormant authenticated adapter also parses `whatsapp.account.update` using
+`payload.waba_id` and `payload.event`. `channel_lifecycle` is the single-business
+binding and channel authority, independent of Conversation pause and handoff.
+Its `eligible_telnyx_channels` view is shared by generation/submission gates;
+absence is ineligible. Journal observations, effect receipts and cancellation
+commit atomically. Reconnect means verification_required, never active. There is
+no activation/rebinding API. See [ADR 0017](decisions/0017-durable-channel-lifecycle.md).
+The runtime still exposes no Telnyx route or sender. Meta/Twilio gates are unchanged.

@@ -125,3 +125,21 @@ future recovery requires an explicitly approved policy. Unknown/unconfirmed prov
 observations likewise never justify retry. The status ledger retains private routing
 IDs under CX-01; it stores no message text or raw provider errors. Existing purge and
 Conversation deletion reject unresolved conflicts instead of hiding them.
+
+## Offline account lifecycle
+
+Ticket 09 binds the configured Telnyx WABA explicitly to the business number,
+organization and profile. It rejects configuration rebinding. Account events do
+not identify a Customer or create Conversations. Offboarding/partner removal
+block the channel; reconnect requires verification. Missing channel verification
+also blocks Telnyx generation and submission. No command in this release enables
+or reconnects that channel. Conversation pause/resume and handoff release remain
+independent and cannot override it. Unknown lifecycle transitions reject without
+ACK and require future ingress policy; do not bypass validation to stop retries.
+
+Observations and applied effects survive restart and Message maintenance. Their
+retention remains a release blocker. Already authorized HTTP/LLM work may finish;
+LLM output cannot commit after a lifecycle block, while submission results remain
+evidence. Never resubmit old work or erase markers/attempts to clear this gate.
+Future operational verification, activation and rebinding require their own
+specification, authorization, audit and tests. See ADR 0017 and issue #11/CX-33.

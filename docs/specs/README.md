@@ -39,3 +39,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [Telnyx Coexistence Ticket 07](V1-telnyx-coexistence-ticket-07.md): authorized offline Message parsing and durable ACK.
 
 - [Telnyx Coexistence Ticket 08](V1-telnyx-coexistence-ticket-08.md): authorized offline delivery status and scoped early correlation.
+
+- [Telnyx Coexistence Ticket 09](V1-telnyx-coexistence-ticket-09.md): authorized offline account lifecycle and durable channel gate.
