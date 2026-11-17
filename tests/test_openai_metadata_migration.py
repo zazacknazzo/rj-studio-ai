@@ -67,7 +67,7 @@ def test_openai_metrics_upgrade_preserves_old_evidence_and_rolls_back(tmp_path, 
                 assert all(row[-1] == 0 for row in rows)
             else:
                 assert rows == before[table]
-        expected = "0012_agentic_intake" if interrupt else "0019_scoped_delivery_status"
+        expected = "0012_agentic_intake" if interrupt else "0020_channel_lifecycle"
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

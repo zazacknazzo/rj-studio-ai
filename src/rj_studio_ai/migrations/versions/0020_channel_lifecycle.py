@@ -79,6 +79,10 @@ def upgrade() -> None:
     op.execute("""CREATE VIEW eligible_telnyx_channels AS
         SELECT channel_id FROM channel_lifecycle WHERE provider='telnyx' AND state='active'
         AND verification_evidence IS NOT NULL AND last_event_record_id IS NULL""")
+    op.execute("""CREATE TRIGGER channel_binding_rejects_replacement
+        BEFORE INSERT ON channel_lifecycle
+        WHEN EXISTS (SELECT 1 FROM channel_lifecycle WHERE provider=NEW.provider)
+        BEGIN SELECT RAISE(ABORT,'channel binding already exists'); END""")
     op.execute("""CREATE TRIGGER channel_binding_immutable BEFORE UPDATE ON channel_lifecycle
         WHEN NEW.provider IS NOT OLD.provider OR NEW.waba_id IS NOT OLD.waba_id
           OR NEW.channel_id IS NOT OLD.channel_id OR NEW.organization_id IS NOT OLD.organization_id

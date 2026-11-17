@@ -554,6 +554,7 @@ class MigrationManager:
         return {
             "eligible_telnyx_channels",
             "channel_binding_immutable",
+            "channel_binding_rejects_replacement",
             "channel_lifecycle_retained",
             "channel_lifecycle_effects_retained",
             "channel_effect_immutable",

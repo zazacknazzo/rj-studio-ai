@@ -464,6 +464,9 @@ def test_migration_from_0019_is_atomic_and_preserves_history(tmp_path, monkeypat
             (PHONE,),
         )
     before = rows(path, "messages")
+    backup = tmp_path / "baseline-backup.db"
+    with sqlite3.connect(path) as source, sqlite3.connect(backup) as destination:
+        source.backup(destination)
     monkeypatch.setattr(command, "upgrade", original)
 
     def fail(conn, cursor, statement, parameters, context, many):
@@ -492,3 +495,139 @@ def test_migration_from_0019_is_atomic_and_preserves_history(tmp_path, monkeypat
     assert rows(path, "message_processing")[0]["state"] == "suppressed"
     with sqlite3.connect(path) as connection:
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    restored = tmp_path / "restored-0019.db"
+    with sqlite3.connect(backup) as source, sqlite3.connect(restored) as destination:
+        source.backup(destination)
+    restored_store = SqliteConversationStore(restored)
+    restored_store.initialize()
+    assert restored_store.migrations_are_current()
+    assert rows(restored, "messages") == before
+    assert rows(restored, "message_processing")[0]["state"] == "suppressed"
+
+
+def test_block_between_claim_and_llm_never_calls_generator(ingress, private_key, monkeypatch):
+    from rj_studio_ai.application import RetryableWebhookError
+    from rj_studio_ai.generation import FixedReplyGenerator
+
+    _, store, path = ingress
+    message = inbound()
+    claim = store.claim_generation(message)
+    generator = FixedReplyGenerator("Synthetic reply")
+    process = runner(store, generator).responder
+    original = process._build_context
+
+    def block(*args, **kwargs):
+        context = original(*args, **kwargs)
+        receive(ingress, private_key, account())
+        return context
+
+    monkeypatch.setattr(process, "_build_context", block)
+    monkeypatch.setattr(type(generator), "generate", lambda *a, **k: pytest.fail("LLM called"))
+    with pytest.raises(RetryableWebhookError, match="Channel"):
+        process.process_persisted(message, preclaimed=claim)
+    assert rows(path, "outbound_deliveries") == []
+
+
+@pytest.mark.parametrize("kind", ["text", "echo", "status"])
+@pytest.mark.parametrize("lifecycle_first", [False, True])
+def test_event_identity_cannot_cross_message_and_account_scopes(
+    ingress, private_key, kind, lifecycle_first
+):
+    message = status_wire(event_id="shared") if kind == "status" else wire(kind, event_id="shared")
+    change = account(event_id="shared")
+    first, second = (change, message) if lifecycle_first else (message, change)
+    receive(ingress, private_key, first)
+    before = state(ingress[2])
+    with pytest.raises(ValueError, match="Conflicting"):
+        receive(ingress, private_key, second)
+    assert state(ingress[2]) == before
+
+
+def test_maintenance_and_restart_preserve_account_block(ingress, private_key):
+    adapter, store, path = ingress
+    pending(store)
+    receive(ingress, private_key, account())
+    before = state(path)
+    journal = rows(path)
+    store.purge_messages_older_than(TIME + timedelta(days=1))
+    store.delete_conversation(provider="telnyx", customer_address=CUSTOMER)
+    restarted = SqliteConversationStore(path)
+    restarted.initialize()
+    assert state(path) == before
+    assert rows(path) == journal
+    assert len(rows(path, "channel_lifecycle_effects")) == 1
+    receive((adapter, restarted, path), private_key, wire())
+    assert rows(path, "message_processing")[0]["state"] == "suppressed"
+
+
+@pytest.mark.parametrize("operation", ["reactivate", "delete", "rebind", "delete_effect"])
+def test_no_sql_shortcut_can_release_or_erase_channel(ingress, private_key, operation):
+    receive(ingress, private_key, account())
+    sql = {
+        "reactivate": "UPDATE channel_lifecycle SET state='active',last_event_record_id=NULL",
+        "delete": "DELETE FROM channel_lifecycle",
+        "rebind": "UPDATE channel_lifecycle SET waba_id='another-account'",
+        "delete_effect": "DELETE FROM channel_lifecycle_effects",
+    }[operation]
+    with sqlite3.connect(ingress[2]) as connection, pytest.raises(sqlite3.IntegrityError):
+        connection.execute(sql)
+    assert state(ingress[2])["state"] == "blocked"
+
+
+def test_expired_authorized_delivery_becomes_unknown_never_retry(ingress, private_key):
+    _, store, path = ingress
+    pending(store)
+    claim_delivery(store)
+    receive(ingress, private_key, account())
+    restarted = SqliteConversationStore(path)
+    restarted.initialize()
+    assert restarted.claim_next_delivery(now=TIME + timedelta(days=1)) is None
+    assert rows(path, "outbound_deliveries")[0]["state"] == "unknown"
+    assert rows(path, "delivery_attempts")[0]["outcome"] == "unknown"
+
+
+@pytest.mark.parametrize("kind", ["offboard", "reconnect"])
+def test_restored_backup_retains_block_and_replay(ingress, private_key, tmp_path, kind):
+    adapter, _, path = ingress
+    payload = account("ACCOUNT_OFFBOARDED" if kind == "offboard" else "ACCOUNT_RECONNECTED")
+    receive(ingress, private_key, payload)
+    backup = tmp_path / "restored.db"
+    with sqlite3.connect(path) as source, sqlite3.connect(backup) as destination:
+        source.backup(destination)
+    store = SqliteConversationStore(backup)
+    store.initialize()
+    before = state(backup)
+    receive((adapter, store, backup), private_key, payload)
+    assert state(backup) == before
+    assert not store.claim_generation(inbound(), now=TIME).acquired
+
+
+@pytest.mark.parametrize(
+    "object_name,kind",
+    [
+        ("eligible_telnyx_channels", "VIEW"),
+        ("channel_rejects_submission", "TRIGGER"),
+        ("channel_lifecycle_fences_update", "TRIGGER"),
+    ],
+)
+def test_schema_damage_fails_local_readiness(ingress, object_name, kind):
+    _, store, path = ingress
+    with sqlite3.connect(path) as connection:
+        connection.execute(f"DROP {kind} {object_name}")
+    assert not store.migrations_are_current()
+
+
+@pytest.mark.parametrize("transition", ["ACCOUNT_OFFBOARDED", "ACCOUNT_RECONNECTED"])
+def test_sql_replace_cannot_bypass_immutable_binding(ingress, private_key, transition):
+    receive(ingress, private_key, account(transition))
+    before = state(ingress[2])
+    with sqlite3.connect(ingress[2]) as connection:
+        assert connection.execute("PRAGMA recursive_triggers").fetchone()[0] == 0
+        with pytest.raises(sqlite3.IntegrityError, match="already exists"):
+            connection.execute(
+                "INSERT OR REPLACE INTO channel_lifecycle "
+                "(provider,waba_id,channel_id,organization_id,profile_id,state,revision,"
+                "updated_at,verification_evidence) VALUES "
+                "('telnyx','another-waba','+15555550109','org','profile','active',0,'2000','fake')"
+            )
+    assert state(ingress[2]) == before
