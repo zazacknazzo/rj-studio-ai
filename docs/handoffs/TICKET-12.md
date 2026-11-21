@@ -9,7 +9,7 @@
 - Exclusive writer: user explicitly confirmed this account in chat2026-11-21.
   Primary alone commits/pushes; independent reviewers may write separate reports.
   Human exclusivity required on every account transfer; Markdown is not a lock.
-- Last remote SHA actually verified: CP5 d7b5d72a2e784ec954bf4f100eac9d4eaba7a1dc;
+- Last remote SHA actually verified: CP6 framing 533052f2d60ee43bd66e82170af1801f4523c76a;
   Ticket12 branch absent before creation. Query origin for current SHA.
 
 ## Checkpoints
@@ -22,7 +22,8 @@
 | CP3 | real-ASGI commit visibility, commit/SQL rollback, lock, fragmented/large body, lost ACK and expiry | 19passed; initial1failed18passed: SQL trace probe missed leading whitespace, corrected probe | CP2 above |
 | CP4 | bounded durable rejection observations/0023, six readiness fields, metrics | 63passed15.15s including schema/history regressions; Ruff check/format | CP3 above |
 | CP5 | strict HMAC/store quarantine, six restore snapshots, callbacks, load/concurrency, bounded admission and cancellation | corrected68passed19.93s; followup14passed7.39s; extra21passed8.74s; initial failures below | CP4 above |
-| CP6–7 | Pending | Full suites/final review pending | None |
+| CP6 | reviews/corrections/full checks complete on533052f | local2207pass/1skip/2warnings335.51s; Spec2207pass/1skip/2warnings344.15s; all checks below | framing533052f above |
+| CP7 | report/issue final publication pending | Final documentary checks pending | None |
 
 ## Risks and limitations
 
@@ -70,3 +71,33 @@ Corrected helper and regression;10ASGItests passed. Both full runs on d7b5 were
 interrupted intentionally to include this change, not reported as completedPASS.
 Spec partial1730passed/1skip289.75s; local partial recorded in final evidence.
 Next: publish correction/verify SHA, restart both guarded full suites on that SHA.
+
+## Final executed validation
+
+- Candidate533052f2d60ee43bd66e82170af1801f4523c76a; local full2207passed/1skip
+  /2warnings335.51s exit0; independent Spec2207passed/1skip/2warnings344.15s exit0.
+  Guarded private temp/basetemp; Python3.12.14/SQLite3.53.1,pip26.3,pytest9.2.0.
+- Standards final38probes/tests24.70s + framing22tests14.12s; Security91focused
+  + owncorrectionprobes + final33tests18.99s + framing22tests17.59s; Spec3own
+  probes7.19s + fullsuite. Final reviews anchored533052f, no newconfirmedP1/P2pending.
+- Four candidateP2 and one RFC204 P3 corrected with original independent probes.
+- Local full load:128unique at8concurrency127x204/1x503, retry1x204; p95.18745s,
+  p99.43827s; duplicate128x204 p95.08976s/p99.17680s. Specfull128x204 eachload,
+  unique p95.18849s/p99.50754s; duplicate p95.07783s/p99.15972s. Zero late2xx.
+- Ruffcheck/format331files,compileall src/tests/scripts,pip check,diffcheck PASS.
+  Pip-audit82entries/0advisorypackages, localapp skipped unindexed. Gitleaks8.30.1
+  checked officialarchive; tree3baselinefalsepositives, rangeCP0–5zero, no ignores.
+- Fullsuites on d7b5 interrupted to include framingfix: local1929pass/1skip327.77s;
+  Spec1730pass/1skip289.75s; earlierSpec176pass32.92s. Interrupt duringfixtures
+  produced pytestteardownKeyError; never count as completedPASS.
+- Newclone d7b5resumption: origin/branch/SHA/ancestry/AGENTS/handoff checked;
+  2focusedpassed6.35s; noWIPdiscarded. Simulation, not actual secondaccountlogin.
+- Source/tests unchanged after533052f; later commits documentary only. AUD01OPEN;
+  no operational release/activation/realHTTP/T13/main/Baileys/intelligence changes.
+
+## Exact final next action
+
+Finish normal documentary checkpoints and issue11 evidence, verify remoteSHA and stop.
+Then direct orchestrator audit of published branch/report/reviews is REQUIRED before
+any Ticket13 or operational work. A new account must first obtain humanexclusive
+writing control, fetch/status/SHA/handoff and reproduce the named focused test.
