@@ -403,3 +403,21 @@ interface; the existing AI Reply outbox remains free-form. No template dispatch,
 consent acquisition/verification interface, sender, activation or new public route
 is introduced. [ADR0018](decisions/0018-whatsapp-eligibility-and-submission-identity.md)
 records the conservative retry policy and unresolved request-byte/operational gates.
+
+
+### Telnyx Ticket11: dormant offline sender
+
+`TelnyxWhatsAppSender` prepares an immutable request for the fixed WhatsApp endpoint;
+`OutboundDeliveryRunner` restricts this concrete sender to Telnyx claims, then passes
+its exact request to atomic store authorization. Migration0022 retains a private keyed
+MAC per durable submission UUID without retaining another payload. Identity, current
+organization/profile and all Ticket10 gates precede committed submission markers.
+Only an explicitly injected intercepted exchange exists; no client, credentials,
+factory/runtime selection, public route or outgoing worker is wired. Inconclusive
+responses remain unknown. T08 alone advances delivery statuses.
+
+The integrity key is distinct from provider credentials and must be stable outside
+SQLite; loss/rotation refuses prior bindings. It does not prove snapshot freshness.
+AUD01 requires external quarantine/reconciliation before operational restore/egress,
+which this ticket does not implement. See [ADR0019](decisions/0019-deterministic-offline-telnyx-sender.md)
+and [validation](architecture/v1-ticket11-validation.md). No production readiness claimed.

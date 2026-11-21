@@ -9,7 +9,8 @@
 - Functional sender candidate: `a049753205001d81a9ac0f11253eab5760a2f017`.
 - Final code/tests candidate: `789c2c89328b0472506c3d34593dfe741c052883`;
   only the latest-head assertion changed after a049753, no production change.
-- Last remote SHA actually confirmed before this checkpoint: validation candidate above.
+- Last remote SHA actually confirmed before final delivery:
+  `7823243293f888321723dc6bcbb9f0fcbcc361b1` (CP5 complete).
   Query origin for current head; never predict this document's own commit hash.
 - Authorized: offline text sender/intercepted exchange, tests/docs, normal branch push
   and issue11 evidence. No commercial API HTTP/credentials, activation/public route,
@@ -31,8 +32,8 @@
 |CP5 corrections | WIP explicit:4ec507a3c057b5c7bdc96bf3a0768265b62c552d |
 |CP5 scope fix | Concrete provider fenced before claim:a049753205001d81a9ac0f11253eab5760a2f017 |
 |CP5 test head | Final historical assertion:789c2c89328b0472506c3d34593dfe741c052883 |
-|CP5 validation | Complete locally, commit publishing now; query origin for SHA |
-|CP6 | Final A–O report, architecture/runbook and issue evidence pending publication |
+|CP5 validation | Complete/published:7823243293f888321723dc6bcbb9f0fcbcc361b1 |
+|CP6 | Final A–O report/architecture/runbook complete; current final SHA is origin head, issue receipt is published after remote verification |
 
 ## Actual final validation
 
@@ -45,7 +46,8 @@
   application skipped explicitly. Runtime declarations unchanged; versions in manifest.
 - Gitleaks8.30.1: functional commit range0hits; final draft tree3raw false positives
   (two baseline prose/synthetic fixture, one public schema SHA256), no ignore entries.
-  Final delivery commit scan/triage still to record; never claim zero raw tree hits.
+  Documentary delivery range also reports the public hash false positive; no secret.
+  Never claim zero raw tree hits.
 - Standards:229focused+3own probes originally; schema gap missed and acknowledged.
   Corrected candidate117focused+3own probes; final provider2cases independently passed.
 - Spec:three P2 independently reproduced and fixed (UUID profile, malformed optional
@@ -74,11 +76,13 @@ No risk checkbox closed, no exception accepted. No real Telnyx/API/credential/ac
 
 ## Exact next action
 
-Primary: confirm CP5 remote head; publish CP6 final report/docs, run final secret/diff
-checks, push normally only this branch and verify origin SHA. Update issue11 with final
-SHA/evidence and residual gates without closing checkboxes. Then STOP development and
-request direct orchestrator audit. Do not start T12–13 or operational recovery/activation.
+Development is STOPPED. Orchestrator must directly audit the published branch, final
+A–O report/reviews and issue11 delivery receipt. Fetch origin, verify its SHA/status
+and read the latest issue evidence; do not start T12–13, operational recovery or
+activation without fresh explicit authorization. No risk checkbox or exception closed.
+
 A new account first obtains exclusive human writing control, fetches origin, checks
 status/divergence/SHA and this handoff; it may reproduce focused offline checks only:
 `python scripts/check_telnyx_offline.py --python /isolated/venv/bin/python tests/test_telnyx_sender_integration.py`.
-Do not overwrite existing WIP or rebase/reset/force-push published work.
+Current SHA is queried remotely (no self-hash prediction). Do not overwrite existing WIP
+or rebase/reset/force-push published work. The original conversation is not required.

@@ -166,3 +166,26 @@ key or replay merely because the provider documents an idempotency window. Its
 retention is bounded, and current local code does not prove future HTTP bytes or
 remote processing. The authorization-to-HTTP and query-to-LLM residual windows
 remain; this ticket neither performs HTTP nor promises recall.
+
+
+## Ticket11 offline sender and mandatory restore gate
+
+The text sender exists only as an uncomposed component with an injected intercepted
+exchange. No Telnyx runtime selector, outgoing worker, credential loading or public route
+has been enabled. Its presence is not activation authority. HTTP acceptance is distinct
+from sent/delivered/read. Unknown,409/10036,422/10027,429/5xx and timeout do not authorize
+resubmission or replacement keys. A Telnyx runner/executor selects only Telnyx work.
+
+AUD01 remains an operational blocker: opening a structurally valid old backup can lose
+later submission or disconnect barriers. Before any future approved operational restore,
+quarantine must disable all egress outside the restored file; independent inventory and
+reconciliation of possible submissions, channel/sync, consent/window and authenticated
+release must precede worker composition. These are required future capabilities, not
+commands implemented here. Never recover by clearing unknown, deleting markers or
+creating a new submission key. Additional DB fields/MACs alone do not fix stale restore.
+
+Request MAC receipts survive terminal content purge and have no automatic expiry;
+CX01 retention/erasure policy remains required. Integrity keys must be held separately
+and stable; do not publish them or use commercial credentials during offline checks.
+The [Ticket11 report](architecture/v1-ticket11-validation.md) distinguishes reproduced
+restore failures, passing offline regressions and operational protection still absent.
