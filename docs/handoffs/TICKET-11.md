@@ -115,3 +115,12 @@ local integration+legacy56passed/0skip20.08s. Last remote verified corrections c
 before completion to include this new fix; no green integral claimed yet. Spec remaining
 direct inspection completed, no additional P1/P2 confirmed. Next: final integral runs
 against this provider fix, then CP5 completion and CP6 reports/governance only.
+
+Final integral attempt on a049753 completed (not interrupted): local1failed/2129passed/
+1historicalskip422.95s; Spec1failed/2129passed/1skip402.26s. Sole remaining failure was
+historical journal migration test expected latest0021, actual0022. Corrected ONLY else
+expected head in tests/test_telnyx_messages.py; rollback/effects/FK assertions retained.
+Global search of all tests finds no other stale latest0021 expectations; remaining0021
+references intentionally exercise historical migration. No production change aftera049.
+Next exact action: complete focused pair then repeat both full suites to green on this
+validation-only correction; do not mark CP5complete on the1failed integral attempts.
