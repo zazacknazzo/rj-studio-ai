@@ -48,6 +48,7 @@ from rj_studio_ai.sqlite import (
     inspect_sqlite_connection,
     require_file_backed_database,
 )
+from rj_studio_ai.telnyx_request import TelnyxRequest, bind_http_request
 from rj_studio_ai.telnyx_submission import RetryEvidence, SubmissionAssessment, assess_submission
 from rj_studio_ai.whatsapp_policy import payload_fingerprint
 
@@ -1124,6 +1125,7 @@ class SqliteConversationStore:
         owner_token: str,
         now: datetime | None = None,
         message: OutboundMessage | None = None,
+        http_request: TelnyxRequest | None = None,
     ) -> bool:
         """Fence owner, lease, handoff and operational pause before irreversible HTTP."""
         try:
@@ -1144,6 +1146,12 @@ class SqliteConversationStore:
                     )
                     if not assessment.eligible:
                         return False
+                    if http_request is not None and (
+                        message is None or not bind_http_request(connection, http_request, message)
+                    ):
+                        return False
+                elif http_request is not None:
+                    return False
                 updated = connection.execute(
                     """
                     UPDATE outbound_deliveries AS delivery SET submission_started_at = ?
@@ -1200,6 +1208,8 @@ class SqliteConversationStore:
                     ).rowcount
                     if marked != 1:
                         raise sqlite3.IntegrityError("Attempt submission ownership changed")
+                if updated != 1 and http_request is not None:
+                    connection.rollback()
                 return updated == 1
         except sqlite3.Error:
             raise PersistenceUnavailable(

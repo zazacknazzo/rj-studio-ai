@@ -1,4 +1,5 @@
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from threading import Event, Thread
@@ -15,6 +16,9 @@ from rj_studio_ai.providers.base import (
     OutboundPermanentError,
     OutboundRetryableError,
 )
+from rj_studio_ai.providers.telnyx_sender import TelnyxOutcomeUnknown, TelnyxWhatsAppSender
+from rj_studio_ai.telnyx_request import InvalidTelnyxRequest
+from rj_studio_ai.telnyx_submission import RetryEvidence
 
 
 class DeliveryOwnershipLost(RuntimeError):
@@ -35,7 +39,7 @@ class OutboundDeliveryRunner:
     retry_backoff_maximum_seconds: float = 30.0
 
     def __post_init__(self) -> None:
-        if self.timeout_seconds <= 0:
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
             raise ValueError("Outbound timeout must be positive")
         if self.maximum_attempts < 1:
             raise ValueError("Outbound maximum attempts must be positive")
@@ -56,18 +60,45 @@ class OutboundDeliveryRunner:
             body=claim.body,
             submission_key=claim.submission_key,
         )
+        prepared = None
+        if isinstance(self.sender, TelnyxWhatsAppSender):
+            try:
+                if claim.provider != "telnyx":
+                    raise InvalidTelnyxRequest("Telnyx delivery provider mismatch")
+                prepared = self.sender.prepare(message)
+                if not self.sender.signer.verify(prepared):
+                    raise InvalidTelnyxRequest("Invalid offline Telnyx request")
+            except Exception:
+                # This branch has not authorized or invoked the exchange. Proof is
+                # scoped to this owned attempt and cannot erase an existing marker.
+                current_time = now or datetime.now(UTC)
+                self._finalize(
+                    claim,
+                    outcome=DeliveryState.RETRYABLE,
+                    safe_error_code="local_not_submitted",
+                    retry_evidence=RetryEvidence.NOT_SUBMITTED,
+                    retry_at=current_time + timedelta(seconds=self.retry_backoff_base_seconds),
+                    retry_exhausted=claim.attempt_count >= self.maximum_attempts,
+                    now=now,
+                )
+                return self.store.get_delivery(claim.delivery_id)
         if not self.store.authorize_delivery_submission(
             delivery_id=claim.delivery_id,
             owner_token=claim.owner_token,
             now=now,
             message=message,
+            **({"http_request": prepared} if prepared is not None else {}),
         ):
             current = self.store.get_delivery(claim.delivery_id)
             if current is not None and current.state is DeliveryState.CANCELLED:
                 return current
             raise DeliveryOwnershipLost("Outbound Delivery is not eligible for submission")
         try:
-            acceptance = self.sender.send(message, timeout_seconds=self.timeout_seconds)
+            acceptance = (
+                self.sender.send_prepared(prepared, timeout_seconds=self.timeout_seconds)
+                if isinstance(self.sender, TelnyxWhatsAppSender) and prepared is not None
+                else self.sender.send(message, timeout_seconds=self.timeout_seconds)
+            )
         except OutboundRetryableError:
             current_time = now or datetime.now(UTC)
             backoff_seconds = min(
@@ -89,11 +120,27 @@ class OutboundDeliveryRunner:
                 safe_error_code="provider_permanent",
                 now=now,
             )
+        except TelnyxOutcomeUnknown as error:
+            self._finalize(
+                claim,
+                outcome=DeliveryState.UNKNOWN,
+                safe_error_code=error.safe_error_code,
+                now=now,
+            )
         except OutboundOutcomeUnknown:
             self._finalize(
                 claim,
                 outcome=DeliveryState.UNKNOWN,
                 safe_error_code="provider_outcome_unknown",
+                now=now,
+            )
+        except Exception:
+            if not isinstance(self.sender, TelnyxWhatsAppSender):
+                raise
+            self._finalize(
+                claim,
+                outcome=DeliveryState.UNKNOWN,
+                safe_error_code="telnyx_after_marker_unknown",
                 now=now,
             )
         else:
@@ -118,6 +165,7 @@ class OutboundDeliveryRunner:
         safe_error_code: str | None = None,
         retry_at: datetime | None = None,
         retry_exhausted: bool = False,
+        retry_evidence: RetryEvidence | None = None,
         now: datetime | None,
     ) -> None:
         if claim.owner_token is None:
@@ -130,6 +178,7 @@ class OutboundDeliveryRunner:
             safe_error_code=safe_error_code,
             retry_at=retry_at,
             retry_exhausted=retry_exhausted,
+            retry_evidence=retry_evidence,
             now=now,
         )
         if not finalized:

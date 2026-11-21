@@ -10,7 +10,7 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `a9fbe86cbbd95000491695864eb0911950a53c32` (CP1).
+- Current SHA: query origin. Last remote SHA verified: `43574436e6bd99d53d2b90598001480aa70c8b59` (CP2).
 
 ## Checkpoints
 
@@ -19,7 +19,7 @@
 | CP0 | Continuity, spec and ADR written before functional implementation | Docs inspected; git diff --check. No tests run yet. |
 | CP1 | Implemented offline | Exact UTF8 request + keyed durable MAC, migration0022; 40 passed/0 skip (9.62s). Not integrated with runner until CP3. |
 | CP2 | Implemented offline | Injected exchange only, strict200 identity, fixed unknown matrix; request/sender 76 passed/0 skips (3.23s). Runner pending CP3. |
-| CP3 | Pending | Runner + SQLite atomic gates |
+| CP3 | Implemented offline | Runner + request-bound atomic gates; integration/submission/legacy delivery:101 passed/0 skips,34.52s. |
 | CP4 | Pending | Adversarial concurrency/crash/restore tests |
 | CP5 | Pending | Corrected toolchain, full suite/checks, independent reviews |
 | CP6 | Pending | Final report + issue evidence + remote verification |
@@ -61,3 +61,11 @@ intercepted callable, not a sandbox for arbitrary implementations; no network cl
 Next exact action: extend authorize_delivery_submission with prepared request binding
 inside its current writer; update runner preparation/local-failure/dispatch paths and
 exercise real SQLite + intercepted sender in tests/test_telnyx_sender_integration.py.
+
+CP3: exchange observes committed request MAC/first+attempt markers; another BEGIN IMMEDIATE
+succeeds during callback/exchange. Local prepare failure records NOT_SUBMITTED with same
+key across bounded retry. Post-marker errors persist fixed unknown; early/late scoped
+callbacks reconcile only at acceptance. No lifecycle override or runtime wiring added.
+Next exact action: add tests/test_telnyx_sender_adversarial.py and migration0022 tests;
+cover rollback/crash/old snapshots/purge/status conflict and pause/race gates. Then run
+full pytest and independent direct-code Standards/Spec/adversarial reviewers at CP5.
