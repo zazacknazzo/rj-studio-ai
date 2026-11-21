@@ -31,7 +31,7 @@ Código: `07c1b7dc150d7eb1776b97d891cd29347adffd37`. Classificação usa impacto
 ## AUD-02 — toolchain instalada tem advisories e pytest exclui versão corrigida
 
 - **Local:** `pyproject.toml:31` (`pytest>=8.3,<9`); pip25.0.1 pertence ao venv do ambiente, não ao runtime declarado.
-- **Descrição/invariante:** ambiente de teste precisa evitar ferramentas com vulnerabilidades aplicáveis sem mitigação. `pip-audit2.10.1` completou e reportou 14 entradas brutas, sete IDs únicos: seis de pip25.0.1 e um de pytest8.4.2. O pin<9 exclui pytest9.0.3, versão corrigida indicada para CVE-2025-71176.
+- **Descrição/invariante:** ambiente de teste precisa evitar ferramentas com vulnerabilidades aplicáveis sem mitigação. `pip-audit2.10.1` completou e reportou 14 entradas brutas, sete IDs únicos: seis de pip25.0.1 e um de pytest8.4.2. O pin<9 exclui pytest 9.0.3, versão corrigida indicada para CVE-2025-71176.
 - **Reprodução/evidência:** criar venv e instalar `.[dev]` conforme baseline; executar pip-audit com cache gravável. JSON, hash, versões, aliases e escopo estão em [TEST-EVIDENCE.md](TEST-EVIDENCE.md) e [SECURITY-PRIVACY-REVIEW.md](SECURITY-PRIVACY-REVIEW.md). Não houve exploit. Python3.12 implementa PEP706, mitigando um dos caminhos de pip, sem eliminar os demais advisories.
 - **Impacto:** risco local/instalação/CI; pytest usa `/tmp/pytest-of-*` em UNIX com possibilidade de abuso por usuário local segundo advisory. Não é falha remota do webhook. Nenhum advisory foi retornado para as bibliotecas runtime resolvidas nesta consulta; app local não auditável no índice foi explicitamente pulada.
 - **Correção recomendada:** validar atualização de pip do ambiente e pytest corrigido em tarefa própria; até lá, runner isolado e parent temporário privado0700 com `--basetemp`, índice confiável e resolução registrada. Um ensaio de autorização concorrente passou com temp privado; a mitigação não corrige o pacote nem substitui atualização.
@@ -40,7 +40,7 @@ Código: `07c1b7dc150d7eb1776b97d891cd29347adffd37`. Classificação usa impacto
 
 ## AUD-03 / DOC-02 — protocolo entre contas não existia na baseline
 
-- **Local:** `AGENTS.md:32–47`; ausência de `docs/handoffs/TICKET-10.md` em `07c1b7d`; decisão posterior de continuidade na issue11, seçãoK/comentário final.
+- **Local:** `AGENTS.md:32–47`; ausência de `docs/handoffs/TICKET-10.md` em `07c1b7d`; decisão posterior de continuidade na issue #11, seçãoK/comentário final.
 - **Descrição/invariante:** uma segunda conta deve conhecer estado real, último push, testes e exclusividade antes de escrever. Disciplina Git genérica não implementa checkpoints/handoff nem lock humano.
 - **Reprodução/evidência:** `git ls-tree -r 07c1b7d docs/handoffs` não encontra protocolo; AGENTS contém apenas regras genéricas. Não houve perda de trabalho observada, e não se inferiu acesso a worktrees em outra máquina.
 - **Impacto:** colisão de trabalho, suposições de teste incorretas ou continuidade sobre SHA antiga quando duas contas escreverem sem coordenação. Não é defeito de autenticação ou envio.
@@ -51,14 +51,14 @@ Código: `07c1b7dc150d7eb1776b97d891cd29347adffd37`. Classificação usa impacto
 ## AUD-04 — instruções correntes misturam estados históricos
 
 - **Locais:** `docs/automation-operations.md:87` e `:111` ainda dizem lifecycle/status futuros; contradizem `:129–145` e T08/09. `docs/specs/README.md:9` diz V1 Draft versus spec aprovada; `:30–37` mistura autorizações históricas. `docs/decisions/README.md:22–27` omite ADR0014/0015. `docs/PRODUCT.md:30–35` omite OpenAI. SpecT10:24–25 atribui byte-identical à query, enquanto fonte atual exige mesmos parâmetros/valores e body byte-for-byte.
-- **Invariante/impacto:** documentação de estado corrente deve orientar gates corretos; stale runbook pode confundir operação e auditoria. Nenhum bypass de gate de código foi reproduzido por essas frases. Reuso de “Ticket11/12” entre séries inteligência/Telnyx amplia ambiguidade.
+- **Invariante/impacto:** documentação de estado corrente deve orientar gates corretos; stale runbook pode confundir operação e auditoria. Nenhum bypass de gate de código foi reproduzido por essas frases. Reuso de “Ticket 11/12” entre séries inteligência/Telnyx amplia ambiguidade.
 - **Reprodução/evidência:** comparar trechos e código/fonte oficial, conforme DOC-03–10 em [DOCUMENTATION-AUDIT.md](DOCUMENTATION-AUDIT.md). Scanner de destinos relativos não encontrou arquivo ausente, sem provar anchors/URLs universais.
 - **Correção/regressão proposta:** alinhar descrições atuais e identificar trechos históricos, prefixar série, atualizar índice de ADR; revisão cruzada por mapa runtime/offline. Gate: antes de usar runbook no piloto, dívida documental para desenvolvimento offline. Não alterar política ou roadmap incidentalmente.
 
 ## AUD-05 — V7 normativa versus estratégia V2.5 e datas vencidas
 
 - **Locais:** `AGENTS.md:22–23`, `docs/ROADMAP.md:5,17,25`, `docs/PRODUCT.md:9–11`, `docs/CONTEXT.md:119`; issues10/13.
-- **Invariante/reprodução:** fontes de direção precisam indicar qual decisão vale. Docs preservam SaaS V7 e prazoV6 de02/10/2026, enquanto issue13 propõe comercializar apósV2 com fundaçãoV2.5; issue10 remete à nova direção como histórica. Ratificação/spec ainda são exigidas.
+- **Invariante/reprodução:** fontes de direção precisam indicar qual decisão vale. Docs preservam SaaS V7 e prazoV6 de02/10/2026, enquanto issue #13 propõe comercializar apósV2 com fundaçãoV2.5; issue #10 remete à nova direção como histórica. Ratificação/spec ainda são exigidas.
 - **Impacto/evidência:** conflito de planejamento confirmado, sem autorização para tenancy na V1. Nenhuma falha de isolamento foi explorada, pois produto continua single-business.
 - **Correção/regressão/gate:** decisão do product owner e revisão documental coordenada, sem datas artificiais; antes de planejar/comercializar SaaS, verificar todas as fontes e testes de isolamento da futura spec. CX-27 continua gate distinto. Não bloqueia sender offline.
 
