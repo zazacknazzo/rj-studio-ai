@@ -92,6 +92,7 @@ class MigrationManager:
             "channel_lifecycle_effects",
             "telnyx_consent",
             "telnyx_policy_clock",
+            "telnyx_http_requests",
             "conversation_handoffs",
             "appointment_intakes",
             "inbound_event_receipts",
@@ -102,6 +103,26 @@ class MigrationManager:
             "conversation_operation_ids",
             "automation_operation_receipts",
         }.issubset(inspector.get_table_names()):
+            return False
+        http_columns = {item["name"] for item in inspector.get_columns("telnyx_http_requests")}
+        if http_columns != {"submission_key", "version", "integrity_key_id", "request_mac"}:
+            return False
+        if inspector.get_pk_constraint("telnyx_http_requests")["constrained_columns"] != [
+            "submission_key"
+        ]:
+            return False
+        http_triggers = {
+            row[0]
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+        if not {
+            "telnyx_http_reject_update",
+            "telnyx_http_reject_delete",
+            "telnyx_http_reject_replace",
+            "telnyx_http_reject_key_reuse",
+        }.issubset(http_triggers):
             return False
         if not MigrationManager._submission_schema_matches(connection, inspector):
             return False

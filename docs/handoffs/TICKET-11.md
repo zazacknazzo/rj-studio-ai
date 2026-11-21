@@ -10,14 +10,14 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `cbf31a0c948a3c9c6801412739c5b724920a1964` (CP0).
+- Current SHA: query origin. Last remote SHA verified: `066861f347411491f34def3e81f7c0e6484d38cf` (toolchain).
 
 ## Checkpoints
 
 | CP | State | Validation / next work |
 | --- | --- | --- |
 | CP0 | Continuity, spec and ADR written before functional implementation | Docs inspected; git diff --check. No tests run yet. |
-| CP1 | Pending | Deterministic request + durable integrity identity |
+| CP1 | Implemented offline | Exact UTF8 request + keyed durable MAC, migration0022; 40 passed/0 skip (9.62s). Not integrated with runner until CP3. |
 | CP2 | Pending | Injected transport + strict responses/errors |
 | CP3 | Pending | Runner + SQLite atomic gates |
 | CP4 | Pending | Adversarial concurrency/crash/restore tests |
@@ -50,3 +50,6 @@ second succeeded. Tests use env-i without proxy/credentials, Python IP guard inh
 by children, private --basetemp. CP1 focused request + historical submission migrations:
 40 passed/0 skipped,9.62s. Integral compatibility and pip-audit still pending.
 Next: publish CP1 exact request/binding; then add intercepted transport/strict response.
+
+CP1 next exact action: implement `providers/telnyx_sender.py` with injected-only exchange,
+strict official response identity and fixed unknown reasons; then run request/sender tests.
