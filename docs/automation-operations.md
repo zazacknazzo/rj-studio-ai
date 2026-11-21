@@ -189,3 +189,36 @@ CX01 retention/erasure policy remains required. Integrity keys must be held sepa
 and stable; do not publish them or use commercial credentials during offline checks.
 The [Ticket11 report](architecture/v1-ticket11-validation.md) distinguishes reproduced
 restore failures, passing offline regressions and operational protection still absent.
+
+## Ticket12 offline HTTP diagnostics and quarantine
+
+The synthetic `create_telnyx_offline_app` factory is for ASGI tests only; it is not
+mounted on the commercial app and has no sender, workers or release command. Do not
+serve it as a workaround for the disabled production provider. `/health` indicates
+process responsiveness. `/ready` separates ingress, persistence, administration,
+generation, egress and operational channel; HTTP200 from this local diagnostic never
+grants channel authority. `/metrics` contains finite process response/latency buckets.
+
+A422 means an authenticated envelope/contract could not be handled. No supported
+Message/effect was acknowledged or silently skipped. SQLite keeps only aggregate
+`telnyx_ingress_rejections(reason, observations, first_seen_at, last_seen_at)`; inspect
+with a local read-only SQLite connection. Counts include retries and contain no content
+or routing identifiers; they cannot recover the unsupported Message. A503 means retry
+is necessary because persistence, capacity or deadline did not permit a timely durable
+acknowledgement. A commit may already be durable; replay the same provider event, not
+new identities. Rejection observations themselves can fail503 and process metrics show
+that failure. Restart preserves durable counters but resets process metrics.
+
+Before a future explicitly authorized deployment, define monitored alerts and operator
+handling for422/503, validate actual provider retry/failover and subscription settings,
+provision key/clock/TLS safely, and establish privacy/retention policy. Media inbound and
+future schemas are unsupported; echo media remains a content-free human pause signal.
+Do not ACK unsupported events simply to stop retries. Synthetic latency and retries are
+not evidence of commercial delivery or a real provider SLA.
+
+All restores in this offline composition stay quarantined outside SQLite, even if the
+snapshot says active/consented or lost markers. There is no endpoint to release it.
+Operational AUD01 still requires independent current evidence, inventory/reconciliation,
+positive sync/channel/consent/window checks and authenticated audited release before
+any worker is composed. Never erase unknown, generate replacement keys or replay old
+sends when external idempotency expires. Ticket13 and production require new authorization.

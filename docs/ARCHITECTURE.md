@@ -421,3 +421,30 @@ SQLite; loss/rotation refuses prior bindings. It does not prove snapshot freshne
 AUD01 requires external quarantine/reconciliation before operational restore/egress,
 which this ticket does not implement. See [ADR0019](decisions/0019-deterministic-offline-telnyx-sender.md)
 and [validation](architecture/v1-ticket11-validation.md). No production readiness claimed.
+
+## Telnyx Ticket12: isolated offline ASGI ingress
+
+`create_telnyx_offline_app` is an explicit synthetic factory, separate from `main.py`.
+Production still cannot select Telnyx. Its ASGI boundary retains raw header evidence,
+rejects duplicate authentication/framing headers and bounds streaming by actual bytes
+and time. The existing adapter authenticates original bytes, checks scope and emits
+canonical events; the existing writer commits receipts/journal/effects before204.
+Internal work/ACK budgets are1.35/1.5seconds, with deadline-bounded admission and SQLite
+waiting. Running commits are drained on cancellation; expired work never gains a late
+success response. This is no hard fsync/proxy/socket SLA.
+
+Unsupported payloads receive422 after durable aggregate rejection observations; they
+never become successful empty batches. Migration0023 adds only a finite reason/count/
+first/last receipt table, no body, hashes or routing identifiers. It is visibility, not
+Message recovery or a deduplicated event archive. Known events retain their existing
+atomic effects. No change to supported wire formats, sender, Meta/Twilio or intelligence.
+
+Health and six readiness dimensions are distinct. The composition has no generation/
+outbound executor, sender, activation or release capability. Its process-configured
+store denies all Telnyx egress outside the restored database, and the direct constructor
+rejects an unquarantined store. Optional strict signer injection for intercepted store
+checks verifies the prepared request HMAC in the writer; historical internal default
+compatibility is not an operational composition. AUD01 remains OPEN: real deployment
+still needs independent freshness, reconciliation and authenticated release. See
+[ADR0020](decisions/0020-offline-telnyx-asgi-composition.md) and
+[Ticket12 validation](architecture/v1-ticket12-validation.md).

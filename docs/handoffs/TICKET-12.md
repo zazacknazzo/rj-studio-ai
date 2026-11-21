@@ -9,7 +9,7 @@
 - Exclusive writer: user explicitly confirmed this account in chat2026-11-21.
   Primary alone commits/pushes; independent reviewers may write separate reports.
   Human exclusivity required on every account transfer; Markdown is not a lock.
-- Last remote SHA actually verified: CP6 framing 533052f2d60ee43bd66e82170af1801f4523c76a;
+- Last remote SHA actually verified: CP6 validation 42130f55081d768db7b3dbed9c02fd07275f314a;
   Ticket12 branch absent before creation. Query origin for current SHA.
 
 ## Checkpoints
@@ -23,7 +23,7 @@
 | CP4 | bounded durable rejection observations/0023, six readiness fields, metrics | 63passed15.15s including schema/history regressions; Ruff check/format | CP3 above |
 | CP5 | strict HMAC/store quarantine, six restore snapshots, callbacks, load/concurrency, bounded admission and cancellation | corrected68passed19.93s; followup14passed7.39s; extra21passed8.74s; initial failures below | CP4 above |
 | CP6 | reviews/corrections/full checks complete on533052f | local2207pass/1skip/2warnings335.51s; Spec2207pass/1skip/2warnings344.15s; all checks below | framing533052f above |
-| CP7 | report/issue final publication pending | Final documentary checks pending | None |
+| CP7 | A–O report/runbook/architecture/handoff complete; issue receipt after remote verification | final Ruff/diff/secret documentary checks | CP6 validation above |
 
 ## Risks and limitations
 
@@ -35,7 +35,7 @@ Fresh clone used --no-checkout (apparent initial deletions were unpopulated inde
 not other-account WIP); switching to exact baseline populated it. No work discarded.
 Toolchain installation in private /tmp/ticket12/venv; test guard reused from Ticket11.
 
-## Exact next action
+## Historical next action at CP0
 
 Fetch origin, verify branch/status/SHA and read this handoff. Reproduce:
 `python scripts/check_telnyx_offline.py --python /tmp/ticket12/venv/bin/python tests/test_telnyx_sender_integration.py`
@@ -95,9 +95,24 @@ Next: publish correction/verify SHA, restart both guarded full suites on that SH
 - Source/tests unchanged after533052f; later commits documentary only. AUD01OPEN;
   no operational release/activation/realHTTP/T13/main/Baileys/intelligence changes.
 
-## Exact final next action
+## Historical next action at CP6 validation
 
 Finish normal documentary checkpoints and issue11 evidence, verify remoteSHA and stop.
 Then direct orchestrator audit of published branch/report/reviews is REQUIRED before
 any Ticket13 or operational work. A new account must first obtain humanexclusive
 writing control, fetch/status/SHA/handoff and reproduce the named focused test.
+
+## Current final state / exact next action
+
+Development STOPPED after Ticket12 offline delivery. The final documentary commit
+SHA is queried from origin and published in the delivery/issue11; the last confirmed
+remote before this document's commit is CP6validation42130f55081d768db7b3dbed9c02fd07275f314a.
+Source/tests candidate remains533052f2d60ee43bd66e82170af1801f4523c76a.
+
+Next action: direct orchestrator audit, not Ticket13 or operation.
+`git fetch origin && git status --short --branch && git rev-parse HEAD origin/codex/telnyx-coexistence-12-composition`
+Read docs/architecture/v1-ticket12-validation.md, all three independent reports and
+the latest issue11 delivery comment. A new writer first obtains humanexclusive
+control; reproduce the focused command near the top with its own isolated venv.
+No risk checkbox is closed; AUD01/productionNO-GO remains. Do not release quarantine,
+activate, replay old sending work, rotate submission keys or start workers.

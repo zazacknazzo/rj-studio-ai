@@ -586,7 +586,9 @@
       "range_raw_hits": 0,
       "tree_raw_hits": 3,
       "tree_triage": "three baseline false positives: T11 public schema SHA, eval prose, synthetic operator fixture; no ignore",
-      "final_tree_raw_hits": 3
+      "final_tree_raw_hits": 3,
+      "cp0_cp6_range_commits": 8,
+      "cp0_cp6_range_raw_hits": 0
     },
     "diff_check": "PASS",
     "markdown_relative_destinations": {
