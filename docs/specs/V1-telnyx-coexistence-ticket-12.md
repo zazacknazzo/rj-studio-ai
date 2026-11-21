@@ -109,3 +109,19 @@ override this project's commit-before-ACK and minimization requirements.
 At completion STOP and request direct orchestrator audit. OFFLINE candidate only;
 PRODUCTION NO-GO. No risk checkboxes closed, no exceptions accepted, no merge/main,
 Baileys, intelligence changes, commercial credentials, real Telnyx calls or activation.
+
+## CP5 reviewed refinements
+
+SQLite writer wait cap is0.5s, always reduced to remaining workbudget;0.05s produced
+observable503 contention at eight-way load. Load evidence reports first-attempt
+204/503 mix and p95/p99, then retries identical503 envelopes after draining and proves
+one durable admission per logical Message. Backpressure is not hidden as success.
+Admission queue acquisition is deadline-bounded before dispatch. Admitted thread work
+is shielded/drained even under repeated raw asyncio cancellation; capacity remains
+reserved until completion, cancellation propagates without ACK. Metrics run after
+ASGI response sending, avoiding a lock after the final ACK deadline check.
+Constructor rejects an unquarantined store, not only the public factory.
+Strict intercepted-store tests inject a stable independent TelnyxRequestSigner:
+missing/tampered requests fail HMAC verification in the writer before authorization.
+The actual ASGI store remains completely quarantined (even valid requests deny).
+Default historical store behavior is compatibility, not an operational entry point.

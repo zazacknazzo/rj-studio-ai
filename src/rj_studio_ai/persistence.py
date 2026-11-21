@@ -48,7 +48,7 @@ from rj_studio_ai.sqlite import (
     inspect_sqlite_connection,
     require_file_backed_database,
 )
-from rj_studio_ai.telnyx_request import TelnyxRequest, bind_http_request
+from rj_studio_ai.telnyx_request import TelnyxRequest, TelnyxRequestSigner, bind_http_request
 from rj_studio_ai.telnyx_submission import RetryEvidence, SubmissionAssessment, assess_submission
 from rj_studio_ai.whatsapp_policy import payload_fingerprint
 
@@ -236,9 +236,15 @@ class SqliteConversationStore:
         database_path: Path,
         *,
         busy_timeout_seconds: float = DEFAULT_BUSY_TIMEOUT_SECONDS,
+        telnyx_request_signer: TelnyxRequestSigner | None = None,
+        telnyx_egress_quarantined: bool = False,
     ) -> None:
         self._database_path = database_path
         self._busy_timeout_seconds = busy_timeout_seconds
+        # Process configuration, deliberately not read from a restoreable SQLite row.
+        # Operational release/antirollback infrastructure is NOT implemented here.
+        self._telnyx_request_signer = telnyx_request_signer
+        self._telnyx_egress_quarantined = telnyx_egress_quarantined
         self._migrations = MigrationManager(
             database_path,
             busy_timeout_seconds=busy_timeout_seconds,
@@ -1158,6 +1164,13 @@ class SqliteConversationStore:
                     "SELECT provider FROM outbound_deliveries WHERE id=?", (delivery_id,)
                 ).fetchone()
                 if provider is not None and provider[0] == "telnyx":
+                    if self._telnyx_egress_quarantined:
+                        return False
+                    if self._telnyx_request_signer is not None and (
+                        not isinstance(http_request, TelnyxRequest)
+                        or not self._telnyx_request_signer.verify(http_request)
+                    ):
+                        return False
                     assessment = assess_submission(
                         connection,
                         delivery_id=delivery_id,

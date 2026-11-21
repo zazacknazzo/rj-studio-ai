@@ -1,5 +1,6 @@
 """Explicit offline ASGI composition. Never mounted by production main/config."""
 
+import asyncio
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -65,6 +66,8 @@ class OfflineTelnyxASGI:
         wall_clock: Callable[[], float],
         clock: Callable[[], float],
     ) -> None:
+        if store._telnyx_egress_quarantined is not True:
+            raise ValueError("Offline Telnyx composition requires quarantine")
         self.adapter = TelnyxMessageAdapter(settings, clock=wall_clock)
         self.store = store
         self._max_bytes = settings.telnyx_webhook_max_body_bytes
@@ -72,6 +75,7 @@ class OfflineTelnyxASGI:
         self._wall_clock = wall_clock
         self.metrics = TelnyxIngressMetrics()
         self._limiter = anyio.CapacityLimiter(8)
+        self._workers = anyio.CapacityLimiter(8)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
@@ -88,7 +92,18 @@ class OfflineTelnyxASGI:
             await self._respond(send, 200, {"process": "ok", "mode": "offline"})
             return
         if scope["path"] == "/ready" and scope["method"] == "GET":
-            readiness = await anyio.to_thread.run_sync(self.readiness, limiter=self._limiter)
+            try:
+                readiness = await self._run_work(
+                    self.readiness,
+                    ExecutionDeadline.start(
+                        clock=self._clock,
+                        total_seconds=self.WORK_SECONDS,
+                        finalization_margin_seconds=0,
+                    ),
+                )
+            except PersistenceUnavailable:
+                await self._respond(send, 503)
+                return
             await self._respond(send, 200 if readiness["persistence"] else 503, readiness)
             return
         if scope["path"] == "/metrics" and scope["method"] == "GET":
@@ -115,7 +130,7 @@ class OfflineTelnyxASGI:
                 deadline=work,
                 clock=self._clock,
             )
-            await anyio.to_thread.run_sync(
+            await self._run_work(
                 partial(
                     receive_telnyx_messages,
                     (request,),
@@ -124,7 +139,7 @@ class OfflineTelnyxASGI:
                     deadline=work,
                     now=datetime.fromtimestamp(self._wall_clock(), UTC),
                 ),
-                limiter=self._limiter,
+                work,
             )
             if work.is_expired() or ack.is_expired():
                 raise PersistenceUnavailable("Webhook deadline expired")
@@ -137,13 +152,13 @@ class OfflineTelnyxASGI:
             # Only finite counters, not arbitrary payload/error strings. No success
             # receipt is claimed for unsupported or invalid authenticated payloads.
             try:
-                await anyio.to_thread.run_sync(
+                await self._run_work(
                     partial(
                         self.store.record_telnyx_ingress_rejection,
                         deadline=work,
                         now=datetime.fromtimestamp(self._wall_clock(), UTC),
                     ),
-                    limiter=self._limiter,
+                    work,
                 )
                 result = 503 if work.is_expired() else 422
             except PersistenceUnavailable:
@@ -153,8 +168,42 @@ class OfflineTelnyxASGI:
         # Check at the response boundary as well; never emit success after expiry.
         if result == 204 and ack.is_expired():
             result = 503
-        self.metrics.record(result, max(0, self._clock() - started))
-        await self._respond(send, result)
+        try:
+            await self._respond(send, result)
+        finally:
+            self.metrics.record(result, max(0, self._clock() - started))
+
+    async def _run_work(self, function: Callable, deadline: ExecutionDeadline):
+        # Queueing is cancellable/bounded. Once SQL/commit starts, wait for its
+        # result and check the deadline; never detach a running transaction.
+        try:
+            with anyio.fail_after(deadline.remaining_budget()):
+                await self._limiter.acquire()
+        except TimeoutError:
+            raise PersistenceUnavailable("Webhook ingress capacity deadline expired") from None
+        try:
+            if deadline.is_expired():
+                raise PersistenceUnavailable("Webhook ingress deadline expired")
+            # Only admitted jobs use these workers, so admission reserves a slot.
+            job = asyncio.create_task(anyio.to_thread.run_sync(function, limiter=self._workers))
+            try:
+                return await asyncio.shield(job)
+            except asyncio.CancelledError:
+                # ASGI cancellation may use asyncio.Task.cancel(), which bypasses
+                # AnyIO's default shield. Drain the admitted job before releasing
+                # capacity, even under repeated cancellation. Do not send an ACK.
+                while not job.done():
+                    try:
+                        await asyncio.shield(job)
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception:
+                        break
+                if not job.cancelled():
+                    job.exception()  # consume failure; cancellation remains authoritative
+                raise
+        finally:
+            self._limiter.release()
 
     def readiness(self) -> dict:
         checks = self.store.sqlite_durability_checks()
@@ -198,7 +247,9 @@ def create_telnyx_offline_app(
     monotonic_clock: Callable[[], float] = monotonic,
 ) -> OfflineTelnyxASGI:
     """Explicit synthetic entry point; no module-level app or production selector."""
-    store = SqliteConversationStore(database_path, busy_timeout_seconds=0.05)
+    store = SqliteConversationStore(
+        database_path, busy_timeout_seconds=0.5, telnyx_egress_quarantined=True
+    )
     app = OfflineTelnyxASGI(settings, store, wall_clock=wall_clock, clock=monotonic_clock)
     store.initialize()
     return app

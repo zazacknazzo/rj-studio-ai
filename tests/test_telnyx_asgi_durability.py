@@ -3,6 +3,7 @@
 import asyncio
 import sqlite3
 from contextlib import contextmanager
+from threading import Event
 from time import monotonic
 
 import pytest
@@ -172,3 +173,69 @@ def test_large_signed_payload_within_limit_is_durable(app, private_key):
     )
     with app.store._connect() as db:
         assert db.execute("SELECT length(body) FROM messages").fetchone() == (200000,)
+
+
+def test_metrics_cannot_delay_success_past_deadline(app, private_key, monkeypatch):
+    ticks = [0.0]
+    app._clock = lambda: ticks[0]
+    monkeypatch.setattr(app.metrics, "record", lambda *_: ticks.__setitem__(0, 2.0))
+    observed = []
+
+    def inspect(message):
+        if message["type"] == "http.response.start":
+            observed.append((message["status"], ticks[0]))
+
+    assert asyncio.run(raw_call(app, signed(private_key, wire()), on_send=inspect)) == 204
+    assert observed == [(204, 0.0)]
+
+
+def test_capacity_wait_is_bounded_without_starting_sql(app, private_key):
+    async def run():
+        borrowers = [object() for _ in range(8)]
+        for borrower in borrowers:
+            await app._limiter.acquire_on_behalf_of(borrower)
+        try:
+            started = monotonic()
+            result = await asyncio.wait_for(raw_call(app, signed(private_key, wire())), 1.6)
+            assert result == 503 and monotonic() - started < 1.5
+        finally:
+            for borrower in borrowers:
+                app._limiter.release_on_behalf_of(borrower)
+
+    asyncio.run(run())
+    assert count(app, "messages") == 0
+
+
+def test_repeated_asgi_cancellation_drains_persistence_and_holds_admission(
+    app, private_key, monkeypatch
+):
+    entered, release = Event(), Event()
+    original = app.store.record_webhook_events
+
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        original(*args, **kwargs)
+
+    monkeypatch.setattr(app.store, "record_webhook_events", blocked)
+
+    async def run():
+        task = asyncio.create_task(raw_call(app, signed(private_key, wire())))
+        try:
+            while not entered.is_set():
+                await asyncio.sleep(0.001)
+            for _ in range(3):
+                task.cancel()
+                await asyncio.sleep(0.01)
+                assert not task.done()
+                assert app._limiter.borrowed_tokens == 1
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert app._limiter.borrowed_tokens == 0
+
+    asyncio.run(run())
+    assert count(app, "messages") == 1
+    assert asyncio.run(raw_call(app, signed(private_key, wire()))) == 204
+    assert count(app, "messages") == 1
