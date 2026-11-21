@@ -203,3 +203,81 @@ def test_missing_id_wrong_media_and_undocumented_2xx(signer, message):
         sender = TelnyxWhatsAppSender(signer, lambda *_, result=value, **__: result)
         with pytest.raises(TelnyxOutcomeUnknown):
             sender.send_prepared(request, timeout_seconds=9)
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("from", "status"), "future_status"),
+        (("from", "status"), []),
+        (("from", "line_type"), "FutureLine"),
+        (("from", "line_type"), []),
+        (("from", "carrier"), {}),
+        (("to", 0, "carrier"), 0),
+        (("to", 0, "line_type"), []),
+        (("encoding",), {}),
+        (("received_at",), "NOT_A_DATETIME"),
+        (("received_at",), None),
+        (("received_at",), "2026-02-30T00:00:00Z"),
+        (("received_at",), "2026-11-21T00:00:00"),
+        (("wait_seconds",), "NOT_A_NUMBER"),
+        (("wait_seconds",), True),
+        (("body", "audio"), {}),
+        (("body", "biz_opaque_callback_data"), 12),
+    ],
+)
+def test_malformed_known_optional_fields_are_unknown(signer, message, path, value):
+    def exchange(request, **_):
+        payload = acceptance(request)
+        parent = payload["data"]
+        for part in path[:-1]:
+            parent = parent[part]
+        parent[path[-1]] = value
+        return response(payload)
+
+    sender = TelnyxWhatsAppSender(signer, exchange)
+    with pytest.raises(TelnyxOutcomeUnknown, match="^telnyx_response_invalid$"):
+        sender.send_prepared(sender.prepare(message), timeout_seconds=9)
+
+
+@pytest.mark.parametrize("wait", [0, 1.5, None])
+def test_valid_optional_schema_fields_and_new_additions(signer, message, wait):
+    def exchange(request, **_):
+        payload = acceptance(request)
+        data = payload["data"]
+        data["from"].update(status="received", carrier="synthetic", line_type="VoIP")
+        data["to"][0].update(carrier="synthetic", line_type="Wireless")
+        data.update(
+            encoding="utf-8",
+            received_at="2026-11-21T00:00:00.000Z",
+            wait_seconds=wait,
+            future_addition={"opaque": True},
+        )
+        return response(payload)
+
+    sender = TelnyxWhatsAppSender(signer, exchange)
+    assert (
+        sender.send_prepared(sender.prepare(message), timeout_seconds=9).provider_message_id
+        == MESSAGE_ID
+    )
+
+
+def test_extreme_timeout_budgets_remain_finite_or_fail_locally(signer, message):
+    import math
+
+    calls = []
+
+    def exchange(request, **policy):
+        calls.append(policy)
+        assert all(
+            math.isfinite(policy[k]) and policy[k] > 0
+            for k in ("connect_timeout_seconds", "read_timeout_seconds")
+        )
+        return response(acceptance(request))
+
+    sender = TelnyxWhatsAppSender(signer, exchange)
+    sender.send_prepared(sender.prepare(message), timeout_seconds=1e308)
+    assert len(calls) == 1
+    with pytest.raises(InvalidTelnyxRequest, match="^Invalid offline Telnyx timeout$"):
+        sender.send_prepared(sender.prepare(message), timeout_seconds=5e-324)
+    assert len(calls) == 1

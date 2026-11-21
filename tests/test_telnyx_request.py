@@ -137,3 +137,13 @@ def test_durable_binding_scope_rotation_and_rollback(tmp_path, signer, message):
         row = db.execute("SELECT * FROM telnyx_http_requests").fetchone()
         assert row == (message.submission_key, "t11-v1", "synthetic-v1", request.request_mac)
     assert restarted.migrations_are_current()
+
+
+@pytest.mark.parametrize(
+    "profile", ["synthetic-profile", "not-a-uuid", "4001781E-626F-4A41-A914-B1B682150F94"]
+)
+def test_profile_requires_official_canonical_uuid(signer, profile):
+    with pytest.raises(
+        InvalidTelnyxRequest, match="^Invalid offline Telnyx integrity configuration$"
+    ):
+        replace(signer, profile_id=profile)

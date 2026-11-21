@@ -30,4 +30,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Restore an explicitly verified backup to downgrade")
+    raise RuntimeError("Downgrade requires explicitly verified backup/restore")

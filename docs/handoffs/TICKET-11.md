@@ -10,7 +10,7 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `a7825b94d9cc0a757f37e5cd5243c1ec9c843714` (CP3).
+- Current SHA: query origin. Last remote SHA verified: `2751652a3df39e0bf3f0d5c7588172b510eab0db` (CP4).
 
 ## Checkpoints
 
@@ -79,3 +79,30 @@ in separate private basetemps. Independent Standards and adversarial reviewers i
 actual code and executing their own evidence; no review completion claimed yet.
 Next exact action: inspect /tmp/ticket11/full.log and reviewer reports; fix any new P1/P2,
 rerun affected checks; complete Gitleaks/pip-audit/compile/pipcheck and resume rehearsal.
+
+## CP5 correction checkpoint — WIP, full final runs pending
+
+Independent Spec/adversarial confirmed P2: malformed known optional response fields were
+accepted. Fixed with strict present-schema checks, regression tests and same independent
+probes. Request profile UUID corrected; shared fixture now a synthetic UUID. Timeout
+arithmetic overflow/underflow P3 fixed. Standards supplemental117passed/0skip18.10s plus
+own3probes11.47s; adversarial original6failed/8passed20.77s→unchanged14passed15.48s,
+timeout3passed0.35s. Initial Standards229passed/84.22s had missed the P2, acknowledged.
+Local final focal145passed/0skip29.63s; historical-head focused19passed9.44s;
+portable runner request+appointment migration40passed12.79s.
+
+Initial full local interrupted after2failed/868passed/1skip279.43s (old head assertion,
+0022downgrade message expected backup/restore); Spec original2failed/942passed/1skip
+287.89s. First replacement full runs also collected downgrade message before fix and
+were stopped; exact partial counts will be recorded in final report. No failing runs
+are claimed green. Changed historical expected latest heads only, preservation asserts
+unchanged; downgrade message now explicitly says backup/restore. Final suites must run
+against this corrected checkpoint before CP5 completion.
+
+Gitleaks8.30.1 verified official download checksum. New committed range0detections;
+working tree2raw detections, both same baseline synthetic operator fixture/prose contexts
+as audit. Not zero raw hits; no ignores added. Pip26.3/pytest9.2.0 pip-audit no known
+vulnerabilities, editable app unindexed skip. Full version manifest/report pending.
+Next exact action: run scripts/check_telnyx_offline.py with isolated venv in clean clone,
+complete both final full suites/checks and receive Spec report; no more functional work
+unless a concrete failure/review requires it. Do not enable operational runtime.

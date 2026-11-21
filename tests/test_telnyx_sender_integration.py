@@ -177,7 +177,10 @@ def test_local_preparation_failure_has_attempt_scoped_non_submission(ingress, si
     assert result2.submission_key == result.submission_key
 
 
-@pytest.mark.parametrize("field,value", [("organization_id", "other"), ("profile_id", "other")])
+@pytest.mark.parametrize(
+    "field,value",
+    [("organization_id", "other"), ("profile_id", "00000000-0000-4000-8000-000000000000")],
+)
 def test_wrong_authorized_scope_never_exchanges(ingress, signer, field, value):
     _, store, _ = ingress
     pending(store)

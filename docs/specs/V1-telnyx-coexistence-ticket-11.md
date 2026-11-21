@@ -120,3 +120,20 @@ pip-audit. AUD01 unresolved, AUD02 resolved only if actual corrected versions ch
 AUD03 requires reproducible resumption rehearsal; human-exclusive branch writing remains.
 Final report A–O and issue11 evidence close no checkboxes. Separate offline eligibility
 from operational NO-GO, then stop and request direct orchestrator audit.
+
+## Review corrections before CP5
+
+Request messaging_profile_id must be canonical UUID per official format; shared synthetic
+profile fixture now uses a UUID. Acceptance supports only documented200 (other2xx unknown),
+not inferred success contracts. Present known optional schema fields must also validate:
+from.status/line_type enums, carrier/encoding strings, recipient optional strings,
+received_at RFC3339 and wait_seconds finite number|null (bool rejected). Known nontext
+body modalities contradict free-form text and are rejected; unknown new fields ignored.
+Tests reproduce both initial acceptance of malformed optional data and corrected unknown.
+Timeout splitting uses read=total-connect to avoid overflow; underflow denies locally.
+
+Portable sanitized runner: `python scripts/check_telnyx_offline.py --python /venv/bin/python`
+creates a fresh0700 evidence parent and its own Python IP guard. Pass test paths/selectors
+positionally for focused checks. It does not install packages, initialize accounts, expose
+routes, or enforce kernel network isolation. Toolchain versions and exact installation
+commands belong to the final validation report.

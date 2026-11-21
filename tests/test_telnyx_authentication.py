@@ -25,7 +25,7 @@ from rj_studio_ai.providers.telnyx import TelnyxConfigurationError, TelnyxWebhoo
 
 NOW = 1_800_000_000
 PHONE = "+15555550100"
-PROFILE = "synthetic-profile"
+PROFILE = "4001781e-626f-4a41-a914-b1b682150f94"
 WABA = "synthetic-waba"
 ORG = "synthetic-organization"
 PRIVATE_TEXT = "PRIVATE-content-Lívia-✨"

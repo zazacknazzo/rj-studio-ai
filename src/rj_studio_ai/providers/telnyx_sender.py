@@ -4,6 +4,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, Protocol
 
 from rj_studio_ai.domain import OutboundMessage
@@ -61,6 +62,57 @@ def _invalid_constant(_):
     raise ValueError("Nonstandard JSON constant")
 
 
+def _optional_schema_valid(data: dict, recipient: dict, body: dict) -> bool:
+    sender = data["from"]
+    if "status" in sender and sender["status"] not in ("received", "delivered"):
+        return False
+    if "line_type" in sender and sender["line_type"] not in (
+        "Wireline",
+        "Wireless",
+        "VoWiFi",
+        "VoIP",
+        "Pre-Paid Wireless",
+        "",
+    ):
+        return False
+    for parent, names in (
+        (sender, ("carrier",)),
+        (recipient, ("carrier", "line_type")),
+        (data, ("encoding",)),
+        (body, ("biz_opaque_callback_data",)),
+    ):
+        if any(name in parent and not isinstance(parent[name], str) for name in names):
+            return False
+    if "received_at" in data:
+        value = data["received_at"]
+        if not isinstance(value, str) or not re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+            r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+            value,
+        ):
+            return False
+        if datetime.fromisoformat(value.replace("Z", "+00:00")).utcoffset() is None:
+            return False
+    if "wait_seconds" in data and data["wait_seconds"] is not None:
+        value = data["wait_seconds"]
+        if type(value) not in (int, float) or not math.isfinite(value):
+            return False
+    # Valid JSON can still contradict the requested text modality. Unknown new
+    # fields remain forward compatible; known alternative message bodies do not.
+    return not {
+        "audio",
+        "document",
+        "image",
+        "sticker",
+        "video",
+        "interactive",
+        "location",
+        "contacts",
+        "reaction",
+        "template",
+    }.intersection(body)
+
+
 def _parse_response(response: TelnyxHttpResponse, request: TelnyxRequest) -> ProviderAcceptance:
     if not isinstance(response.content, bytes) or len(response.content) > 1_048_576:
         raise TelnyxOutcomeUnknown("telnyx_response_invalid")
@@ -101,6 +153,7 @@ def _parse_response(response: TelnyxHttpResponse, request: TelnyxRequest) -> Pro
             and len(recipients) == 1
             and recipients[0]["phone_number"] == request.message.recipient_address
             and recipients[0]["status"] in {"queued", "sending", "sent", "delivered", "read"}
+            and _optional_schema_valid(data, recipients[0], body)
             and body["type"] == "text"
             and body["text"]["body"] == request.message.body
             and body["text"].get("preview_url", False) is False
@@ -142,13 +195,17 @@ class TelnyxWhatsAppSender(OutboundMessageSender):
         """
         if not (math.isfinite(timeout_seconds) and timeout_seconds > 0):
             raise InvalidTelnyxRequest("Invalid offline Telnyx timeout")
+        connect_timeout = timeout_seconds / 3
+        read_timeout = timeout_seconds - connect_timeout
+        if connect_timeout <= 0 or read_timeout <= 0:
+            raise InvalidTelnyxRequest("Invalid offline Telnyx timeout")
         if not self.signer.verify(request):
             raise InvalidTelnyxRequest("Invalid offline Telnyx request")
         try:
             response = self.exchange(
                 request,
-                connect_timeout_seconds=timeout_seconds / 3,
-                read_timeout_seconds=timeout_seconds * 2 / 3,
+                connect_timeout_seconds=connect_timeout,
+                read_timeout_seconds=read_timeout,
                 retries=0,
                 follow_redirects=False,
             )

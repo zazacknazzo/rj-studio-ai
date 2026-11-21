@@ -31,6 +31,13 @@ def _validate(message: OutboundMessage) -> None:
         raise InvalidTelnyxRequest("Invalid offline Telnyx request")
 
 
+def _profile_valid(value: object) -> bool:
+    try:
+        return isinstance(value, str) and str(UUID(value)) == value
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 def _body(message: OutboundMessage, profile_id: str) -> bytes:
     return json.dumps(
         {
@@ -78,6 +85,7 @@ class TelnyxRequest:
             _validate(message)
             return (
                 self.message == message
+                and _profile_valid(self.profile_id)
                 and self.method == "POST"
                 and self.scheme == "https"
                 and self.host == "api.telnyx.com"
@@ -128,6 +136,7 @@ class TelnyxRequestSigner:
         if not (
             isinstance(self.integrity_key, bytes)
             and len(self.integrity_key) >= 32
+            and _profile_valid(self.profile_id)
             and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.integrity_key_id)
             and all(
                 isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,255}", v)
