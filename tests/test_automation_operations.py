@@ -734,7 +734,16 @@ def test_migration_preserves_ticket04_evidence_and_rolls_back_atomically(
         actual = rows(path, t)
         if t == "outbound_deliveries":
             assert all(row["status_conflict"] == 0 for row in actual)
-            actual = [{k: v for k, v in row.items() if k != "status_conflict"} for row in actual]
+            added = {"submission_key", "payload_fingerprint", "first_submission_at"}
+            assert all(all(row[key] is None for key in added) for row in actual)
+            actual = [
+                {k: v for k, v in row.items() if k not in added | {"status_conflict"}}
+                for row in actual
+            ]
+        elif t == "delivery_attempts":
+            added = {"submission_started_at", "retry_evidence"}
+            assert all(all(row[key] is None for key in added) for row in actual)
+            actual = [{k: v for k, v in row.items() if k not in added} for row in actual]
         assert actual == values
     assert store.migrations_are_current()
     opaque = store.automation_identifier(1)

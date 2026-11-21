@@ -379,6 +379,24 @@ def test_attempt_and_clock_evidence_cannot_be_rewritten(ingress):
     assert not authorize(restarted, claim, now=TIME + timedelta(days=2))
 
 
+@pytest.mark.parametrize("marked", [False, True])
+def test_replace_cannot_erase_telnyx_attempt_evidence(ingress, marked):
+    store, path, claim = prepare(ingress)
+    if marked:
+        assert authorize(store, claim)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("PRAGMA recursive_triggers").fetchone()[0] == 0
+        before = connection.execute("SELECT * FROM delivery_attempts").fetchall()
+        with pytest.raises(sqlite3.IntegrityError, match="already exists"):
+            connection.execute(
+                "INSERT OR REPLACE INTO delivery_attempts "
+                "(id,outbound_delivery_id,attempt_number,owner_token,outcome,started_at) "
+                "SELECT id,outbound_delivery_id,attempt_number,owner_token,outcome,started_at "
+                "FROM delivery_attempts"
+            )
+        assert connection.execute("SELECT * FROM delivery_attempts").fetchall() == before
+
+
 def test_commit_failure_rolls_back_and_redacts_sql_error(ingress, monkeypatch, caplog):
     store, path, claim = prepare(ingress)
     original = store._connect

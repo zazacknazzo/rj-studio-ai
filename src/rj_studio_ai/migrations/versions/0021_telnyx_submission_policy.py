@@ -83,6 +83,21 @@ def upgrade() -> None:
           AND (outbound_message_id=NEW.id OR outbound_message_id IN
             (SELECT id FROM messages WHERE in_reply_to_message_id=NEW.id)))
         BEGIN SELECT RAISE(ABORT,'submission message already exists'); END""")
+    op.execute("""CREATE TRIGGER telnyx_attempt_rejects_replacement
+        BEFORE INSERT ON delivery_attempts WHEN EXISTS (
+            SELECT 1 FROM delivery_attempts AS attempt
+            JOIN outbound_deliveries AS delivery ON delivery.id=attempt.outbound_delivery_id
+            WHERE delivery.provider='telnyx' AND (attempt.id=NEW.id
+                OR (attempt.outbound_delivery_id=NEW.outbound_delivery_id
+                    AND attempt.attempt_number=NEW.attempt_number)
+                OR attempt.owner_token=NEW.owner_token))
+        BEGIN SELECT RAISE(ABORT,'attempt submission evidence already exists'); END""")
+    op.execute("""CREATE TRIGGER telnyx_attempt_initial_evidence
+        BEFORE INSERT ON delivery_attempts WHEN EXISTS (
+            SELECT 1 FROM outbound_deliveries WHERE id=NEW.outbound_delivery_id
+              AND provider='telnyx') AND (
+            NEW.submission_started_at IS NOT NULL OR NEW.retry_evidence IS NOT NULL)
+        BEGIN SELECT RAISE(ABORT,'new attempt cannot claim prior submission evidence'); END""")
     op.execute("""CREATE TRIGGER telnyx_attempt_evidence_immutable
         BEFORE UPDATE ON delivery_attempts
         WHEN (OLD.submission_started_at IS NOT NULL
@@ -91,6 +106,23 @@ def upgrade() -> None:
           OR NEW.retry_evidence NOT IN ('not_submitted')
           OR (NEW.retry_evidence IS NOT NULL AND NEW.submission_started_at IS NOT NULL)
         BEGIN SELECT RAISE(ABORT,'attempt submission evidence is immutable'); END""")
+    op.execute("""CREATE TRIGGER telnyx_attempt_evidence_requires_current_claim
+        BEFORE UPDATE OF submission_started_at,retry_evidence ON delivery_attempts
+        WHEN EXISTS (SELECT 1 FROM outbound_deliveries
+            WHERE id=OLD.outbound_delivery_id AND provider='telnyx') AND (
+          (NEW.submission_started_at IS NOT OLD.submission_started_at AND NOT (
+            OLD.outcome='started' AND NEW.outcome='started' AND EXISTS (
+              SELECT 1 FROM outbound_deliveries WHERE id=OLD.outbound_delivery_id
+                AND state='sending' AND owner_token=OLD.owner_token
+                AND attempt_count=OLD.attempt_number
+                AND submission_started_at=NEW.submission_started_at)))
+          OR (NEW.retry_evidence IS NOT OLD.retry_evidence AND NOT (
+            OLD.outcome='started' AND NEW.outcome='retryable'
+            AND NEW.submission_started_at IS NULL AND EXISTS (
+              SELECT 1 FROM outbound_deliveries WHERE id=OLD.outbound_delivery_id
+                AND state='sending' AND owner_token=OLD.owner_token
+                AND attempt_count=OLD.attempt_number AND submission_started_at IS NULL))))
+        BEGIN SELECT RAISE(ABORT,'attempt evidence requires current claim'); END""")
     op.execute("""CREATE TRIGGER telnyx_retry_requires_proof
         BEFORE UPDATE OF state ON outbound_deliveries
         WHEN NEW.provider='telnyx' AND NEW.state='retryable' AND OLD.state!='retryable'

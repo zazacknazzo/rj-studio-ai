@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import timedelta
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from alembic import command
@@ -533,7 +534,10 @@ def test_migration_backfills_existing_pauses_atomically_without_replaying_effect
     from historical_delivery import seed_reply
 
     seed_reply(path, NOW, sending=True)
-    delivery = claim = store.get_delivery(1)
+    # Current store selects the head0021 columns; inspect the historical fixture
+    # using the fields available at0015 before upgrading it.
+    prior = rows(path, "outbound_deliveries")[0]
+    delivery = claim = SimpleNamespace(delivery_id=prior["id"], owner_token=prior["owner_token"])
     pause(store)
     before_controls, before_effects = controls(path), rows(path, "human_pause_effects")
     before_outbox, before_attempts = (

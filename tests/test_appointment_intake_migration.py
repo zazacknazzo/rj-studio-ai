@@ -95,8 +95,8 @@ def test_upgrade_preserves_all_existing_data_and_rolls_back_ddl_failure(tmp_path
             assert all(row[-1] == 0 for row in after["message_processing"])
             after["message_processing"] = [row[:-1] for row in after["message_processing"]]
         if not failing_upgrade:
-            assert all(row[-1] == 0 for row in after["outbound_deliveries"])
-            after["outbound_deliveries"] = [row[:-1] for row in after["outbound_deliveries"]]
+            assert all(row[-4:] == (0, None, None, None) for row in after["outbound_deliveries"])
+            after["outbound_deliveries"] = [row[:-4] for row in after["outbound_deliveries"]]
         assert after == before
         if failing_upgrade:
             assert (

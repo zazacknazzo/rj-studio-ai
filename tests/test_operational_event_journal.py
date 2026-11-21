@@ -352,9 +352,16 @@ def test_legacy_upgrade_preserves_every_existing_row_and_unknown(tmp_path, monke
     for row in after["message_processing"]:
         assert row.pop("automation_revision") == 0
     assert all(row["status_conflict"] == 0 for row in after["outbound_deliveries"])
+    added = {"submission_key", "payload_fingerprint", "first_submission_at"}
+    assert all(all(row[key] is None for key in added) for row in after["outbound_deliveries"])
     after["outbound_deliveries"] = [
-        {k: v for k, v in row.items() if k != "status_conflict"}
+        {k: v for k, v in row.items() if k not in added | {"status_conflict"}}
         for row in after["outbound_deliveries"]
+    ]
+    added = {"submission_started_at", "retry_evidence"}
+    assert all(all(row[key] is None for key in added) for row in after["delivery_attempts"])
+    after["delivery_attempts"] = [
+        {k: v for k, v in row.items() if k not in added} for row in after["delivery_attempts"]
     ]
     assert after == before
     assert rows(path, "outbound_deliveries")[0]["state"] == "unknown"

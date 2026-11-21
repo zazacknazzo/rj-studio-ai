@@ -209,6 +209,25 @@ def test_historical_retry_without_proof_does_not_gain_submission_authority(tmp_p
     assert store.get_delivery_attempts(1)[0].retry_evidence is None
 
 
+def test_historical_terminal_attempt_cannot_gain_retroactive_submission_proof(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "historical-proof.db"
+    manager = baseline(path, monkeypatch)
+    manager.upgrade()
+    with sqlite3.connect(path) as connection:
+        before = connection.execute("SELECT * FROM delivery_attempts").fetchall()
+        for assignment in (
+            "retry_evidence='not_submitted'",
+            "submission_started_at='2026-01-01T00:00:00+00:00'",
+        ):
+            with pytest.raises(sqlite3.IntegrityError, match="requires current claim"):
+                connection.execute(
+                    f"UPDATE delivery_attempts SET {assignment} WHERE outbound_delivery_id=1"
+                )
+        assert connection.execute("SELECT * FROM delivery_attempts").fetchall() == before
+
+
 @pytest.mark.parametrize(
     "stage", ["ADD COLUMN first_submission_at", "CREATE TRIGGER telnyx_submission_identity_insert"]
 )
@@ -243,6 +262,9 @@ def test_failed_migration_rolls_back_schema_backfill_and_data(tmp_path, monkeypa
         ("telnyx_submission_identity_immutable", "TRIGGER"),
         ("telnyx_submission_rejects_replacement", "TRIGGER"),
         ("telnyx_clock_monotonic", "TRIGGER"),
+        ("telnyx_attempt_rejects_replacement", "TRIGGER"),
+        ("telnyx_attempt_initial_evidence", "TRIGGER"),
+        ("telnyx_attempt_evidence_requires_current_claim", "TRIGGER"),
         ("uq_delivery_submission_key", "INDEX"),
     ],
 )
