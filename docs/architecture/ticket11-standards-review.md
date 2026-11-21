@@ -13,7 +13,8 @@ The reviewer changed only this document; primary agent remains sole Git writer.
 
 **PASS for the corrected OFFLINE scope after supplemental verification below.** The
 initial Standards perspective did not identify the optional-schema P2 subsequently
-found by the independent Spec/adversarial reviews. That omission is acknowledged;
+found by the independent Spec/adversarial reviews, or the later provider-default P2
+found by Spec. That omission is acknowledged;
 the initial229-test run alone was insufficient to detect it. This is a Standards
 review recommendation for direct orchestrator audit, not approval of real sending.
 **Operational/production: NO-GO.** AUD-01 remains open: an old, structurally valid
@@ -257,3 +258,31 @@ Corrected production bytes inspected/executed before their next publication:
 No new P1/P2 was confirmed in this supplemental inspection/execution. This is an
 offline recommendation only. AUD-01, external quarantine/reconciliation, actual
 credential-organization association and all operational gates remain unchanged.
+
+## Final candidate — provider-default isolation fix
+
+Independently inspected commit `a049753205001d81a9ac0f11253eab5760a2f017`
+directly with git show. The independent **Spec reviewer**, not Standards, found that
+constructing a concrete Telnyx runner with the real provider=None default could claim
+and consume legacy-provider work before its local preparation failure. The earlier
+Standards selection did not detect this gap; its helper supplied provider=telnyx.
+
+The shared provider-normalization helper now runs in runner and executor construction:
+a concrete Telnyx sender with None becomes telnyx; explicit incompatible provider
+raises before any claim; other sender behavior is preserved. I inspected this control
+flow and independently executed only the two new parametrized legacy-outbox cases,
+without repeating the full suite:
+
+```bash
+/tmp/ticket11/run -m pytest \
+  tests/test_telnyx_sender_integration.py::test_concrete_sender_default_provider_preserves_other_outboxes \
+  --basetemp=/tmp/ticket11/tmp/standards-final-provider -ra
+```
+
+Observed: **2 passed,0 skipped,8.05s,exit0**. Each verifies repeated default-runner polls
+leave a Meta/Twilio outbox pending with zero attempts, both constructors reject explicit
+mismatches, and an unstarted default executor is normalized. No transport was invoked.
+The corrected final candidate remains **PASS for reviewed offline scope**, with no
+confirmed P1/P2 remaining from this perspective. Operational/production stays **NO-GO**;
+AUD-01 and the previously recorded operational gates remain open. No code/test changes,
+commits or pushes were made by this reviewer.

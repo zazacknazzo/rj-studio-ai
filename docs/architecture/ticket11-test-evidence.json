@@ -1,0 +1,45 @@
+{
+  "functional_candidate": "a049753205001d81a9ac0f11253eab5760a2f017",
+  "validation_candidate": "789c2c89328b0472506c3d34593dfe741c052883",
+  "python": "3.12.14",
+  "sqlite": "3.53.1",
+  "pip": "26.3",
+  "pytest": "9.2.0",
+  "runs": [
+    {
+      "executor": "implementer",
+      "passed": 2130,
+      "skipped": 1,
+      "seconds": 393.78,
+      "exit_code": 0,
+      "junit": {
+        "errors": "0",
+        "failures": "0",
+        "skipped": "1",
+        "tests": "2131",
+        "time": "393.725"
+      },
+      "log_sha256": "e03018f1024ce9f1adf71afe7d30c38a0a2bc38ae47c20280bf20c19455b7181",
+      "junit_sha256": "c10e8b8ffde4832ed22be5faa1a2bc0d0db993ef22f5ddd0c3963e8004dfdbec"
+    },
+    {
+      "executor": "spec-independent",
+      "passed": 2130,
+      "skipped": 1,
+      "seconds": 399.84,
+      "exit_code": 0,
+      "junit": {
+        "errors": "0",
+        "failures": "0",
+        "skipped": "1",
+        "tests": "2131",
+        "time": "399.750"
+      },
+      "log_sha256": "eb023dfddd9f8ca1050da1b2f8b82903bb3bbf9905822ca39eda486081a3784d",
+      "junit_sha256": "8cc54095db7f9dbdc2474d30c97e694f8a3fa2778b5080969715afcc896eea5a"
+    }
+  ],
+  "skip": "test_historical_v8_record_remains_loadable: local history fixture not versioned",
+  "network": "Python IP socket guard in sanitized subprocess; no kernel sandbox claim",
+  "transport": "injected intercepted callables only; no Telnyx API HTTP"
+}

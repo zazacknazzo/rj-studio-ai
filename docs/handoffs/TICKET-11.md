@@ -1,126 +1,84 @@
-# Handoff — Telnyx Coexistence Ticket 11
+# Handoff — Telnyx Coexistence Ticket11
 
-- Repository/origin: zazacknazzo/rj-studio-ai / https://github.com/zazacknazzo/rj-studio-ai.git
+## Current state and authorization
+
+- Repository/origin: `zazacknazzo/rj-studio-ai` / https://github.com/zazacknazzo/rj-studio-ai.git
 - Exact approved T10 baseline: `07c1b7dc150d7eb1776b97d891cd29347adffd37`.
-- Branch: `codex/telnyx-coexistence-11-sender`; absent remotely at initialization.
-- Audit read directly through GitHub at `502bca89e64b45e981ad9c5f2eeb189aad3dd9e6`;
-  audit branch is documentation and must NOT be merged.
-- Authorized: offline text sender, intercepted transport, SQLite/tests/docs/checkpoints,
-  normal push of this branch and evidence on issue #11. No runtime wiring, commercial
-  credentials, external Telnyx requests, activation, public route, main merge or T12–13.
-- Writer: primary implementing account in this session. Another account must arrange
-  human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `2751652a3df39e0bf3f0d5c7588172b510eab0db` (CP4).
+- Branch: `codex/telnyx-coexistence-11-sender` only. No audit-branch merge.
+- Audit documents read directly at `502bca89e64b45e981ad9c5f2eeb189aad3dd9e6`.
+- Functional sender candidate: `a049753205001d81a9ac0f11253eab5760a2f017`.
+- Final code/tests candidate: `789c2c89328b0472506c3d34593dfe741c052883`;
+  only the latest-head assertion changed after a049753, no production change.
+- Last remote SHA actually confirmed before this checkpoint: validation candidate above.
+  Query origin for current head; never predict this document's own commit hash.
+- Authorized: offline text sender/intercepted exchange, tests/docs, normal branch push
+  and issue11 evidence. No commercial API HTTP/credentials, activation/public route,
+  outgoing runtime wiring, production, main merge or T12–13.
+- Primary implementing account is sole Git writer. Independent subagents wrote only
+  separate review documents. A second account needs human-exclusive control before
+  writing. Markdown is not a distributed lock; no simultaneous branch writing allowed.
 
-## Checkpoints
+## Completed checkpoints
 
-| CP | State | Validation / next work |
-| --- | --- | --- |
-| CP0 | Continuity, spec and ADR written before functional implementation | Docs inspected; git diff --check. No tests run yet. |
-| CP1 | Implemented offline | Exact UTF8 request + keyed durable MAC, migration0022; 40 passed/0 skip (9.62s). Not integrated with runner until CP3. |
-| CP2 | Implemented offline | Injected exchange only, strict200 identity, fixed unknown matrix; request/sender 76 passed/0 skips (3.23s). Runner pending CP3. |
-| CP3 | Implemented offline | Runner + request-bound atomic gates; integration/submission/legacy delivery:101 passed/0 skips,34.52s. |
-| CP4 | Implemented offline | Adversarial rollback/crash/gates/purge/restore +0022 migrations:28 passed/0 skips,11.41s. Four passing AUD01 probes reproduce OPEN unsafe behavior; not mitigation. |
-| CP5 | Pending | Corrected toolchain, full suite/checks, independent reviews |
-| CP6 | Pending | Final report + issue evidence + remote verification |
+| CP | State / published remote SHA |
+| --- | --- |
+|CP0 | Spec/ADR/protocol first:cbf31a0c948a3c9c6801412739c5b724920a1964 |
+|Toolchain | Separate dev-only constraint:066861f347411491f34def3e81f7c0e6484d38cf |
+|CP1 | Exact request/HMAC/0022:a9fbe86cbbd95000491695864eb0911950a53c32 |
+|CP2 | Intercepted exchange/strict response:43574436e6bd99d53d2b90598001480aa70c8b59 |
+|CP3 | Runner/SQLite atomic binding:a7825b94d9cc0a757f37e5cd5243c1ec9c843714 |
+|CP4 | Adversarial/restore evidence:2751652a3df39e0bf3f0d5c7588172b510eab0db |
+|CP5 corrections | WIP explicit:4ec507a3c057b5c7bdc96bf3a0768265b62c552d |
+|CP5 scope fix | Concrete provider fenced before claim:a049753205001d81a9ac0f11253eab5760a2f017 |
+|CP5 test head | Final historical assertion:789c2c89328b0472506c3d34593dfe741c052883 |
+|CP5 validation | Complete locally, commit publishing now; query origin for SHA |
+|CP6 | Final A–O report, architecture/runbook and issue evidence pending publication |
 
-## Risks
+## Actual final validation
 
-AUD-01 remains OPEN: consistent old SQLite can lose submission/disconnect/consent fences.
-T11 specifies quarantine and demonstrates the limitation; no operational recovery is
-implemented. AUD-02 requires isolated updated pip/pytest and private temp0700 before tests.
-AUD-03 protocol now written; rehearsal pending, real second-account control unproven.
-CX-01/06/11/15/16/17/19/24/29/30/32/33/35/36/37 remain open until audit/operational gates.
-Historical v8 fixture skip must be reported. Offline tests never prove WhatsApp delivery.
+- Implementer full:2130passed/1historicalskip,393.78s,exit0.
+- Independent Spec full:2130passed/1historicalskip,399.84s,exit0.
+- Ruff check/format315files, compileall src/tests/scripts, pip check and diff check PASS.
+- Python3.12.14/SQLite3.53.1; isolated pip26.3/pytest9.2.0, private0700 temp/basetemp,
+  sanitized environment, Python IP socket guard including children. Not kernel isolation.
+- Pip-audit2.10.1:82JSON dependency entries,0packages with advisories; unindexed local
+  application skipped explicitly. Runtime declarations unchanged; versions in manifest.
+- Gitleaks8.30.1: functional commit range0hits; final draft tree3raw false positives
+  (two baseline prose/synthetic fixture, one public schema SHA256), no ignore entries.
+  Final delivery commit scan/triage still to record; never claim zero raw tree hits.
+- Standards:229focused+3own probes originally; schema gap missed and acknowledged.
+  Corrected candidate117focused+3own probes; final provider2cases independently passed.
+- Spec:three P2 independently reproduced and fixed (UUID profile, malformed optional
+  success fields, default provider consuming legacy attempts), full final suite green.
+- Adversarial:original6failed/8passed→same14probes pass; own timeout3probes pass.
+- New-clone resumption: origin/branch/local+remoteSHA verified at a049753, AGENTS/handoff
+  read, baseline ancestry confirmed,3focused tests passed9.14s, final status clean.
+  Simulates account-neutral resumption; actual second-account authentication not proved.
+
+## Failures and limitations preserved
+
+All failing/interrupted trial runs and focused counts are recorded in
+`docs/architecture/v1-ticket11-validation.md` and independent review reports.
+The completed pre-final integral runs each had1failed/2129passed/1skip (latest head0021
+expectation), corrected to0022 preserving rollback/journal/FK assertions. Earlier partial
+runs were interrupted to include known fixes and are not described as passing integral.
+Historical v8 fixture skip remains explicit, not fabricated away.
+
+AUD01 OPEN: four known-gap probes reproduce stale SQLite losing fences. Contract for
+outside-snapshot quarantine/reconciliation specified; operational protection NOT
+implemented. Sender NOT ready for real egress. Never new key/retry unknown after restore.
+AUD02: corrected versions actually used/audited; formal risk closure/CI remains owner gate.
+AUD03: permanent protocol/checkpoints/clone rehearsal implemented; human exclusivity needed.
+CX01/06/11/15/16/17/19/24/29/30/32/33/35/36/37 remain open pending audit/operational gates.
+No risk checkbox closed, no exception accepted. No real Telnyx/API/credential/activation.
 
 ## Exact next action
 
-After verifying CP0 remotely, inspect `src/rj_studio_ai/providers/base.py`, `delivery.py`,
-`telnyx_submission.py`, authorization/finalization in `persistence.py`, migration0021,
-and `tests/test_telnyx_submission.py`; implement CP1 per ADR0019. Create isolated
-venv in private `/tmp/ticket11` and resolve corrected pip/pytest from PyPI before testing.
-Read current origin/status/handoff first on any account change. No sender code yet.
-
-## Toolchain checkpoint (AUD02)
-
-Changed only dev constraint pytest>=9.0.3,<10; runtime declarations unchanged.
-Isolated /tmp/ticket11 parent0700, pip26.3, pytest9.2.0, Python3.12; PyPI explicit,
-managed proxy/CA preserved for installation only. First install failed without proxy;
-second succeeded. Tests use env-i without proxy/credentials, Python IP guard inherited
-by children, private --basetemp. CP1 focused request + historical submission migrations:
-40 passed/0 skipped,9.62s. Integral compatibility and pip-audit still pending.
-Next: publish CP1 exact request/binding; then add intercepted transport/strict response.
-
-CP1 next exact action: implement `providers/telnyx_sender.py` with injected-only exchange,
-strict official response identity and fixed unknown reasons; then run request/sender tests.
-
-CP2: pip-audit completed in isolated corrected environment: no known vulnerabilities;
-local editable application skipped as absent from index (report details pending CP5).
-Ruff local passed after formatting/style corrections. Exchange protocol is a trusted
-intercepted callable, not a sandbox for arbitrary implementations; no network client.
-Next exact action: extend authorize_delivery_submission with prepared request binding
-inside its current writer; update runner preparation/local-failure/dispatch paths and
-exercise real SQLite + intercepted sender in tests/test_telnyx_sender_integration.py.
-
-CP3: exchange observes committed request MAC/first+attempt markers; another BEGIN IMMEDIATE
-succeeds during callback/exchange. Local prepare failure records NOT_SUBMITTED with same
-key across bounded retry. Post-marker errors persist fixed unknown; early/late scoped
-callbacks reconcile only at acceptance. No lifecycle override or runtime wiring added.
-Next exact action: add tests/test_telnyx_sender_adversarial.py and migration0022 tests;
-cover rollback/crash/old snapshots/purge/status conflict and pause/race gates. Then run
-full pytest and independent direct-code Standards/Spec/adversarial reviewers at CP5.
-
-CP4 evidence: first run2failed/26passed (fixture handoff column names wrong, correlation
-exception expectation wrong); second2failed/26passed (correlation expectation and wrapped
-SQLAlchemy OperationalError expectation); third1failed/27passed (wrapped error); corrected
-run28passed/0skips11.41s. Production code unchanged by these test expectation fixes.
-Ruff check PASS; Ruff format310files PASS. Full local and independent Spec suites running
-in separate private basetemps. Independent Standards and adversarial reviewers inspecting
-actual code and executing their own evidence; no review completion claimed yet.
-Next exact action: inspect /tmp/ticket11/full.log and reviewer reports; fix any new P1/P2,
-rerun affected checks; complete Gitleaks/pip-audit/compile/pipcheck and resume rehearsal.
-
-## CP5 correction checkpoint — WIP, full final runs pending
-
-Independent Spec/adversarial confirmed P2: malformed known optional response fields were
-accepted. Fixed with strict present-schema checks, regression tests and same independent
-probes. Request profile UUID corrected; shared fixture now a synthetic UUID. Timeout
-arithmetic overflow/underflow P3 fixed. Standards supplemental117passed/0skip18.10s plus
-own3probes11.47s; adversarial original6failed/8passed20.77s→unchanged14passed15.48s,
-timeout3passed0.35s. Initial Standards229passed/84.22s had missed the P2, acknowledged.
-Local final focal145passed/0skip29.63s; historical-head focused19passed9.44s;
-portable runner request+appointment migration40passed12.79s.
-
-Initial full local interrupted after2failed/868passed/1skip279.43s (old head assertion,
-0022downgrade message expected backup/restore); Spec original2failed/942passed/1skip
-287.89s. First replacement full runs also collected downgrade message before fix and
-were stopped; exact partial counts will be recorded in final report. No failing runs
-are claimed green. Changed historical expected latest heads only, preservation asserts
-unchanged; downgrade message now explicitly says backup/restore. Final suites must run
-against this corrected checkpoint before CP5 completion.
-
-Gitleaks8.30.1 verified official download checksum. New committed range0detections;
-working tree2raw detections, both same baseline synthetic operator fixture/prose contexts
-as audit. Not zero raw hits; no ignores added. Pip26.3/pytest9.2.0 pip-audit no known
-vulnerabilities, editable app unindexed skip. Full version manifest/report pending.
-Next exact action: run scripts/check_telnyx_offline.py with isolated venv in clean clone,
-complete both final full suites/checks and receive Spec report; no more functional work
-unless a concrete failure/review requires it. Do not enable operational runtime.
-
-CP5 additional review fix: Spec's own probe showed concrete sender + default provider=None
-could consume/fail Meta work before transport. Runner/executor now infer telnyx before
-claim and reject explicit incompatible provider. New real-SQLite Meta/Twilio guards;
-local integration+legacy56passed/0skip20.08s. Last remote verified corrections checkpoint:
-`4ec507a3c057b5c7bdc96bf3a0768265b62c552d`. Root's second replacement integral stopped
-before completion to include this new fix; no green integral claimed yet. Spec remaining
-direct inspection completed, no additional P1/P2 confirmed. Next: final integral runs
-against this provider fix, then CP5 completion and CP6 reports/governance only.
-
-Final integral attempt on a049753 completed (not interrupted): local1failed/2129passed/
-1historicalskip422.95s; Spec1failed/2129passed/1skip402.26s. Sole remaining failure was
-historical journal migration test expected latest0021, actual0022. Corrected ONLY else
-expected head in tests/test_telnyx_messages.py; rollback/effects/FK assertions retained.
-Global search of all tests finds no other stale latest0021 expectations; remaining0021
-references intentionally exercise historical migration. No production change aftera049.
-Next exact action: complete focused pair then repeat both full suites to green on this
-validation-only correction; do not mark CP5complete on the1failed integral attempts.
+Primary: confirm CP5 remote head; publish CP6 final report/docs, run final secret/diff
+checks, push normally only this branch and verify origin SHA. Update issue11 with final
+SHA/evidence and residual gates without closing checkboxes. Then STOP development and
+request direct orchestrator audit. Do not start T12–13 or operational recovery/activation.
+A new account first obtains exclusive human writing control, fetches origin, checks
+status/divergence/SHA and this handoff; it may reproduce focused offline checks only:
+`python scripts/check_telnyx_offline.py --python /isolated/venv/bin/python tests/test_telnyx_sender_integration.py`.
+Do not overwrite existing WIP or rebase/reset/force-push published work.
