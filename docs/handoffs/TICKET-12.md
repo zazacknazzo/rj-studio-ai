@@ -1,0 +1,37 @@
+# Handoff — Telnyx Coexistence Ticket12
+
+- Repository/origin: zazacknazzo/rj-studio-ai / https://github.com/zazacknazzo/rj-studio-ai.git
+- Exact approved baseline: 246fe79a9bed4b202c49d3b2780320f6d5a0ca9c.
+- Authorized branch: codex/telnyx-coexistence-12-composition only.
+- Scope: offline ASGI ingress/readiness/quarantine tests, intercepted transport only.
+  No real Telnyx/API/commercial credentials/activation/egress workers/production/main
+  merge/Baileys/intelligence changes/Ticket13. Approval: issue11 comment7062936123.
+- Exclusive writer: user explicitly confirmed this account in chat2026-11-21.
+  Primary alone commits/pushes; independent reviewers may write separate reports.
+  Human exclusivity required on every account transfer; Markdown is not a lock.
+- Last remote SHA actually verified: baseline246fe79a9bed4b202c49d3b2780320f6d5a0ca9c;
+  Ticket12 branch absent before creation. Query origin for current SHA.
+
+## Checkpoints
+
+| CP | Completed / WIP / pending | Actual checks / failures | Remote SHA verified |
+| --- | --- | --- | --- |
+| CP0 | Spec/ADR/handoff first; code pending | baseline/origin/approval checked; 20 sender integration passed6.24s under IP guard; diff check | baseline above |
+| CP1–7 | Pending | Not executed | None |
+
+## Risks and limitations
+
+AUD01 OPEN. Closed offline composition is not an operational antirollback system.
+CX01/06/11/15/16/17/19/24/25/29/30/32/33/35/36/37 remain audit/production gates.
+Public docs inspected, no Telnyx account calls; synthetic toolchain install separate
+from app tests. Prior Ticket11 reports inspected, not claimed as current executions.
+Fresh clone used --no-checkout (apparent initial deletions were unpopulated index/worktree,
+not other-account WIP); switching to exact baseline populated it. No work discarded.
+Toolchain installation in private /tmp/ticket12/venv; test guard reused from Ticket11.
+
+## Exact next action
+
+Fetch origin, verify branch/status/SHA and read this handoff. Reproduce:
+`python scripts/check_telnyx_offline.py --python /tmp/ticket12/venv/bin/python tests/test_telnyx_sender_integration.py`
+Then CP1: implement/test raw ASGI headers and bounded streaming before ingress wiring.
+Account change must use its own isolated venv and record its actual check result.

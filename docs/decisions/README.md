@@ -27,3 +27,5 @@ Add an ADR only for a hard-to-reverse choice that would be surprising without it
 - [0018: Eligibility and submission identity](0018-whatsapp-eligibility-and-submission-identity.md) — strict source-time window, separate consent and conservative retry evidence.
 
 - [0019 — Deterministic offline Telnyx sender](0019-deterministic-offline-telnyx-sender.md)
+
+- [0020 — offline Telnyx ASGI composition](0020-offline-telnyx-asgi-composition.md)
