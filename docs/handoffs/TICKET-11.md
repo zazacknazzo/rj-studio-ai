@@ -10,7 +10,7 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA before initial checkpoint: baseline above.
+- Current SHA: query origin. Last remote SHA verified: `cbf31a0c948a3c9c6801412739c5b724920a1964` (CP0).
 
 ## Checkpoints
 
@@ -40,3 +40,13 @@ After verifying CP0 remotely, inspect `src/rj_studio_ai/providers/base.py`, `del
 and `tests/test_telnyx_submission.py`; implement CP1 per ADR0019. Create isolated
 venv in private `/tmp/ticket11` and resolve corrected pip/pytest from PyPI before testing.
 Read current origin/status/handoff first on any account change. No sender code yet.
+
+## Toolchain checkpoint (AUD02)
+
+Changed only dev constraint pytest>=9.0.3,<10; runtime declarations unchanged.
+Isolated /tmp/ticket11 parent0700, pip26.3, pytest9.2.0, Python3.12; PyPI explicit,
+managed proxy/CA preserved for installation only. First install failed without proxy;
+second succeeded. Tests use env-i without proxy/credentials, Python IP guard inherited
+by children, private --basetemp. CP1 focused request + historical submission migrations:
+40 passed/0 skipped,9.62s. Integral compatibility and pip-audit still pending.
+Next: publish CP1 exact request/binding; then add intercepted transport/strict response.

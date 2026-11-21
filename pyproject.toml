@@ -28,7 +28,7 @@ rj-studio-maintenance = "rj_studio_ai.maintenance:main"
 dev = [
   "cryptography==50.0.2",
   "httpx>=0.28,<1",
-  "pytest>=8.3,<9",
+  "pytest>=9.0.3,<10",
   "ruff>=0.11,<1",
 ]
 
