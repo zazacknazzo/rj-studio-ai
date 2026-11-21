@@ -572,6 +572,7 @@ class MigrationManager:
             "telnyx_attempt_evidence_immutable",
             "telnyx_attempt_rejects_replacement",
             "telnyx_attempt_initial_evidence",
+            "telnyx_attempt_evidence_retained",
             "telnyx_attempt_evidence_requires_current_claim",
             "telnyx_retry_requires_proof",
             "telnyx_clock_monotonic",

@@ -228,6 +228,27 @@ def test_historical_terminal_attempt_cannot_gain_retroactive_submission_proof(
         assert connection.execute("SELECT * FROM delivery_attempts").fetchall() == before
 
 
+def test_missing_historical_attempt_fails_closed_after_migration(tmp_path, monkeypatch):
+    path = tmp_path / "missing-history.db"
+    manager = baseline(path, monkeypatch)
+    # Model an incomplete0020 backup before the new retention guard exists.
+    with sqlite3.connect(path) as connection:
+        connection.execute("DELETE FROM delivery_attempts WHERE outbound_delivery_id=1")
+    manager.upgrade()
+    verified_consent(path, customer=CUSTOMER, now=TIME)
+    store = SqliteConversationStore(path)
+    claim = store.claim_next_delivery(provider="telnyx", now=TIME)
+    assert claim.attempt_count == 2
+    decision = store.assess_telnyx_submission(
+        delivery_id=claim.delivery_id, owner_token=claim.owner_token, now=TIME
+    )
+    assert not decision.eligible
+    assert decision.decision.reason == "historical_submission_unproven"
+    assert not store.authorize_delivery_submission(
+        delivery_id=claim.delivery_id, owner_token=claim.owner_token, now=TIME
+    )
+
+
 @pytest.mark.parametrize(
     "stage", ["ADD COLUMN first_submission_at", "CREATE TRIGGER telnyx_submission_identity_insert"]
 )
@@ -264,6 +285,7 @@ def test_failed_migration_rolls_back_schema_backfill_and_data(tmp_path, monkeypa
         ("telnyx_clock_monotonic", "TRIGGER"),
         ("telnyx_attempt_rejects_replacement", "TRIGGER"),
         ("telnyx_attempt_initial_evidence", "TRIGGER"),
+        ("telnyx_attempt_evidence_retained", "TRIGGER"),
         ("telnyx_attempt_evidence_requires_current_claim", "TRIGGER"),
         ("uq_delivery_submission_key", "INDEX"),
     ],

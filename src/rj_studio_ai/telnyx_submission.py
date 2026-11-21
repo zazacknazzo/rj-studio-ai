@@ -158,12 +158,16 @@ def assess_submission(
         (row["conversation_id"], row["in_reply_to_message_id"]),
     ).fetchone():
         return _deny("ordering_barrier", EligibilityKind.OPERATIONAL_UNKNOWN)
-    if connection.execute(
-        """SELECT 1 FROM delivery_attempts WHERE outbound_delivery_id=? AND attempt_number<?
-        AND (outcome!='retryable' OR retry_evidence IS NOT 'not_submitted'
-             OR submission_started_at IS NOT NULL) LIMIT 1""",
+    history = connection.execute(
+        """SELECT COUNT(*), COUNT(CASE WHEN outcome='retryable'
+            AND retry_evidence='not_submitted' AND submission_started_at IS NULL THEN 1 END)
+        FROM delivery_attempts WHERE outbound_delivery_id=? AND attempt_number<?""",
         (delivery_id, row["attempt_count"]),
-    ).fetchone():
+    ).fetchone()
+    # Unique positive attempt numbers plus the exact count prove continuity.
+    # Missing historical attempts must never become an empty successful proof.
+    expected = row["attempt_count"] - 1
+    if history != (expected, expected):
         return _deny("historical_submission_unproven", EligibilityKind.OPERATIONAL_UNKNOWN)
     try:
         key = UUID(row["submission_key"])

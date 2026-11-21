@@ -368,6 +368,7 @@ def test_attempt_and_clock_evidence_cannot_be_rewritten(ingress):
             "UPDATE outbound_deliveries SET first_submission_at=NULL",
             "UPDATE delivery_attempts SET submission_started_at=NULL",
             "UPDATE delivery_attempts SET retry_evidence='not_submitted'",
+            "DELETE FROM delivery_attempts",
             "UPDATE telnyx_policy_clock SET checked_at='2000-01-01T00:00:00+00:00'",
             "INSERT OR REPLACE INTO telnyx_policy_clock VALUES(1,'2000-01-01T00:00:00+00:00')",
             "DELETE FROM telnyx_policy_clock",
@@ -471,3 +472,23 @@ def test_generic_fake_retryable_response_after_marker_remains_unknown(ingress):
     assert runner.run_once(now=TIME).state is DeliveryState.UNKNOWN
     assert runner.run_once(now=TIME + timedelta(days=2)) is None
     assert len(fake.calls) == 1
+
+
+def test_terminal_purge_cascades_attempts_and_reused_id_gets_new_submission_key(ingress):
+    store, path, first = prepare(ingress)
+    assert authorize(store, first)
+    assert store.finalize_delivery(
+        delivery_id=first.delivery_id,
+        owner_token=first.owner_token,
+        outcome=DeliveryState.ACCEPTED,
+        provider_message_id="synthetic-purge-acceptance",
+        now=TIME,
+    )
+    assert store.purge_messages_older_than(TIME + timedelta(days=1)).messages_deleted == 2
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT * FROM delivery_attempts").fetchall() == []
+    pending(store, message_id="new-logical-after-purge")
+    second = store.claim_next_delivery(now=TIME + timedelta(seconds=1))
+    assert second.delivery_id == first.delivery_id
+    assert second.submission_key != first.submission_key
+    assert authorize(store, second, now=TIME + timedelta(seconds=1))

@@ -98,6 +98,11 @@ def upgrade() -> None:
               AND provider='telnyx') AND (
             NEW.submission_started_at IS NOT NULL OR NEW.retry_evidence IS NOT NULL)
         BEGIN SELECT RAISE(ABORT,'new attempt cannot claim prior submission evidence'); END""")
+    op.execute("""CREATE TRIGGER telnyx_attempt_evidence_retained
+        BEFORE DELETE ON delivery_attempts WHEN EXISTS (
+            SELECT 1 FROM outbound_deliveries WHERE id=OLD.outbound_delivery_id
+              AND provider='telnyx')
+        BEGIN SELECT RAISE(ABORT,'attempt submission evidence retained'); END""")
     op.execute("""CREATE TRIGGER telnyx_attempt_evidence_immutable
         BEFORE UPDATE ON delivery_attempts
         WHEN (OLD.submission_started_at IS NOT NULL
