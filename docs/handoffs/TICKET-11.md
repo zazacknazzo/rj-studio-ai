@@ -10,7 +10,7 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `066861f347411491f34def3e81f7c0e6484d38cf` (toolchain).
+- Current SHA: query origin. Last remote SHA verified: `a9fbe86cbbd95000491695864eb0911950a53c32` (CP1).
 
 ## Checkpoints
 
@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | CP0 | Continuity, spec and ADR written before functional implementation | Docs inspected; git diff --check. No tests run yet. |
 | CP1 | Implemented offline | Exact UTF8 request + keyed durable MAC, migration0022; 40 passed/0 skip (9.62s). Not integrated with runner until CP3. |
-| CP2 | Pending | Injected transport + strict responses/errors |
+| CP2 | Implemented offline | Injected exchange only, strict200 identity, fixed unknown matrix; request/sender 76 passed/0 skips (3.23s). Runner pending CP3. |
 | CP3 | Pending | Runner + SQLite atomic gates |
 | CP4 | Pending | Adversarial concurrency/crash/restore tests |
 | CP5 | Pending | Corrected toolchain, full suite/checks, independent reviews |
@@ -53,3 +53,11 @@ Next: publish CP1 exact request/binding; then add intercepted transport/strict r
 
 CP1 next exact action: implement `providers/telnyx_sender.py` with injected-only exchange,
 strict official response identity and fixed unknown reasons; then run request/sender tests.
+
+CP2: pip-audit completed in isolated corrected environment: no known vulnerabilities;
+local editable application skipped as absent from index (report details pending CP5).
+Ruff local passed after formatting/style corrections. Exchange protocol is a trusted
+intercepted callable, not a sandbox for arbitrary implementations; no network client.
+Next exact action: extend authorize_delivery_submission with prepared request binding
+inside its current writer; update runner preparation/local-failure/dispatch paths and
+exercise real SQLite + intercepted sender in tests/test_telnyx_sender_integration.py.
