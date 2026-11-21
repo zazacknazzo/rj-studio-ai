@@ -90,6 +90,8 @@ class MigrationManager:
             "delivery_status_events",
             "channel_lifecycle",
             "channel_lifecycle_effects",
+            "telnyx_consent",
+            "telnyx_policy_clock",
             "conversation_handoffs",
             "appointment_intakes",
             "inbound_event_receipts",
@@ -100,6 +102,8 @@ class MigrationManager:
             "conversation_operation_ids",
             "automation_operation_receipts",
         }.issubset(inspector.get_table_names()):
+            return False
+        if not MigrationManager._submission_schema_matches(connection, inspector):
             return False
         if not MigrationManager._channel_schema_matches(connection, inspector):
             return False
@@ -225,6 +229,9 @@ class MigrationManager:
                 "delivery_id",
             },
             "outbound_deliveries": {
+                "submission_key",
+                "payload_fingerprint",
+                "first_submission_at",
                 "status_conflict",
                 "handoff_token",
                 "submission_started_at",
@@ -245,6 +252,8 @@ class MigrationManager:
                 "updated_at",
             },
             "delivery_attempts": {
+                "submission_started_at",
+                "retry_evidence",
                 "id",
                 "outbound_delivery_id",
                 "attempt_number",
@@ -525,6 +534,47 @@ class MigrationManager:
                 "terminal_delivery_attempt_is_immutable",
             }.issubset(processing_triggers)
         )
+
+    @staticmethod
+    def _submission_schema_matches(connection: Connection, inspector: Inspector) -> bool:
+        for table, required in (
+            (
+                "telnyx_consent",
+                {
+                    "channel_id",
+                    "customer_address",
+                    "evidence_ref",
+                    "granted_at",
+                    "expires_at",
+                    "revoked_at",
+                },
+            ),
+            ("telnyx_policy_clock", {"singleton", "checked_at"}),
+        ):
+            if not required.issubset({item["name"] for item in inspector.get_columns(table)}):
+                return False
+        indexes = {item["name"]: item for item in inspector.get_indexes("outbound_deliveries")}
+        index = indexes.get("uq_delivery_submission_key")
+        if index is None or index["column_names"] != ["submission_key"] or not index["unique"]:
+            return False
+        triggers = {
+            row[0]
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+        return {
+            "telnyx_submission_identity_insert",
+            "telnyx_submission_rejects_replacement",
+            "telnyx_submission_identity_immutable",
+            "telnyx_submission_body_immutable",
+            "telnyx_submission_message_replacement",
+            "telnyx_attempt_evidence_immutable",
+            "telnyx_retry_requires_proof",
+            "telnyx_clock_monotonic",
+            "telnyx_clock_retained",
+            "telnyx_clock_replacement",
+        }.issubset(triggers)
 
     @staticmethod
     def _channel_schema_matches(connection: Connection, inspector: Inspector) -> bool:

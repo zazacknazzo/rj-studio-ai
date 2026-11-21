@@ -52,11 +52,13 @@ def test_upgrade_preserves_all_baseline_rows_and_rolls_back_partial_rebuild(tmp_
             assert all(row[-1] == 0 for row in after["message_processing"])
             after["message_processing"] = [row[:-1] for row in after["message_processing"]]
         if not interrupt:
-            assert all(row[-1] == 0 for row in after["outbound_deliveries"])
-            after["outbound_deliveries"] = [row[:-1] for row in after["outbound_deliveries"]]
+            # Status conflict plus Ticket10's Telnyx-only columns are additive;
+            # historical Meta/Twilio rows receive no fabricated submission proof.
+            assert all(row[-4:] == (0, None, None, None) for row in after["outbound_deliveries"])
+            after["outbound_deliveries"] = [row[:-4] for row in after["outbound_deliveries"]]
         assert after == before
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
-        expected = "0011_conversational_intake" if interrupt else "0020_channel_lifecycle"
+        expected = "0011_conversational_intake" if interrupt else "0021_telnyx_submission_policy"
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

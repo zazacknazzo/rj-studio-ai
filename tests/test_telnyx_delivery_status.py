@@ -11,7 +11,7 @@ from threading import Barrier
 
 import pytest
 from alembic import command
-from telnyx_channel_fixture import verified_channel
+from telnyx_channel_fixture import verified_channel, verified_consent
 from test_operational_event_journal import rows
 from test_telnyx_authentication import NOW, ORG, PHONE, PRIVATE_TEXT, PROFILE, message, signed
 from test_telnyx_authentication import private_key as private_key
@@ -20,7 +20,13 @@ from test_telnyx_messages import CUSTOMER, TIME, receive, wire
 from test_telnyx_messages import ingress as ingress
 
 from rj_studio_ai.deadline import ExecutionDeadline
-from rj_studio_ai.domain import DeliveryStatusReceived, InboundMessage
+from rj_studio_ai.domain import (
+    DeliveryStatusReceived,
+    EventOrigin,
+    InboundMessage,
+    InboundMessageReceived,
+    ProviderEventMetadata,
+)
 from rj_studio_ai.maintenance import main as maintenance_main
 from rj_studio_ai.migrations import MigrationManager
 from rj_studio_ai.persistence import DeliveryState, PersistenceUnavailable, SqliteConversationStore
@@ -49,6 +55,23 @@ def status_wire(status="delivered", *, event=None, message_id=MESSAGE_ID, event_
 
 def pending(store, *, customer=CUSTOMER, channel=PHONE, provider="telnyx", message_id="inbound"):
     inbound = InboundMessage(provider, message_id, customer, channel, "Synthetic inbound")
+    if provider == "telnyx":
+        # Trusted canonical fixture for status/lifecycle tests. Signature parsing is
+        # covered by ingress tests; the new submission policy requires provenance.
+        inbound = InboundMessageReceived(
+            provider,
+            message_id,
+            customer,
+            channel,
+            "Synthetic inbound",
+            metadata=ProviderEventMetadata(
+                event_id="synthetic-window-" + message_id,
+                origin=EventOrigin.CUSTOMER,
+                occurred_at=TIME,
+                message_occurred_at=TIME - timedelta(seconds=1),
+            ),
+        )
+        store.record_webhook_events((inbound,), now=TIME, require_message_provenance=True)
     claim = store.claim_generation(inbound, now=TIME)
     assert claim.acquired
     assert store.complete_generation(
@@ -523,6 +546,7 @@ def test_migration_preserves_legacy_inbox_and_does_not_promote_telnyx_rows(tmp_p
     manager.upgrade()
     store = SqliteConversationStore(path)
     verified_channel(path)
+    verified_consent(path, customer=CUSTOMER, now=TIME)
     pending(store)
     assert accept(store).state == DeliveryState.ACCEPTED
     assert len(rows(path, "pending_delivery_statuses")) == 3

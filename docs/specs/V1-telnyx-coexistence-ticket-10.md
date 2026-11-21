@@ -21,9 +21,10 @@ campaigns, follow-ups, CRM, intelligence changes, main and Baileys are excluded.
   POST `/messages/whatsapp` explicitly declares optional `Idempotency-Key`; UUIDv4
   is used internally. This is endpoint-specific, not an assumption about all APIs.
 - [Telnyx idempotency](https://developers.telnyx.com/docs/development/api-fundamentals/idempotency):
-  bounded 24-hour protection, scoped to organization/method/path with identical
+  protection for up to 24 hours, scoped to organization/method/path with identical
   query and body bytes. Successful 2xx responses can be replayed; in-progress
   409/10036 and changed-request 422/10027 differ. Expiry can execute a new operation.
+  This is an upper bound, not proof of minimum retention throughout all 24 hours.
   A status number alone, timeout, 429 or generic 5xx does not prove non-submission.
 - [Telnyx echo](https://developers.telnyx.com/api-reference/callbacks/whatsapp-business-app-message-echo)
   does not open/extend the service window. OpenAPI `MessagingInboundMessagePayload`
@@ -73,6 +74,10 @@ The runner must supply the exact claimed OutboundMessage and durable submission 
 Expose a structured offline assessment for the future sender and keep the existing
 bool seam compatible for Meta/Twilio. Assessment does not consume submission authority;
 authorization repeats it in the writer transaction immediately before marking.
+
+Only proven E.164 recipients are currently submit-eligible. Namespaced BSUID
+inbound remains preserved without guessing a phone number or wire recipient.
+Its future outbound decoding and scope require a separately verified sender contract.
 
 Commit the existing `submission_started_at`, first logical submission time and
 attempt marker atomically. Never hold SQLite across network or LLM. Authorization

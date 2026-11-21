@@ -62,12 +62,18 @@ def test_openai_metrics_upgrade_preserves_old_evidence_and_rolls_back(tmp_path, 
             if table == "generation_metrics" and not interrupt:
                 assert [row[:-5] for row in rows] == before[table]
                 assert rows[0][-5:] == (None,) * 5
-            elif table in ("message_processing", "outbound_deliveries") and not interrupt:
+            elif table == "message_processing" and not interrupt:
                 assert [row[:-1] for row in rows] == before[table]
                 assert all(row[-1] == 0 for row in rows)
+            elif table == "outbound_deliveries" and not interrupt:
+                assert [row[:-4] for row in rows] == before[table]
+                assert all(row[-4:] == (0, None, None, None) for row in rows)
+            elif table == "delivery_attempts" and not interrupt:
+                assert [row[:-2] for row in rows] == before[table]
+                assert all(row[-2:] == (None, None) for row in rows)
             else:
                 assert rows == before[table]
-        expected = "0012_agentic_intake" if interrupt else "0020_channel_lifecycle"
+        expected = "0012_agentic_intake" if interrupt else "0021_telnyx_submission_policy"
         assert (
             connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == expected
         )

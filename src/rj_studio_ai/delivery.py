@@ -54,11 +54,13 @@ class OutboundDeliveryRunner:
             sender_address=claim.provider_channel_id,
             recipient_address=claim.recipient_address,
             body=claim.body,
+            submission_key=claim.submission_key,
         )
         if not self.store.authorize_delivery_submission(
             delivery_id=claim.delivery_id,
             owner_token=claim.owner_token,
             now=now,
+            message=message,
         ):
             current = self.store.get_delivery(claim.delivery_id)
             if current is not None and current.state is DeliveryState.CANCELLED:

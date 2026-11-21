@@ -377,3 +377,29 @@ absence is ineligible. Journal observations, effect receipts and cancellation
 commit atomically. Reconnect means verification_required, never active. There is
 no activation/rebinding API. See [ADR 0017](decisions/0017-durable-channel-lifecycle.md).
 The runtime still exposes no Telnyx route or sender. Meta/Twilio gates are unchanged.
+
+## Offline WhatsApp eligibility and submission identity (Ticket 10)
+
+`whatsapp_policy.py` classifies free-form and approved-template evidence without I/O.
+Telnyx free-form requires separately proven consent and a legitimate Customer source
+timestamp strictly less than 24 hours old. `telnyx_submission.py` selects only the
+first durable receipt of each logical inbound, composes operational gates and keeps
+a durable local clock high-water mark. Neither signature time, webhook ACK, status,
+human echo, edit/revoke nor reconnect creates service-window evidence. Invalid or
+missing evidence denies. Meta/Twilio retain their existing window/state policies.
+
+`assess_telnyx_submission` consults the contract but does not mark a submission.
+`authorize_delivery_submission` repeats it inside BEGIN IMMEDIATE and atomically
+marks the delivery and current attempt. The runner passes the exact claimed message
+and stable UUIDv4 submission key, which remains unchanged across safe retries. The
+payload fingerprint binds the canonical intent, not future HTTP byte serialization.
+The first logical submission marker is never renewed. Generic retryable outcomes
+after possible Telnyx submission become unknown; only explicit local proof of no
+submission allows retry. Unknown remains blocked regardless of key age.
+
+Migration0021 adds identity and evidence columns, scoped consent and the local clock.
+No parent table is rebuilt. Template evidence has only an offline classification
+interface; the existing AI Reply outbox remains free-form. No template dispatch,
+consent acquisition/verification interface, sender, activation or new public route
+is introduced. [ADR0018](decisions/0018-whatsapp-eligibility-and-submission-identity.md)
+records the conservative retry policy and unresolved request-byte/operational gates.

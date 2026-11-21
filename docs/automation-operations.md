@@ -143,3 +143,26 @@ LLM output cannot commit after a lifecycle block, while submission results remai
 evidence. Never resubmit old work or erase markers/attempts to clear this gate.
 Future operational verification, activation and rebinding require their own
 specification, authorization, audit and tests. See ADR 0017 and issue #11/CX-33.
+# Ticket 10: offline eligibility evidence
+
+Telnyx delivery authorization now also requires a proven Customer service window,
+explicit consent and unchanged submission identity/payload. Exactly 24 hours is
+outside the local free-form policy. Missing evidence, an unhandled recipient
+identity, a backward local clock, a blocking handoff or unresolved outcome denies.
+Pausing/resuming a Conversation does not refresh the window, grant consent,
+activate a channel or make an unknown delivery retryable.
+
+The new consent rows and template evidence objects are trusted internal contracts,
+exercised with synthetic fixtures only. There is no operational permission to
+populate them manually for a real Customer, verify templates, enable a channel or
+send messages in this ticket. Collection, revocation, freshness and authenticated
+operational verification require a subsequent reviewed workflow. Evidence references,
+phone/BSUID identifiers, submission keys and fingerprints are private operational
+metadata; do not copy them or message content into logs or public issues.
+
+On timeout or restart after possible submission, preserve `unknown` and investigate
+through a future authorized reconciliation workflow. Never generate a replacement
+key or replay merely because the provider documents an idempotency window. Its
+retention is bounded, and current local code does not prove future HTTP bytes or
+remote processing. The authorization-to-HTTP and query-to-LLM residual windows
+remain; this ticket neither performs HTTP nor promises recall.

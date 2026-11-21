@@ -266,10 +266,11 @@ def test_previously_authorized_result_is_preserved_and_never_resends(
         now=TIME,
         **kwargs,
     )
-    assert rows(path, "outbound_deliveries")[0]["state"] == (
-        "cancelled" if outcome == "retryable" else outcome
-    )
-    assert rows(path, "delivery_attempts")[0]["outcome"] == outcome
+    # Ticket10 narrows Telnyx's retry contract: a generic retryable assertion
+    # after possible submission is ambiguous, including after lifecycle blocks.
+    expected = "unknown" if outcome == "retryable" else outcome
+    assert rows(path, "outbound_deliveries")[0]["state"] == expected
+    assert rows(path, "delivery_attempts")[0]["outcome"] == expected
     receive(ingress, private_key, account("ACCOUNT_RECONNECTED", event_id="reconnect"))
     assert store.claim_next_delivery(now=TIME + timedelta(days=2)) is None
 
@@ -291,7 +292,9 @@ def test_legacy_authorization_and_handoff_release_cannot_bypass(
         now=TIME,
     )
     delivery = rows(path, "outbound_deliveries")[0]
-    assert store.authorize_legacy_reply(delivery_id=delivery["id"])
+    # Ticket10 rejects the dormant Telnyx legacy seam even before a lifecycle
+    # block: it cannot prove the new message policy or submission identity.
+    assert not store.authorize_legacy_reply(delivery_id=delivery["id"])
     receive(ingress, private_key, account())
     handoff = rows(path, "conversation_handoffs")[0]
     assert store.release_handoff(

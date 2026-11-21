@@ -48,6 +48,8 @@ from rj_studio_ai.sqlite import (
     inspect_sqlite_connection,
     require_file_backed_database,
 )
+from rj_studio_ai.telnyx_submission import RetryEvidence, SubmissionAssessment, assess_submission
+from rj_studio_ai.whatsapp_policy import payload_fingerprint
 
 
 class PersistenceUnavailable(RuntimeError):
@@ -176,6 +178,8 @@ class OutboundDeliveryRecord:
     created_at: datetime
     updated_at: datetime
     handoff_token: str | None = None
+    submission_key: str | None = None
+    first_submission_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +200,8 @@ class DeliveryAttemptRecord:
     safe_error_code: str | None
     started_at: datetime
     completed_at: datetime | None
+    submission_started_at: datetime | None = None
+    retry_evidence: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -799,7 +805,7 @@ class SqliteConversationStore:
                         provider_message_id,
                         safe_error_code,
                         started_at,
-                        completed_at
+                        completed_at, submission_started_at, retry_evidence
                     FROM delivery_attempts
                     WHERE outbound_delivery_id = ?
                     ORDER BY attempt_number
@@ -816,6 +822,10 @@ class SqliteConversationStore:
                 safe_error_code=None if row[3] is None else str(row[3]),
                 started_at=datetime.fromisoformat(str(row[4])),
                 completed_at=None if row[5] is None else datetime.fromisoformat(str(row[5])),
+                submission_started_at=None
+                if row[6] is None
+                else datetime.fromisoformat(str(row[6])),
+                retry_evidence=None if row[7] is None else str(row[7]),
             )
             for row in rows
         ]
@@ -1085,18 +1095,55 @@ class SqliteConversationStore:
             raise PersistenceUnavailable("Outbound Delivery persistence is unavailable") from error
         return bool(row[0])
 
+    def assess_telnyx_submission(
+        self,
+        *,
+        delivery_id: int,
+        owner_token: str,
+        message: OutboundMessage | None = None,
+        now: datetime | None = None,
+    ) -> SubmissionAssessment:
+        """Offline assessment; authorization must repeat it before possible submission."""
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                return assess_submission(
+                    connection,
+                    delivery_id=delivery_id,
+                    owner_token=owner_token,
+                    message=message,
+                    now=self._utc_time(now),
+                )
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Submission assessment unavailable") from None
+
     def authorize_delivery_submission(
         self,
         *,
         delivery_id: int,
         owner_token: str,
         now: datetime | None = None,
+        message: OutboundMessage | None = None,
     ) -> bool:
         """Fence owner, lease, handoff and operational pause before irreversible HTTP."""
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                timestamp = self._utc_time(now).isoformat()
+                current_time = self._utc_time(now)
+                timestamp = current_time.isoformat()
+                provider = connection.execute(
+                    "SELECT provider FROM outbound_deliveries WHERE id=?", (delivery_id,)
+                ).fetchone()
+                if provider is not None and provider[0] == "telnyx":
+                    assessment = assess_submission(
+                        connection,
+                        delivery_id=delivery_id,
+                        owner_token=owner_token,
+                        message=message,
+                        now=current_time,
+                    )
+                    if not assessment.eligible:
+                        return False
                 updated = connection.execute(
                     """
                     UPDATE outbound_deliveries AS delivery SET submission_started_at = ?
@@ -1138,11 +1185,26 @@ class SqliteConversationStore:
                     """,
                     (timestamp, delivery_id, owner_token, timestamp),
                 ).rowcount
+                if updated == 1 and provider[0] == "telnyx":
+                    connection.execute(
+                        "UPDATE outbound_deliveries "
+                        "SET first_submission_at=COALESCE(first_submission_at,?) "
+                        "WHERE id=?",
+                        (timestamp, delivery_id),
+                    )
+                    marked = connection.execute(
+                        "UPDATE delivery_attempts SET submission_started_at=? "
+                        "WHERE outbound_delivery_id=? AND owner_token=? AND outcome='started' "
+                        "AND submission_started_at IS NULL",
+                        (timestamp, delivery_id, owner_token),
+                    ).rowcount
+                    if marked != 1:
+                        raise sqlite3.IntegrityError("Attempt submission ownership changed")
                 return updated == 1
-        except sqlite3.Error as error:
+        except sqlite3.Error:
             raise PersistenceUnavailable(
                 "Outbound submission authorization is unavailable"
-            ) from error
+            ) from None
 
     def authorize_legacy_reply(
         self, *, delivery_id: int, lock_timeout: float | None = None
@@ -1156,7 +1218,7 @@ class SqliteConversationStore:
                     """
                     UPDATE outbound_deliveries AS delivery
                     SET submission_started_at = COALESCE(submission_started_at, ?)
-                    WHERE id = ? AND (
+                    WHERE id = ? AND provider != 'telnyx' AND (
                         state = 'accepted_legacy'
                         OR (state = 'unknown' AND safe_error_code = 'legacy_unverified')
                     ) AND EXISTS (
@@ -1260,6 +1322,7 @@ class SqliteConversationStore:
         safe_error_code: str | None = None,
         retry_at: datetime | None = None,
         retry_exhausted: bool = False,
+        retry_evidence: RetryEvidence | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> bool:
@@ -1311,7 +1374,7 @@ class SqliteConversationStore:
                     ) OR (delivery.provider='telnyx' AND NOT EXISTS (
                         SELECT 1 FROM eligible_telnyx_channels
                         WHERE channel_id=delivery.provider_channel_id
-                    )) AS paused
+                    )) AS paused, delivery.submission_started_at
                     FROM outbound_deliveries AS delivery
                     WHERE delivery.id = ?
                       AND delivery.state = 'sending'
@@ -1322,6 +1385,18 @@ class SqliteConversationStore:
                 ).fetchone()
                 if current is None:
                     return False
+                if (
+                    current[1] == "telnyx"
+                    and outcome is DeliveryState.RETRYABLE
+                    and (
+                        retry_evidence is not RetryEvidence.NOT_SUBMITTED or current[3] is not None
+                    )
+                ):
+                    outcome = DeliveryState.UNKNOWN
+                    safe_error_code = "submission_outcome_unproven"
+                    next_attempt_at = None
+                    retry_exhausted = False
+                    retry_evidence = None
                 # Resolve exhaustion against pause in this same writer transaction.
                 # A paused proven-retryable result retains its attempt evidence;
                 # the ready-state trigger cancels the delivery before commit.
@@ -1338,7 +1413,7 @@ class SqliteConversationStore:
                     SET outcome = ?,
                         provider_message_id = ?,
                         safe_error_code = ?,
-                        completed_at = ?
+                        completed_at = ?, retry_evidence = ?
                     WHERE outbound_delivery_id = ?
                       AND attempt_number = ?
                       AND owner_token = ?
@@ -1349,6 +1424,9 @@ class SqliteConversationStore:
                         provider_message_id,
                         safe_error_code,
                         timestamp,
+                        retry_evidence
+                        if provider == "telnyx" and outcome is DeliveryState.RETRYABLE
+                        else None,
                         delivery_id,
                         attempt_number,
                         owner_token,
@@ -2603,6 +2681,15 @@ class SqliteConversationStore:
         next_attempt_at = timestamp if delivery_state is DeliveryState.PENDING else None
         safe_error_code = "legacy_unverified" if delivery_state is DeliveryState.UNKNOWN else None
         accepted_at = timestamp if delivery_state is DeliveryState.ACCEPTED_LEGACY else None
+        submission_key = str(uuid4()) if provider == "telnyx" else None
+        fingerprint = None
+        if provider == "telnyx":
+            body = connection.execute(
+                "SELECT body FROM messages WHERE id=?", (outbound_message_id,)
+            ).fetchone()[0]
+            fingerprint = payload_fingerprint(
+                OutboundMessage(provider_channel_id, recipient_address, body)
+            )
         return int(
             connection.execute(
                 """
@@ -2620,8 +2707,8 @@ class SqliteConversationStore:
                     safe_error_code,
                     accepted_at,
                     created_at,
-                    updated_at, handoff_token
-                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?, ?, ?, ?)
+                    updated_at, handoff_token, submission_key, payload_fingerprint
+                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """,
                 (
@@ -2636,6 +2723,8 @@ class SqliteConversationStore:
                     timestamp,
                     timestamp,
                     handoff_token,
+                    submission_key,
+                    fingerprint,
                 ),
             ).fetchone()[0]
         )
@@ -2699,7 +2788,8 @@ class SqliteConversationStore:
                 delivery.safe_error_code,
                 delivery.accepted_at,
                 delivery.created_at,
-                delivery.updated_at, delivery.handoff_token
+                delivery.updated_at, delivery.handoff_token,
+                delivery.submission_key, delivery.first_submission_at
             FROM outbound_deliveries AS delivery
             JOIN messages AS outbound ON outbound.id = delivery.outbound_message_id
         """
@@ -2725,6 +2815,8 @@ class SqliteConversationStore:
             created_at=datetime.fromisoformat(str(row[15])),
             updated_at=datetime.fromisoformat(str(row[16])),
             handoff_token=None if row[17] is None else str(row[17]),
+            submission_key=None if row[18] is None else str(row[18]),
+            first_submission_at=None if row[19] is None else datetime.fromisoformat(str(row[19])),
         )
 
     def _claim_exhausted_finalization(
