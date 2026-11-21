@@ -137,3 +137,8 @@ creates a fresh0700 evidence parent and its own Python IP guard. Pass test paths
 positionally for focused checks. It does not install packages, initialize accounts, expose
 routes, or enforce kernel network isolation. Toolchain versions and exact installation
 commands belong to the final validation report.
+
+Concrete sender composition must select provider=telnyx before claiming work. Runner and
+executor infer this when provider is omitted and reject explicit Meta/Twilio/other
+providers at construction. No incompatible outbox may acquire an attempt or be failed
+because a Telnyx sender was accidentally paired with the generic default provider.

@@ -28,6 +28,14 @@ class DeliveryOwnershipLost(RuntimeError):
 logger = logging.getLogger(__name__)
 
 
+def _sender_provider(sender: OutboundMessageSender, provider: str | None) -> str | None:
+    if isinstance(sender, TelnyxWhatsAppSender):
+        if provider not in (None, "telnyx"):
+            raise ValueError("Telnyx sender requires Telnyx delivery provider")
+        return "telnyx"
+    return provider
+
+
 @dataclass(slots=True)
 class OutboundDeliveryRunner:
     store: SqliteConversationStore
@@ -39,6 +47,7 @@ class OutboundDeliveryRunner:
     retry_backoff_maximum_seconds: float = 30.0
 
     def __post_init__(self) -> None:
+        self.provider = _sender_provider(self.sender, self.provider)
         if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
             raise ValueError("Outbound timeout must be positive")
         if self.maximum_attempts < 1:
@@ -203,6 +212,7 @@ class OutboundDeliveryExecutor:
     _threads: list[Thread] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
+        self.provider = _sender_provider(self.sender, self.provider)
         if self.request_timeout_seconds <= 0:
             raise ValueError("Outbound request timeout must be positive")
         if self.poll_interval_seconds <= 0:

@@ -17,7 +17,11 @@ from test_telnyx_request import signer as signer
 from test_telnyx_sender import MESSAGE_ID, acceptance, response
 from test_telnyx_submission import outbound, prepare
 
-from rj_studio_ai.delivery import DeliveryOwnershipLost, OutboundDeliveryRunner
+from rj_studio_ai.delivery import (
+    DeliveryOwnershipLost,
+    OutboundDeliveryExecutor,
+    OutboundDeliveryRunner,
+)
 from rj_studio_ai.persistence import DeliveryState, SqliteConversationStore
 from rj_studio_ai.providers.telnyx_sender import TelnyxWhatsAppSender
 from rj_studio_ai.telnyx_request import InvalidTelnyxRequest
@@ -242,3 +246,27 @@ def test_disconnect_after_marker_exposes_residual_window(ingress, signer, privat
     assert result.state is DeliveryState.ACCEPTED
     assert len(calls) == 1
     assert store.claim_next_delivery(now=TIME) is None
+
+
+@pytest.mark.parametrize("provider", ["meta", "twilio"])
+def test_concrete_sender_default_provider_preserves_other_outboxes(ingress, signer, provider):
+    _, store, _ = ingress
+    inbound_id = pending(store, provider=provider)
+
+    def unexpected(*_, **__):
+        pytest.fail("exchange invoked")
+
+    sender = TelnyxWhatsAppSender(signer, unexpected)
+    default_runner = OutboundDeliveryRunner(store, sender, 9)
+    assert default_runner.provider == "telnyx"
+    for index in range(3):
+        assert default_runner.run_once(now=TIME + timedelta(seconds=index)) is None
+    current = store.get_delivery_for_inbound(inbound_id)
+    assert current.state is DeliveryState.PENDING and current.attempt_count == 0
+    assert store.get_delivery_attempts(current.delivery_id) == []
+    with pytest.raises(ValueError, match="^Telnyx sender requires Telnyx delivery provider$"):
+        OutboundDeliveryRunner(store, sender, 9, provider=provider)
+    with pytest.raises(ValueError, match="^Telnyx sender requires Telnyx delivery provider$"):
+        OutboundDeliveryExecutor(store, sender, 9, 1, 1, provider=provider)
+    executor = OutboundDeliveryExecutor(store, sender, 9, 1, 1)
+    assert executor.provider == "telnyx"  # constructed only; never started

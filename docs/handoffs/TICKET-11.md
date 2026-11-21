@@ -106,3 +106,12 @@ vulnerabilities, editable app unindexed skip. Full version manifest/report pendi
 Next exact action: run scripts/check_telnyx_offline.py with isolated venv in clean clone,
 complete both final full suites/checks and receive Spec report; no more functional work
 unless a concrete failure/review requires it. Do not enable operational runtime.
+
+CP5 additional review fix: Spec's own probe showed concrete sender + default provider=None
+could consume/fail Meta work before transport. Runner/executor now infer telnyx before
+claim and reject explicit incompatible provider. New real-SQLite Meta/Twilio guards;
+local integration+legacy56passed/0skip20.08s. Last remote verified corrections checkpoint:
+`4ec507a3c057b5c7bdc96bf3a0768265b62c552d`. Root's second replacement integral stopped
+before completion to include this new fix; no green integral claimed yet. Spec remaining
+direct inspection completed, no additional P1/P2 confirmed. Next: final integral runs
+against this provider fix, then CP5 completion and CP6 reports/governance only.
