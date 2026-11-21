@@ -4,7 +4,7 @@ Data de início: 20/11/2026 (America/Sao_Paulo; host UTC 21/11).
 
 - Origem imutável: `07c1b7dc150d7eb1776b97d891cd29347adffd37`.
 - Branch: `codex/audit-pre11-telnyx-v1`.
-- Última SHA publicada verificada antes deste checkpoint: `3d93bd18c963894490dd192aa22cc1cc9ec9241b`, confirmada por `git ls-remote origin refs/heads/codex/audit-pre11-telnyx-v1`.
+- Última SHA publicada verificada antes deste checkpoint: `c837124cc7fb45a30fe65d75717973081e7526c9`, confirmada por `git ls-remote origin refs/heads/codex/audit-pre11-telnyx-v1`.
 - Escritor Git: orquestrador desta sessão; revisores independentes escrevem apenas seus documentos atribuídos. Uma segunda conta deve aguardar handoff antes de modificar a branch.
 - Escopo: somente documentação de auditoria em `docs/audits/pre-ticket11/` e este handoff. Sem implementação/correção/sender/HTTP comercial/ativação/merge/edição de issues.
 
@@ -24,8 +24,10 @@ Comandos e versões completos: `docs/audits/pre-ticket11/TEST-EVIDENCE.md`; repr
 
 Achados a consolidar: AUD-01/P2 restore obsoleto perde fences e pode reautorizar localmente (sem HTTP/duplicação externa observada); AUD-02/P2 advisories da toolchain, alcance local/CI; DOC-02/P2 protocolo multi-conta ausente na baseline, mitigado nesta auditoria com escritorGit único/handoff. Nenhum P0/P1 confirmado. P3 e gates CX existentes permanecem explícitos. Prova de temp privado0700 com `--basetemp` e1testeSQLite aprovado demonstra mitigação de temp para pytest; não foi atualizado pacote nem corrigido código.
 
-Pendentes: fases13–14 (priorização final, plano de correção e dois pareceres), revisão cruzada de consistência dos relatórios, scan do delta documental, publicação final e confirmação de origin. Não iniciar implementação.
+Fase13 concluída: FINDINGS registra zeroP0/P1 confirmados; AUD-01/P2 restore, AUD-02/P2 toolchain, AUD-03/DOC-02/P2 governança mitigada nesta tarefa. P3 e gates conhecidos não confundidos com defeitos novos do sender ausente. REMEDIATION-PLAN ordena condições antes da retomadaT11 e aceite/runtime/piloto. Auditor principal leu script/código e reexecutou3cenários de restore:3pass/4deselected2,44s; teste aprova reprodução do risco, não correção. TEST-EVIDENCE atualizado.
+
+Pendentes: fase14 (executive, índice e dois pareceres), revisão cruzada final, scan do delta documental, publicação e confirmação final de origin. Não iniciar implementação.
 
 ## Próxima ação exata
 
-Publicar este checkpoint documental por commit normal após conferir somente paths autorizados, verificar SHA em origin, consolidar FINDINGS/REMEDIATION/GO-NO-GO/EXECUTIVE e índice. Antes de cada push atualizar este arquivo com a SHA anterior verificada (um commit não pode conter seu próprio hash). Nenhum outro escritorGit deve assumir até a entrega/exclusividade combinada; ler remoto/status e este handoff antes de continuar em outra conta.
+Publicar checkpoint da fase13 após conferir paths, verificar SHA em origin, concluir GO-NO-GO/EXECUTIVE/índice e verificações finais documentais. Antes de cada push atualizar este arquivo com a SHA anterior verificada (um commit não pode conter seu próprio hash). Nenhum outro escritorGit deve assumir até a entrega/exclusividade combinada; ler remoto/status e este handoff antes de continuar em outra conta.

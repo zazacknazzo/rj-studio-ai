@@ -47,6 +47,7 @@ Primeira tentativa de pip-audit falhou antes de consultar advisories porque cach
 | Auditor principal:mutação focal em memória, janela25h |2failed/2passed/155deselected,0,08s,exit1 esperado | Testes exatos24h detectaram mutante; nenhum arquivo de produção modificado |
 | Auditor principal:limite baseline após mutante |4passed/155deselected,0,04s,exit0 | Processo novo sem mutação |
 | Auditor principal:temp privado + autorização concorrente |1passed,1,91s,exit0; parent0700 | Mitigação verificável para pytest em host compartilhado; não atualiza pacote |
+| Auditor principal:contraprova própria de AUD-01 |3passed/4deselected,2,44s,exit0 | Reexecução dos três cenários de restore: aprovação reproduz falta do fence, sem HTTP |
 
 Os recortes se sobrepõem à suíte integral. Não somar suas contagens como casos distintos, cobertura adicional ou independência de todos os caminhos. As três perspectivas iniciaram inspeção direta de código/spec/fontes sem derivar revisões de um resumo comum do implementador. Depois da coleta própria, resultados foram compartilhados para consolidação; revisãoB identifica explicitamente scanners executados pelo auditor principal.
 
