@@ -9,7 +9,7 @@
 - Exclusive writer: user explicitly confirmed this account in chat2026-11-21.
   Primary alone commits/pushes; independent reviewers may write separate reports.
   Human exclusivity required on every account transfer; Markdown is not a lock.
-- Last remote SHA actually verified: CP0 52e0c2b5da61c2ec990a5d07fee6542ba76ede27;
+- Last remote SHA actually verified: CP1 f54ffbd82f57bc0b5b60f4fcc91533fb4f663fc5;
   Ticket12 branch absent before creation. Query origin for current SHA.
 
 ## Checkpoints
@@ -18,7 +18,8 @@
 | --- | --- | --- | --- |
 | CP0 | Spec/ADR/handoff first; code pending | baseline/origin/approval checked; 20 sender integration passed6.24s under IP guard; diff check | baseline above |
 | CP1 | raw duplicate/smuggling checks and bounded byte streaming complete | 17passed0.19s; Ruff check/format PASS | CP0 above |
-| CP2–7 | Pending | Not executed | None |
+| CP2 | isolated ASGI auth/parse/SQLite/ACK; no runtime route | 27passed; initial1failed26passed due to FastAPI included-router introspection; test now inspects OpenAPI | CP1 above |
+| CP3–7 | Pending | Not executed | None |
 
 ## Risks and limitations
 
@@ -34,5 +35,5 @@ Toolchain installation in private /tmp/ticket12/venv; test guard reused from Tic
 
 Fetch origin, verify branch/status/SHA and read this handoff. Reproduce:
 `python scripts/check_telnyx_offline.py --python /tmp/ticket12/venv/bin/python tests/test_telnyx_sender_integration.py`
-Then CP2: compose isolated ASGI auth→parse→SQLite→ACK with the same work deadline.
+Then CP3: exercise ACK/deadline/commit failures, lock and lost ACK over ASGI.
 Account change must use its own isolated venv and record its actual check result.
