@@ -10,7 +10,7 @@
   credentials, external Telnyx requests, activation, public route, main merge or T12–13.
 - Writer: primary implementing account in this session. Another account must arrange
   human-exclusive control before writing; this file cannot coordinate distributed locks.
-- Current SHA: query origin. Last remote SHA verified: `43574436e6bd99d53d2b90598001480aa70c8b59` (CP2).
+- Current SHA: query origin. Last remote SHA verified: `a7825b94d9cc0a757f37e5cd5243c1ec9c843714` (CP3).
 
 ## Checkpoints
 
@@ -20,7 +20,7 @@
 | CP1 | Implemented offline | Exact UTF8 request + keyed durable MAC, migration0022; 40 passed/0 skip (9.62s). Not integrated with runner until CP3. |
 | CP2 | Implemented offline | Injected exchange only, strict200 identity, fixed unknown matrix; request/sender 76 passed/0 skips (3.23s). Runner pending CP3. |
 | CP3 | Implemented offline | Runner + request-bound atomic gates; integration/submission/legacy delivery:101 passed/0 skips,34.52s. |
-| CP4 | Pending | Adversarial concurrency/crash/restore tests |
+| CP4 | Implemented offline | Adversarial rollback/crash/gates/purge/restore +0022 migrations:28 passed/0 skips,11.41s. Four passing AUD01 probes reproduce OPEN unsafe behavior; not mitigation. |
 | CP5 | Pending | Corrected toolchain, full suite/checks, independent reviews |
 | CP6 | Pending | Final report + issue evidence + remote verification |
 
@@ -69,3 +69,13 @@ callbacks reconcile only at acceptance. No lifecycle override or runtime wiring 
 Next exact action: add tests/test_telnyx_sender_adversarial.py and migration0022 tests;
 cover rollback/crash/old snapshots/purge/status conflict and pause/race gates. Then run
 full pytest and independent direct-code Standards/Spec/adversarial reviewers at CP5.
+
+CP4 evidence: first run2failed/26passed (fixture handoff column names wrong, correlation
+exception expectation wrong); second2failed/26passed (correlation expectation and wrapped
+SQLAlchemy OperationalError expectation); third1failed/27passed (wrapped error); corrected
+run28passed/0skips11.41s. Production code unchanged by these test expectation fixes.
+Ruff check PASS; Ruff format310files PASS. Full local and independent Spec suites running
+in separate private basetemps. Independent Standards and adversarial reviewers inspecting
+actual code and executing their own evidence; no review completion claimed yet.
+Next exact action: inspect /tmp/ticket11/full.log and reviewer reports; fix any new P1/P2,
+rerun affected checks; complete Gitleaks/pip-audit/compile/pipcheck and resume rehearsal.
