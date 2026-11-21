@@ -93,6 +93,7 @@ class MigrationManager:
             "telnyx_consent",
             "telnyx_policy_clock",
             "telnyx_http_requests",
+            "telnyx_ingress_rejections",
             "conversation_handoffs",
             "appointment_intakes",
             "inbound_event_receipts",
@@ -103,6 +104,15 @@ class MigrationManager:
             "conversation_operation_ids",
             "automation_operation_receipts",
         }.issubset(inspector.get_table_names()):
+            return False
+        if {item["name"] for item in inspector.get_columns("telnyx_ingress_rejections")} != {
+            "reason",
+            "observations",
+            "first_seen_at",
+            "last_seen_at",
+        } or inspector.get_pk_constraint("telnyx_ingress_rejections")["constrained_columns"] != [
+            "reason"
+        ]:
             return False
         http_columns = {item["name"] for item in inspector.get_columns("telnyx_http_requests")}
         if http_columns != {"submission_key", "version", "integrity_key_id", "request_mac"}:

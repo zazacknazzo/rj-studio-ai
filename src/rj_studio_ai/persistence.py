@@ -614,6 +614,27 @@ class SqliteConversationStore:
             # SQL errors may contain external identifiers (including trigger messages).
             raise PersistenceUnavailable("Provider webhook persistence is unavailable") from None
 
+    def record_telnyx_ingress_rejection(
+        self, *, deadline: ExecutionDeadline, now: datetime
+    ) -> None:
+        """One aggregate observation per rejected request, never an event receipt."""
+        try:
+            if deadline.is_expired():
+                raise PersistenceUnavailable("Webhook ingress deadline expired")
+            with self._connect(deadline.remaining_budget()) as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = self._utc_time(now).isoformat()
+                connection.execute(
+                    "INSERT INTO telnyx_ingress_rejections VALUES('payload_rejected',1,?,?) "
+                    "ON CONFLICT(reason) DO UPDATE SET observations="
+                    "MIN(observations,9223372036854775806)+1,last_seen_at=excluded.last_seen_at",
+                    (timestamp, timestamp),
+                )
+                if deadline.is_expired():
+                    raise PersistenceUnavailable("Webhook ingress deadline expired")
+        except sqlite3.Error:
+            raise PersistenceUnavailable("Ingress rejection observation unavailable") from None
+
     def meta_free_form_is_eligible(
         self,
         message: OutboundMessage,

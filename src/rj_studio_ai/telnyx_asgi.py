@@ -87,6 +87,13 @@ class OfflineTelnyxASGI:
         if scope["path"] == "/health" and scope["method"] == "GET":
             await self._respond(send, 200, {"process": "ok", "mode": "offline"})
             return
+        if scope["path"] == "/ready" and scope["method"] == "GET":
+            readiness = await anyio.to_thread.run_sync(self.readiness, limiter=self._limiter)
+            await self._respond(send, 200 if readiness["persistence"] else 503, readiness)
+            return
+        if scope["path"] == "/metrics" and scope["method"] == "GET":
+            await self._respond(send, 200, self.metrics.snapshot())
+            return
         if scope["path"] != "/webhooks/telnyx":
             await self._respond(send, 404)
             return
@@ -127,7 +134,20 @@ class OfflineTelnyxASGI:
         except InvalidWebhookSignature:
             result = 403
         except (InvalidWebhookPayload, ValueError):
-            result = 422
+            # Only finite counters, not arbitrary payload/error strings. No success
+            # receipt is claimed for unsupported or invalid authenticated payloads.
+            try:
+                await anyio.to_thread.run_sync(
+                    partial(
+                        self.store.record_telnyx_ingress_rejection,
+                        deadline=work,
+                        now=datetime.fromtimestamp(self._wall_clock(), UTC),
+                    ),
+                    limiter=self._limiter,
+                )
+                result = 503 if work.is_expired() else 422
+            except PersistenceUnavailable:
+                result = 503
         except PersistenceUnavailable:
             result = 503
         # Check at the response boundary as well; never emit success after expiry.
@@ -135,6 +155,24 @@ class OfflineTelnyxASGI:
             result = 503
         self.metrics.record(result, max(0, self._clock() - started))
         await self._respond(send, result)
+
+    def readiness(self) -> dict:
+        checks = self.store.sqlite_durability_checks()
+        persistent = (
+            all(value == "ok" for value in checks.values())
+            and self.store.migrations_are_current()
+            and self.store.is_writable()
+        )
+        return {
+            "mode": "offline",
+            "ingress": self.adapter.is_configured(),
+            "persistence": persistent,
+            "administration": False,
+            "generation": False,
+            "egress": False,
+            "operational_channel": False,
+            "quarantined": True,
+        }
 
     @staticmethod
     async def _respond(send: Send, status: int, payload: dict | None = None) -> None:
