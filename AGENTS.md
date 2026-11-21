@@ -56,3 +56,16 @@ python3 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
 ```
 
 Environment variables and Twilio Sandbox setup live in `README.md` and `.env.example`.
+
+## Continuity between accounts
+
+Before writing, obtain human-exclusive branch ownership; Markdown is not a distributed lock.
+Read this file, fetch origin, verify repository/origin/status/branch and exact baseline,
+compare local and remote commits, then read `docs/handoffs/TICKET-<NN>.md`.
+Never discard another account's WIP or rewrite published history. Stop concurrent writing
+and reconcile divergence without force push/rebase/reset. At each coherent checkpoint run
+relevant checks, update completed/WIP/pending work, failures, risks and the exact next
+command in the handoff, commit normally, push only the authorized branch and verify its
+remote SHA. Obtain the current SHA from origin; never predict a commit's own hash.
+Use `docs/handoffs/TEMPLATE.md`. A new account must reproduce a focused test and record
+what it actually executed; prior reports are evidence to inspect, not its own test run.

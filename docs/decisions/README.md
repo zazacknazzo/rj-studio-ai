@@ -25,3 +25,5 @@ Add an ADR only for a hard-to-reverse choice that would be surprising without it
 - [0017: Durable channel lifecycle](0017-durable-channel-lifecycle.md) — explicit WABA binding, blocked defaults and replay-safe lifecycle effects.
 
 - [0018: Eligibility and submission identity](0018-whatsapp-eligibility-and-submission-identity.md) — strict source-time window, separate consent and conservative retry evidence.
+
+- [0019 — Deterministic offline Telnyx sender](0019-deterministic-offline-telnyx-sender.md)

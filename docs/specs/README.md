@@ -43,3 +43,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [Telnyx Coexistence Ticket 09](V1-telnyx-coexistence-ticket-09.md): authorized offline account lifecycle and durable channel gate.
 
 - [Telnyx Coexistence Ticket 10](V1-telnyx-coexistence-ticket-10.md): authorized offline WhatsApp eligibility and durable submission identity; no sender or activation.
+
+- [Telnyx Coexistence Ticket11 — offline sender](V1-telnyx-coexistence-ticket-11.md)
