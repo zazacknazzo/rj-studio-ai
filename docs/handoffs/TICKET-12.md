@@ -9,7 +9,7 @@
 - Exclusive writer: user explicitly confirmed this account in chat2026-11-21.
   Primary alone commits/pushes; independent reviewers may write separate reports.
   Human exclusivity required on every account transfer; Markdown is not a lock.
-- Last remote SHA actually verified: CP4 f55d7f51ef72bcf659de6b0ffe3faec0308e185f;
+- Last remote SHA actually verified: CP5 d7b5d72a2e784ec954bf4f100eac9d4eaba7a1dc;
   Ticket12 branch absent before creation. Query origin for current SHA.
 
 ## Checkpoints
@@ -62,3 +62,11 @@ Account change must use its own isolated venv and record its actual check result
   private cache completed, no known vulnerabilities returned. Not treated as initialPASS.
 - Gitleaks8.30.1 archive checksum verified; tree3 raw baseline falsepositives
   (Ticket11 public schemahash, eval prose, synthetic operatorfixture), no ignores.
+
+## CP6 framing correction
+
+Spec independently flagged P3 RFC9110§8.6:204must omit Content-Length, including0.
+Corrected helper and regression;10ASGItests passed. Both full runs on d7b5 were
+interrupted intentionally to include this change, not reported as completedPASS.
+Spec partial1730passed/1skip289.75s; local partial recorded in final evidence.
+Next: publish correction/verify SHA, restart both guarded full suites on that SHA.

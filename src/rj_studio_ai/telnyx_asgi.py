@@ -226,14 +226,15 @@ class OfflineTelnyxASGI:
     @staticmethod
     async def _respond(send: Send, status: int, payload: dict | None = None) -> None:
         body = b"" if payload is None else json.dumps(payload).encode()
+        headers = [(b"content-type", b"application/json")]
+        # RFC9110 §8.6 forbids Content-Length on204, including an explicit zero.
+        if status != 204:
+            headers.append((b"content-length", str(len(body)).encode()))
         await send(
             {
                 "type": "http.response.start",
                 "status": status,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode()),
-                ],
+                "headers": headers,
             }
         )
         await send({"type": "http.response.body", "body": body})

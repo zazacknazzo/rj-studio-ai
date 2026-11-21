@@ -35,7 +35,9 @@ def count(app, table):
 
 def test_commit_observable_at_ack_and_replay_after_lost_ack(app, private_key):
     with TestClient(app) as client:
-        assert post(client, private_key).status_code == 204
+        ack = post(client, private_key)
+        assert ack.status_code == 204 and ack.content == b""
+        assert "content-length" not in ack.headers
         assert count(app, "messages") == 1
         assert count(app, "inbound_event_receipts") == 1
         assert post(client, private_key).status_code == 204
