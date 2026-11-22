@@ -123,3 +123,10 @@ CI da própriaSHA e atualizaçãoissue são verificações
 pós-publicação, vinculadas na issue11 para evitar prever hash/resultado.
 AUD-01ABERTO; nenhum risco/checkbox encerrado, exceção aceita ou aprovação inferida.
 SemTelnyx real,credenciaiscomerciais,ativação,piloto,produção,merge,Baileys ouLLM.
+
+Primeira publicaçãoCP8:61b650d9b3e9933cb34d4725c2ba646d983251c6, pushnormal e
+origin conferidos, main inalterada; CI45027677502 emandamento no momento desta
+correção editorial. Conferência final ajustou somente a referência do parecer
+históricoCX31: seçãoG da issue11, em vez do relatórioT08 anterior à auditoria.
+Nenhum estado de risco foi alterado. Publicar correção documental por commitnormal
+e vincular aCI da NOVASHA final na issue; preservar também a execução anterior.
