@@ -38,8 +38,9 @@ Comando reproduzível, na raiz do repo (`T13_PYTHON` aponta para o venv próprio
 ```
 
 **73passed/0failed/0skipped em42,74s**, antes de qualquer edição do repo.
-Ruff check/format350arquivos, compileall src/tests/scripts, pip check e diff check
-também passaram nesta retomada. Os resultados e hashes estão no
+Ruff check/format350arquivos antes de importar os relatórios, compileall
+src/tests/scripts, pip check e diff check passaram nesta retomada.
+Os resultados e hashes estão no
 [JSON de evidências](ticket13-cp7-evidence.json).
 Pip-audit próprio:87entradas,86auditáveis,0pacotes com advisories reportados;
 app local não indexada explicitamente skipped. Gitleaks8.30.1 da árvore candidata:
@@ -62,9 +63,9 @@ Os conjuntos se sobrepõem; não somar contagens como cobertura distinta.
 
 ## Quatro revisões independentes
 
-Relatórios anteriores tiveram seu conteúdo preservado; uma linha em branco extra
-no fim do relatório Architecture foi removida após diff check. Hashes originais e
-publicados constam noJSON.
+Relatórios anteriores tiveram seu conteúdo preservado; EOF Architecture e formatação
+dos blocos Python Architecture/Operations foram normalizados. ASTs dos dois blocos
+permanecem iguais aos de c06b1a9. Hashes originais e publicados constam noJSON.
 Frases sobre CI ainda não executada descrevem o momento original da revisão.
 
 | Perspectiva | Evidência e conclusão |
@@ -94,8 +95,16 @@ sem alterar pins. Nenhuma mudança funcional em src/tests/scripts/.github.
 
 Aviso `sudo: unable to resolve host` dentro do namespace aparece no log; isolamento
 foi confirmado e o job terminou success. Nenhuma validação Linux3.14 é alegada.
-O novo push deCP7 dispara outro run; consultar a SHA publicada no GitHub e observar
-seu resultado antes de iniciarCP8. Não prever aSHA do próprio commit neste documento.
+
+[Primeiro CP7 run44983247843](https://github.com/zazacknazzo/rj-studio-ai/actions/runs/44983247843)
+naSHA c06b1a90cca1a2658b75c23a237aa626228c5ca4 terminou **failure**: Ruff format
+detectou blocos Python não formatados em dois relatórios novos; pytest não iniciou.
+O check local havia sido executado antes de importar esses relatórios. A correção
+normaliza apenas esses blocos, compara suas ASTs e repete Ruff check/format depois
+da importação: RuffcheckPASS/format356arquivosPASS/diffcheckPASS.
+Código de produto, testes, workflow e pins não mudaram.
+O push corretivo deCP7 dispara outro run; consultar a SHA publicada no GitHub e
+observar seu resultado antes de iniciarCP8. Não prever aSHA do próprio commit.
 
 ## Falhas e limitações preservadas
 
@@ -106,6 +115,8 @@ Warning do cachepip read-only não foi erro de dependência. Nenhuma dessas tent
 foi rotulada PASS. Diff check staged apontou a linha em branco extra no relatório
 Architecture; removida antes do commit. Relatórios herdados conservam falhas anteriores
 e suas correções.
+O primeiro runCP7 falho por formatação também fica registrado acima e noJSON;
+não é evidência de pytest integral nem é descrito comoPASS.
 
 O store permanece quarantinado e o laboratório apenas diagnostica simulation_ready;
 não concede operational_egress. AUD01, CX01–37 e AUD/AR conservam seus gates abertos

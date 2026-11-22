@@ -235,5 +235,4 @@ def test_witness_failure_prevents_authority_mutation_commit(lab):
             expected_revision=before.revision,
         )
     assert authority.state() == before
-
 ```

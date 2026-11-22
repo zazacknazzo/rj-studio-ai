@@ -112,11 +112,18 @@
       "elapsed_pytest_seconds": 224.28,
       "kernel_network_isolation_verified": true,
       "log_sha256": "6cea1f4022aa41f83669fa2c2e2d762dffdb99a5dde7e8f9d1e81db35c35937f"
+    },
+    {
+      "id": 44983247843,
+      "head_sha": "c06b1a90cca1a2658b75c23a237aa626228c5ca4",
+      "status": "completed",
+      "conclusion": "failure",
+      "failure": "Ruff format of Python blocks in two newly imported Markdown reports; pytest not started",
+      "correction": "Format those blocks without changing their Python AST; rerun all repository formatting checks after artifacts are copied."
     }
   ],
   "current_checks": {
     "ruff_check": "PASS",
-    "ruff_format_files": 350,
     "compileall": "PASS",
     "pip_check": "PASS",
     "diff_check": "PASS",
@@ -133,7 +140,11 @@
       "triage": "PASS: unchanged baseline files/lines/rules/whole-file hashes",
       "ignores_added": false,
       "report_sha256": "72fcdf48bf7e6a8060b12fc611d5c82af68769f77da860e0cb77ee5216e38933"
-    }
+    },
+    "ruff_format_files_before_review_import": 350,
+    "ruff_format_files_after_correction": 356,
+    "ruff_check_after_correction": "PASS",
+    "python_fenced_block_AST_comparison": "PASS: architecture and operations blocks identical to c06b1a9 ASTs"
   },
   "original_reviews_sha256": {
     "ticket13-architecture-review.md": "21caffc8cce6e82024d3315bfc3b3b86c2a2e9cb33e36d25b918cc058f831ae3",
@@ -143,11 +154,11 @@
     "ticket13-operations-review.md": "3d81706f7debbf8ae80d7bfbbd3a9d81128e34863e8e774a9592005cac18942e"
   },
   "published_reviews_sha256": {
-    "ticket13-architecture-review.md": "ed521d9bb7abb465e43590cef0b655f8eb2f84c992286d0190ae8dd2218881ec",
+    "ticket13-architecture-review.md": "9897bda16c3fd4fa3d6187a35fb304f58e0ba9969855a011dffe8672b52efad4",
     "ticket13-spec-review.md": "54ee166d4f28fdf3f9e00809a20a71f1e2ecbd0a8ab919374dd24389eb85bcd5",
     "ticket13-spec-closure-review.md": "aca8424a3fefc51bf4ff52a504200bb4532b0d9a32455a0e00c0102cdaeb8f23",
     "ticket13-security-reliability-review.md": "3b45daf89887dd09987951fb87dc965e88fb54150c599f2e0c73b3839a519f49",
-    "ticket13-operations-review.md": "3d81706f7debbf8ae80d7bfbbd3a9d81128e34863e8e774a9592005cac18942e"
+    "ticket13-operations-review.md": "b06a9bb92169c561d7cfb9c1601d63c16061d04e8c23871c64999b0346c42696"
   },
-  "review_format_normalization": "One extra blank line at EOF removed from architecture report after staged diff check; content preserved."
+  "review_format_normalization": "Architecture EOF normalized; Ruff formatted Python code blocks in architecture/operations reports; ASTs unchanged from c06b1a9."
 }

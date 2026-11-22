@@ -8,8 +8,8 @@
   chat01a2015d-cb63-7060-a5cf-49e361bf3739; esta execução é a única escritora
   de Git da branch. Revisores só leitura/probes fora do repo. Nova retomada exige
   exclusividade humana vigente; esta linha não é lock distribuído.
-- Última SHA remota verificada antes deste checkpoint: CP6
-  995af20ff7d9e9f592a23c544f09a2407bd1b7f0. Consultar origin após publicarCP7.
+- Última SHA remota verificada antes da correçãoCP7:
+  c06b1a90cca1a2658b75c23a237aa626228c5ca4. Consultar origin após publicar correção.
 - Main observado: af1c9eb862a4180ca6b9e537349e4f8abaa2bb29.
 - Clone separado preserva todos os worktrees/WIP anteriores, incluindo Baileys.
 
@@ -23,8 +23,8 @@
 | CP3 | Segregação/segurança/consentimento especificados; corrida revoke→authorize realSQLite | 222passed9.40s (race2/policy/admin), Ruff/diff | CP2 acima |
 | CP4 | Matriz24tabelas+authority/witness/backups/evidências; sem novo purge | 160passed16.94s retention/replay/migrations/adversarial; diff | CP3 acima |
 | CP5 | CI/lock86, guardDNS/children, v8original, carga com falha; CIremota a observar | 13passed5.27s (cargas3/guard9/v8); 106passed10.65s recorte anterior; Ruff346/compile/pipcheck/audit87/0advisories; Gitleaks3baseline | CP4 acima |
-| CP6 | Runbooks16, CX29/fila, observabilidade e piloto sóplanejamento; índices/histórico alinhados | Integrais anteriores concluídas2262PASS/0skip; CI988efab e995af20 success, observadas na retomada | CP6 acima |
-| CP7 | Recuperação, quatro reviews concluídos, evidência persistida; P3comentário lock corrigido sem alterar pins; clone limpo preservado | Retomada73PASS42.74s antes de editar; Spec13PASS18.66s; Ruff/format/compile/pipcheck/audit/diff; detalhes no relatórioCP7 | CP6 acima; consultar origin após pushCP7 e observar run da novaSHA |
+| CP6 | Runbooks16, CX29/fila, observabilidade e piloto sóplanejamento; índices/histórico alinhados | Integrais anteriores concluídas2262PASS/0skip; CI988efab e995af20 success, observadas na retomada | 995af20ff7d9e9f592a23c544f09a2407bd1b7f0 |
+| CP7 | Recuperação, quatro reviews concluídos, evidência persistida; P3comentário lock corrigido sem alterar pins; clone limpo preservado; correção de formatação dos blocos Python dos relatórios | Retomada73PASS42.74s antes de editar; Spec13PASS18.66s; primeiro runCP7 falhou emformat antes depytest; ASTs dos blocos preservadas echecks repetidos | c06b1a9 acima confirmado após push; consultar origin após correção e observar novaCI |
 | CP8 | Pendente: relatório final A–P e issue11 | Não iniciado nesta retomada | Não publicado |
 
 ## Riscos e evidências
@@ -72,3 +72,12 @@ Falhas: fetchsandboxDNS, repetido com acesso autorizado; instalação app premat
 sem hatchling, repetida offline após terminar pins. Não rotuladas comoPASS.
 Detalhes: [validaçãoCP7](../architecture/ticket13-cp7-validation.md) eJSON vinculado.
 AUD01 e gates permanecem abertos; issue11 somente lida; nenhuma exceção aceita.
+
+CP7 publicado por push normal emc06b1a90cca1a2658b75c23a237aa626228c5ca4,
+SHA remota confirmada e mainaf1c9eb inalterada. Gitleaks range8commits/0hits;
+árvore3achados baseline triados. CI44983247843 falhou antes depytest:
+Ruff format verifica também blocosPython dos novos relatórios Architecture/Operations.
+Check local anterior à importação não os cobria; corrigida sóformatação desses blocos,
+ASTs comparadas iguais aoCP7 publicado; Ruffcheck/format356arquivos e diffcheckPASS.
+Runfalho preservado, não chamarPASS. Publicar correção por novo commit/pushnormal,
+verificar SHA remota e observar novaCI até resultado. CP8 continua não iniciado.

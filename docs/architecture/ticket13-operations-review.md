@@ -198,7 +198,11 @@ def admin_client(store, *, permissions=("read", "control")):
         operator_permissions=permissions,
         operator_conversations=("*",),
     )
-    return TestClient(create_app(settings, store=store)), {"Authorization": "Bearer " + token}, token
+    return (
+        TestClient(create_app(settings, store=store)),
+        {"Authorization": "Bearer " + token},
+        token,
+    )
 
 
 def opaque_for_claim(store, path, claim):
@@ -207,7 +211,8 @@ def opaque_for_claim(store, path, claim):
             "SELECT inbound_message_id FROM outbound_deliveries d "
             "JOIN messages m ON m.id=d.outbound_message_id "
             "JOIN message_processing p ON p.inbound_message_id=m.in_reply_to_message_id "
-            "WHERE d.id=?", (claim.delivery_id,)
+            "WHERE d.id=?",
+            (claim.delivery_id,),
         ).fetchone()[0]
     return store.automation_identifier(inbound_id)
 
@@ -225,7 +230,8 @@ def test_authenticated_manual_pause_without_echo_preserves_inflight_truth(ingres
     assert before["paused"] is False
     operation = uuid4().hex
     response = client.post(
-        url + "/pause", headers=headers,
+        url + "/pause",
+        headers=headers,
         json={"operation_id": operation, "expected_revision": before["revision"]},
     )
     assert response.status_code == 200
@@ -233,10 +239,14 @@ def test_authenticated_manual_pause_without_echo_preserves_inflight_truth(ingres
     assert paused["paused"] and paused["in_flight_possible"] is marker_first
     assert token not in response.text and claim.recipient_address not in response.text
     # The same request repeats its receipt, not a second side effect.
-    assert client.post(
-        url + "/pause", headers=headers,
-        json={"operation_id": operation, "expected_revision": before["revision"]},
-    ).json() == paused
+    assert (
+        client.post(
+            url + "/pause",
+            headers=headers,
+            json={"operation_id": operation, "expected_revision": before["revision"]},
+        ).json()
+        == paused
+    )
     assert not authorize(store, claim)
     delivery = store.get_delivery(claim.delivery_id)
     if marker_first:
@@ -251,8 +261,11 @@ def test_unknown_is_visible_to_operator_and_is_not_expunged_or_retried(ingress):
     store, path, claim = prepare(ingress)
     assert authorize(store, claim)
     assert store.finalize_delivery(
-        delivery_id=claim.delivery_id, owner_token=claim.owner_token,
-        outcome=DeliveryState.UNKNOWN, safe_error_code="synthetic_ambiguous", now=TIME,
+        delivery_id=claim.delivery_id,
+        owner_token=claim.owner_token,
+        outcome=DeliveryState.UNKNOWN,
+        safe_error_code="synthetic_ambiguous",
+        now=TIME,
     )
     opaque = opaque_for_claim(store, path, claim)
     client, headers, _ = admin_client(store)
@@ -270,9 +283,7 @@ def test_unknown_is_visible_to_operator_and_is_not_expunged_or_retried(ingress):
 
 
 @pytest.mark.parametrize("kind", ["image", "location", "unknown-future-kind"])
-def test_unsupported_repeated_attempts_stay_visible_without_false_receipts(
-    app, private_key, kind
-):
+def test_unsupported_repeated_attempts_stay_visible_without_false_receipts(app, private_key, kind):
     payload = wire(kind)
     payload["data"]["payload"]["body"]["private_sentinel"] = PRIVATE_TEXT
     with TestClient(app) as client:
@@ -301,7 +312,8 @@ def test_read_only_operator_cannot_change_pause_or_revision(ingress):
     url = f"/admin/conversations/{opaque}/automation"
     before = client.get(url, headers=headers).json()
     response = client.post(
-        url + "/pause", headers=headers,
+        url + "/pause",
+        headers=headers,
         json={"operation_id": uuid4().hex, "expected_revision": before["revision"]},
     )
     assert response.status_code == 403
@@ -313,11 +325,16 @@ def test_retention_matrix_covers_actual_migrated_application_tables(tmp_path):
     store = SqliteConversationStore(path, telnyx_egress_quarantined=True)
     store.initialize()
     with sqlite3.connect(path) as db:
-        tables = {row[0] for row in db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-        )}
+        tables = {
+            row[0]
+            for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
     document = (ROOT / "docs/operations/telnyx-retention-backups.md").read_text()
-    documented = {line.split("|")[1].strip() for line in document.splitlines() if line.startswith("| ")}
+    documented = {
+        line.split("|")[1].strip() for line in document.splitlines() if line.startswith("| ")
+    }
     assert tables <= documented
     assert len(tables) == 24
 
@@ -331,7 +348,8 @@ def test_historical_pause_receipt_is_distinct_from_current_operator_state(ingres
     pause = client.post(url + "/pause", headers=headers, json=first)
     assert pause.status_code == 200 and pause.json()["paused"] is True
     resume = client.post(
-        url + "/resume", headers=headers,
+        url + "/resume",
+        headers=headers,
         json={"operation_id": uuid4().hex, "expected_revision": pause.json()["revision"]},
     )
     assert resume.status_code == 200 and resume.json()["paused"] is False
@@ -340,5 +358,4 @@ def test_historical_pause_receipt_is_distinct_from_current_operator_state(ingres
     current = client.get(url, headers=headers).json()
     assert current["paused"] is False
     assert current["revision"] == resume.json()["revision"]
-
 ```
