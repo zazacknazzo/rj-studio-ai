@@ -6,7 +6,7 @@
 - Escopo: preparação, hardening, CI e testes OFFLINE; proibições na spec13.
 - Escritor exclusivo: confirmado pelo usuário neste chat em22/11/2026;
   esta execução é a única escritora de Git da branch. Revisores só leitura/probes fora do repo.
-- Última SHA remota verificada: CP3 fbfc0e0dc403f5fdb5f92647fd4777da79ace7e.
+- Última SHA remota verificada: CP4 536bfbc2a79829f21f69b3258abc8fbf8c86000b.
 - Main observado: af1c9eb862a4180ca6b9e537349e4f8abaa2bb29.
 - Clone separado preserva todos os worktrees/WIP anteriores, incluindo Baileys.
 
@@ -19,7 +19,8 @@
 | CP2 | Lab recovery com authority+witness externos simulados/SQLite, sempre sem egress | 63passed12.01s recovery+ASGI; probes contratos/arquitetura37passed8.26s; Ruff/diff; P2 TTL corrigido | CP1 acima |
 | CP3 | Segregação/segurança/consentimento especificados; corrida revoke→authorize realSQLite | 222passed9.40s (race2/policy/admin), Ruff/diff | CP2 acima |
 | CP4 | Matriz24tabelas+authority/witness/backups/evidências; sem novo purge | 160passed16.94s retention/replay/migrations/adversarial; diff | CP3 acima |
-| CP5–8 | Pendentes | Não executados | Não publicados |
+| CP5 | CI/lock87, guardDNS/children, v8original, carga com falha; CIremota a observar | 13passed5.27s (cargas3/guard9/v8); 106passed10.65s recorte anterior; Ruff346/compile/pipcheck/audit87/0advisories; Gitleaks3baseline | CP4 acima |
+| CP6–8 | Pendentes | Não executados | Não publicados |
 
 ## Riscos e evidências
 
@@ -32,10 +33,12 @@ Não executar restore/worker/ativação/replay de envios nem trocar submission k
 
 ## Próxima ação exata
 
-CP5: CI/resolução/guard/métricas e fixture histórica recuperada; store continua quarantinado.
+CP6: runbooks/piloto/observabilidade; observarCI e corrigir falhas reais; store continua quarantinado.
 Fetch/status/handoff antes de retomar; publicar somente checks realmente executados.
 Reproduzir com venv próprio:
 `python scripts/check_telnyx_offline.py --python /isolated/venv/bin/python tests/test_telnyx_sender_integration.py`.
 Não sobrescrever WIP e não usar force push. Conta nova precisa exclusividade humana.
 
 CP2: primeiro recorte31passed6.45s. Spec independente reproduziu2falhasTTL (P2 do contrato de laboratório); corrigidos recheck dentroCAS e alias com guard. Colisão key/intent e conflito local corrigidos por inspeção. Revisor confirmou ramos pause/disconnect ainda não exercitavam transições; agora usam echo/lifecycle reais sintéticos. Probes próprios independentes reexecutados; sem ocultar tentativas.
+
+CP5: arquivo v8original recuperado do workspace anterior; hash/provenance em tests/fixtures/historical. Não houve geração nova. SSLstdlib não confiava inicialmente no issuer local ao baixar scanner; repetido com truststore nativo, sem desativarTLS, checksum verificado. Pip-audit87entradas (86auditáveis+appskipped),0pacotescomadvisories; contagem exata conferida noJSON. Kernel isolation CI ainda não executado no momento deste commit.

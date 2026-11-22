@@ -425,9 +425,12 @@ def test_historical_v8_record_remains_loadable(tmp_path):
 
     from rj_studio_ai.evaluation.live import LiveRecord
 
-    historical = Path("work/evals/openai-agentic-surface-smoke-2026-10-04-01/phase-A.json")
-    if not historical.exists():
-        pytest.skip("Local history evidence is not checked into Git")
+    historical = Path(__file__).parent / "fixtures/historical/live-record-v8.json"
+    import hashlib
+
+    assert hashlib.sha256(historical.read_bytes()).hexdigest() == (
+        "3d849ff3465d44cf20898aa170e72c08cc99b12e2f1b3266324754818291451e"
+    )
     record = LiveRecord.model_validate(json.loads(historical.read_text()))
     assert record.schema_version == 8
 

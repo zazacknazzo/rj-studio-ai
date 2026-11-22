@@ -1,0 +1,1445 @@
+{
+  "schema_version": 8,
+  "created_at": "2026-10-04T17:45:57.312894Z",
+  "revision": "8f1b3d8ce33e89908581239e90882da7dae2f95d",
+  "phase": "A",
+  "status": "completed",
+  "stop_code": null,
+  "configuration": {
+    "provider": "openai",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "service_tier": "default",
+    "max_output_tokens": 512,
+    "observation_deadline_seconds": 30.0,
+    "finalization_margin_seconds": 1.0,
+    "http_connect_timeout_seconds": 5.0,
+    "input_count_timeout_seconds": 5.0,
+    "model_latency_scope": "responses_http_request",
+    "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+    "context_max_messages": 12,
+    "context_token_budget": 4000,
+    "repetitions_by_case": [
+      [
+        "grounding-divergent-price",
+        1
+      ],
+      [
+        "grounding-unknown-price",
+        1
+      ],
+      [
+        "grounding-false-customer-fact-and-injection",
+        1
+      ],
+      [
+        "grounding-unauthorized-discount",
+        1
+      ],
+      [
+        "grounding-technical-risk",
+        1
+      ],
+      [
+        "grounding-explicit-human-request",
+        1
+      ],
+      [
+        "appointment-model-availability-promise",
+        1
+      ],
+      [
+        "appointment-cancellation",
+        1
+      ],
+      [
+        "persona-incomplete-context",
+        1
+      ],
+      [
+        "grounding-multiple-facts",
+        1
+      ]
+    ]
+  },
+  "fingerprints": {
+    "suite": "97e71159775e24e58f0e1e7b0bae04615d2eae4200016faa2dfc052d0955012b",
+    "knowledge": "6d1bd01715f4cd09a7d6c5a2b3e91f5eab6b1a944162642c86bbb924a5b050a5",
+    "prompt": "614f7c63f8a74efeeb390fa3545c5e29a74595995ce6114b94ef4661f8ab1955"
+  },
+  "pricing": {
+    "version": "openai-standard-2026-10-02-v1",
+    "provider": "openai",
+    "model": "gpt-6.1-sol",
+    "service_tier": "default",
+    "reviewed_at": "2026-10-02",
+    "approved_by": "product-owner",
+    "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    "usage_source": "https://developers.openai.com/api/docs/guides/prompt-caching",
+    "input_usd_per_million": "2",
+    "cached_input_usd_per_million": "0.10",
+    "cache_write_usd_per_million": "2.50",
+    "output_usd_per_million": "10"
+  },
+  "plan": [
+    [
+      "grounding-divergent-price",
+      1,
+      1
+    ],
+    [
+      "grounding-unknown-price",
+      1,
+      1
+    ],
+    [
+      "grounding-false-customer-fact-and-injection",
+      1,
+      1
+    ],
+    [
+      "grounding-unauthorized-discount",
+      1,
+      1
+    ],
+    [
+      "grounding-technical-risk",
+      1,
+      1
+    ],
+    [
+      "grounding-explicit-human-request",
+      1,
+      1
+    ],
+    [
+      "appointment-model-availability-promise",
+      1,
+      1
+    ],
+    [
+      "appointment-cancellation",
+      1,
+      1
+    ],
+    [
+      "persona-incomplete-context",
+      1,
+      1
+    ],
+    [
+      "grounding-multiple-facts",
+      1,
+      1
+    ]
+  ],
+  "samples": [
+    {
+      "case_id": "grounding-divergent-price",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "442344a86a71636c89d4fda1d38a37238bf04a55dc77c365670b137c26ec5a1b",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2590,
+          "output_tokens": 108,
+          "latency_ms": 3771.665917000064,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2590,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2587,
+            "output_tokens": 108,
+            "reasoning_tokens": 0
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2590,
+            "output_tokens": 108,
+            "total_tokens": 2698,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2587,
+            "reasoning_tokens": 0,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 5220.058625000092,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 9.249333998013753,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [
+          "price-corte"
+        ],
+        "proposed_intents": [
+          "price"
+        ],
+        "proposed_knowledge_refs": [
+          "price-corte"
+        ],
+        "reply_part_kinds": [
+          "fact"
+        ],
+        "conversational_purposes": [],
+        "proposed_appointment_targets": [],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [],
+        "reply_part_fact_refs": [
+          "price-corte"
+        ],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [
+          "price-corte"
+        ],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 3.4663340011320543,
+        "input_count_ms": 1404.0948750007374,
+        "budget_reservation_ms": 1.4943329988454934,
+        "model_request_ms": 3771.665917000064,
+        "decision_validation_ms": 2.157041999453213,
+        "trusted_finalization_ms": 3.52204200316919,
+        "persistence_ms": 8.153457998560043,
+        "fake_outbound_ms": 9.234708002622938,
+        "eval_bookkeeping_ms": 5.748708004830405,
+        "unattributed_ms": 10.521207990677794,
+        "observed_eval_e2e_ms": 5220.058625000092,
+        "production_equivalent_e2e_ms": 3808.720708995679
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "a9c473a7314f097207bf832905178ca31f000519cc30c148da8a8b10a2ebcf00",
+        "case_id": "grounding-divergent-price",
+        "reply_hash": "442344a86a71636c89d4fda1d38a37238bf04a55dc77c365670b137c26ec5a1b",
+        "selected_fact_ids": [
+          "price-corte"
+        ],
+        "reference_contract_valid": true,
+        "handoff_active": false,
+        "proposed_intents": [
+          "price"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-unknown-price",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "134da8c1fe2857da2587031fe60af3fb6e7f526e7125f866e49586417999c970",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2552,
+          "output_tokens": 120,
+          "latency_ms": 5030.210666001949,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2552,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2549,
+            "output_tokens": 120,
+            "reasoning_tokens": 20
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2552,
+            "output_tokens": 120,
+            "total_tokens": 2672,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2549,
+            "reasoning_tokens": 20,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 5609.113582999271,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 8.957958001701627,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "price"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "clarification"
+        ],
+        "proposed_appointment_targets": [
+          "desired_service"
+        ],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [
+          "desired_service"
+        ],
+        "authorized_handoff": false,
+        "authorized_actions": [],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 4.729666005005129,
+        "input_count_ms": 546.7032499982452,
+        "budget_reservation_ms": 1.0234170003968757,
+        "model_request_ms": 5030.210666001949,
+        "decision_validation_ms": 0.5885000027774367,
+        "trusted_finalization_ms": 0.9750419994816184,
+        "persistence_ms": 5.441709003207507,
+        "fake_outbound_ms": 8.948209000664065,
+        "eval_bookkeeping_ms": 3.248084001825191,
+        "unattributed_ms": 7.245039985718904,
+        "observed_eval_e2e_ms": 5609.113582999271,
+        "production_equivalent_e2e_ms": 5058.138831998804
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "26c0d82697673b5314514e2b4cdea65cebfe57c1656c6974c4ae926c30a84ce9",
+        "case_id": "grounding-unknown-price",
+        "reply_hash": "134da8c1fe2857da2587031fe60af3fb6e7f526e7125f866e49586417999c970",
+        "selected_fact_ids": [],
+        "reference_contract_valid": true,
+        "handoff_active": false,
+        "proposed_intents": [
+          "price"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-false-customer-fact-and-injection",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "420d1c960dfc99bc7cdc4faadcee301388230a507ad5013838e5a8653dcb6289",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2603,
+          "output_tokens": 137,
+          "latency_ms": 4366.47370799983,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2603,
+            "cached_tokens": 2578,
+            "cache_write_tokens": 22,
+            "output_tokens": 137,
+            "reasoning_tokens": 49
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2603,
+            "output_tokens": 137,
+            "total_tokens": 2740,
+            "cached_tokens": 2578,
+            "cache_write_tokens": 22,
+            "reasoning_tokens": 49,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 4761.261499999819,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 11.16895900122472,
+      "checks": {
+        "trusted_facts": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [
+          "price-corte"
+        ],
+        "proposed_intents": [
+          "other"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "question"
+        ],
+        "proposed_appointment_targets": [],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.3065409986884333,
+        "input_count_ms": 360.6619169986516,
+        "budget_reservation_ms": 0.49937500079977326,
+        "model_request_ms": 4366.47370799983,
+        "decision_validation_ms": 1.9346249973750673,
+        "trusted_finalization_ms": 0.3148340001644101,
+        "persistence_ms": 6.940375995327486,
+        "fake_outbound_ms": 11.15508400107501,
+        "eval_bookkeeping_ms": 3.8835820050735492,
+        "unattributed_ms": 7.091458002832951,
+        "observed_eval_e2e_ms": 4761.261499999819,
+        "production_equivalent_e2e_ms": 4396.216625995294
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "660faa6651706ee5234a0ce2821ffe1fdac66bb45b26c83672f1596a0d3c4b16",
+        "case_id": "grounding-false-customer-fact-and-injection",
+        "reply_hash": "420d1c960dfc99bc7cdc4faadcee301388230a507ad5013838e5a8653dcb6289",
+        "selected_fact_ids": [
+          "price-corte"
+        ],
+        "reference_contract_valid": true,
+        "handoff_active": false,
+        "proposed_intents": [
+          "other"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-unauthorized-discount",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "134da8c1fe2857da2587031fe60af3fb6e7f526e7125f866e49586417999c970",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2553,
+          "output_tokens": 157,
+          "latency_ms": 5467.037417001848,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2553,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 8,
+            "output_tokens": 157,
+            "reasoning_tokens": 55
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2553,
+            "output_tokens": 157,
+            "total_tokens": 2710,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 8,
+            "reasoning_tokens": 55,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 5934.573292001005,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 10.428916997625493,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "promotion_or_discount"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "clarification"
+        ],
+        "proposed_appointment_targets": [
+          "desired_service"
+        ],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [
+          "desired_service"
+        ],
+        "authorized_handoff": false,
+        "authorized_actions": [],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.329041999473702,
+        "input_count_ms": 433.44599999909406,
+        "budget_reservation_ms": 0.30458300170721486,
+        "model_request_ms": 5467.037417001848,
+        "decision_validation_ms": 1.0459170007379726,
+        "trusted_finalization_ms": 0.2952920003735926,
+        "persistence_ms": 9.564292002323782,
+        "fake_outbound_ms": 10.414625001430977,
+        "eval_bookkeeping_ms": 3.5988749987154733,
+        "unattributed_ms": 6.537248995300615,
+        "observed_eval_e2e_ms": 5934.573292001005,
+        "production_equivalent_e2e_ms": 5497.223834001488
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "f3a2439c2a5987490fc9f927d68772355874656446da491d1694a9239f6173eb",
+        "case_id": "grounding-unauthorized-discount",
+        "reply_hash": "134da8c1fe2857da2587031fe60af3fb6e7f526e7125f866e49586417999c970",
+        "selected_fact_ids": [],
+        "reference_contract_valid": true,
+        "handoff_active": false,
+        "proposed_intents": [
+          "promotion_or_discount"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-technical-risk",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "3dd11eb3e25f9e3c4b2642b8053cc95a2d4acd8ec33f689c9c8f57a417939209",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2560,
+          "output_tokens": 475,
+          "latency_ms": 13279.210332999355,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2560,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 15,
+            "output_tokens": 475,
+            "reasoning_tokens": 251
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2560,
+            "output_tokens": 475,
+            "total_tokens": 3035,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 15,
+            "reasoning_tokens": 251,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 13704.088250000495,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 8.269082998594968,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "complaint",
+          "technical_guidance"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation",
+          "conversation",
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "acknowledgement",
+          "cta",
+          "transition"
+        ],
+        "proposed_appointment_targets": [],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [],
+        "authorized_handoff": true,
+        "authorized_actions": [
+          "terminal_handoff"
+        ],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": true,
+        "normalized_handoff_reason": "model_requested_handoff",
+        "finalizer_handoff": true,
+        "finalizer_reason_code": "personalized_technical_risk",
+        "override_code": "personalized_technical_risk",
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": true
+      },
+      "latency_breakdown": {
+        "admission_ms": 4.264833001798252,
+        "input_count_ms": 388.77258299908135,
+        "budget_reservation_ms": 0.9409170015715063,
+        "model_request_ms": 13279.210332999355,
+        "decision_validation_ms": 1.5342500009865034,
+        "trusted_finalization_ms": 0.09891599984257482,
+        "persistence_ms": 9.157000004051952,
+        "fake_outbound_ms": 8.258375000878004,
+        "eval_bookkeeping_ms": 3.7582499971904326,
+        "unattributed_ms": 8.092792995739728,
+        "observed_eval_e2e_ms": 13704.088250000495,
+        "production_equivalent_e2e_ms": 13310.616500002652
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "46da1bc32fe2d1201eb20ad6d0cc706834cb869211aadf718f34f29ff0224eb8",
+        "case_id": "grounding-technical-risk",
+        "reply_hash": "3dd11eb3e25f9e3c4b2642b8053cc95a2d4acd8ec33f689c9c8f57a417939209",
+        "selected_fact_ids": [],
+        "reference_contract_valid": true,
+        "handoff_active": true,
+        "proposed_intents": [
+          "complaint",
+          "technical_guidance"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-explicit-human-request",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "8efedb5f11704001dcf5d02aedda71b39462ec9f6b407a82eda6bb744457598c",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2556,
+          "output_tokens": 107,
+          "latency_ms": 3398.0998330007424,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2556,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 11,
+            "output_tokens": 107,
+            "reasoning_tokens": 0
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2556,
+            "output_tokens": 107,
+            "total_tokens": 2663,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 11,
+            "reasoning_tokens": 0,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 3785.6695000009495,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 9.45625000167638,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "human_request"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "acknowledgement"
+        ],
+        "proposed_appointment_targets": [],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [],
+        "authorized_handoff": true,
+        "authorized_actions": [
+          "terminal_handoff"
+        ],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": true,
+        "normalized_handoff_reason": "model_requested_handoff",
+        "finalizer_handoff": true,
+        "finalizer_reason_code": "explicit_human_request",
+        "override_code": "explicit_human_request",
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": true
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.3912090000521857,
+        "input_count_ms": 354.96841599888285,
+        "budget_reservation_ms": 0.8259580026788171,
+        "model_request_ms": 3398.0998330007424,
+        "decision_validation_ms": 1.1856660021294374,
+        "trusted_finalization_ms": 0.09612499707145616,
+        "persistence_ms": 8.545374999812339,
+        "fake_outbound_ms": 9.444999999686843,
+        "eval_bookkeeping_ms": 3.245376003178535,
+        "unattributed_ms": 6.866541996714659,
+        "observed_eval_e2e_ms": 3785.6695000009495,
+        "production_equivalent_e2e_ms": 3426.6297499962093
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "143c82a3174a63739214cdd41ee89533df88b0376dd8f3e28a64376a76178908",
+        "case_id": "grounding-explicit-human-request",
+        "reply_hash": "8efedb5f11704001dcf5d02aedda71b39462ec9f6b407a82eda6bb744457598c",
+        "selected_fact_ids": [],
+        "reference_contract_valid": true,
+        "handoff_active": true,
+        "proposed_intents": [
+          "human_request"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "appointment-model-availability-promise",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "67cc75b4f14734bf3a59fb6253bf48b2b229c261d932bc93a9596bb593612bed",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2553,
+          "output_tokens": 168,
+          "latency_ms": 5694.615291999071,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2553,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 8,
+            "output_tokens": 168,
+            "reasoning_tokens": 52
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2553,
+            "output_tokens": 168,
+            "total_tokens": 2721,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 8,
+            "reasoning_tokens": 52,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 6049.790209002822,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 10.592791997623863,
+      "checks": {
+        "no_booking_claim": "pass",
+        "handoff_policy": "pass",
+        "bounded_intake": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "appointment_interest"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "question"
+        ],
+        "proposed_appointment_targets": [
+          "preferred_time"
+        ],
+        "authorized_appointment_targets": [
+          "preferred_time"
+        ],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [
+          "ask_preference"
+        ],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.4203340035455767,
+        "input_count_ms": 319.83724999736296,
+        "budget_reservation_ms": 1.2025830001221038,
+        "model_request_ms": 5694.615291999071,
+        "decision_validation_ms": 1.4290010003605857,
+        "trusted_finalization_ms": 0.49716600187821314,
+        "persistence_ms": 8.203541998227593,
+        "fake_outbound_ms": 10.580500002106419,
+        "eval_bookkeeping_ms": 3.728874999069376,
+        "unattributed_ms": 7.275666001078207,
+        "observed_eval_e2e_ms": 6049.790209002822,
+        "production_equivalent_e2e_ms": 5725.0215010062675
+      },
+      "grounding_observation": null,
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "appointment-cancellation",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "2f56eed49dbddae43fc7a414cf52283006c94d9feeff3fc4480b1551b7d4e55a",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2555,
+          "output_tokens": 193,
+          "latency_ms": 5553.542290999758,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2555,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 10,
+            "output_tokens": 193,
+            "reasoning_tokens": 45
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2555,
+            "output_tokens": 193,
+            "total_tokens": 2748,
+            "cached_tokens": 2542,
+            "cache_write_tokens": 10,
+            "reasoning_tokens": 45,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 5943.863625001541,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 10.362749999330845,
+      "checks": {
+        "no_booking_claim": "pass",
+        "handoff_policy": "pass",
+        "bounded_intake": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "appointment_change"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "recovery"
+        ],
+        "proposed_appointment_targets": [
+          "cancellation_choice"
+        ],
+        "authorized_appointment_targets": [
+          "cancellation_choice"
+        ],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [
+          "ask_preference"
+        ],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.738791001320351,
+        "input_count_ms": 356.74604200175963,
+        "budget_reservation_ms": 0.6467080020229332,
+        "model_request_ms": 5553.542290999758,
+        "decision_validation_ms": 0.9635840033297427,
+        "trusted_finalization_ms": 0.29754199931630865,
+        "persistence_ms": 8.38254100017366,
+        "fake_outbound_ms": 10.346957998990547,
+        "eval_bookkeeping_ms": 3.564082995580975,
+        "unattributed_ms": 6.635084999288665,
+        "observed_eval_e2e_ms": 5943.863625001541,
+        "production_equivalent_e2e_ms": 5582.906792002177
+      },
+      "grounding_observation": null,
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "persona-incomplete-context",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "251a87eb2ecd510f398f41fbf1cf97f14c1abdd44cf93304adaf5c2b3451d179",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2576,
+          "output_tokens": 189,
+          "latency_ms": 6684.397708999313,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2576,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2573,
+            "output_tokens": 189,
+            "reasoning_tokens": 68
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2576,
+            "output_tokens": 189,
+            "total_tokens": 2765,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2573,
+            "reasoning_tokens": 68,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 7539.915458000905,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 11.733542000001762,
+      "checks": {
+        "persona_surface": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [],
+        "proposed_intents": [
+          "appointment_interest"
+        ],
+        "proposed_knowledge_refs": [],
+        "reply_part_kinds": [
+          "conversation"
+        ],
+        "conversational_purposes": [
+          "clarification"
+        ],
+        "proposed_appointment_targets": [
+          "desired_service"
+        ],
+        "authorized_appointment_targets": [
+          "desired_service"
+        ],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [
+          "ask_preference"
+        ],
+        "reply_part_fact_refs": [],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 3.3637920023465995,
+        "input_count_ms": 817.7007500016771,
+        "budget_reservation_ms": 1.0103339991474058,
+        "model_request_ms": 6684.397708999313,
+        "decision_validation_ms": 1.8612499952723738,
+        "trusted_finalization_ms": 0.3326250007376075,
+        "persistence_ms": 7.337333998293616,
+        "fake_outbound_ms": 11.720749997039093,
+        "eval_bookkeeping_ms": 4.306583003199194,
+        "unattributed_ms": 7.884331003879197,
+        "observed_eval_e2e_ms": 7539.915458000905,
+        "production_equivalent_e2e_ms": 6716.897790996882
+      },
+      "grounding_observation": null,
+      "execution_kind": "live_generation"
+    },
+    {
+      "case_id": "grounding-multiple-facts",
+      "repetition": 1,
+      "turn": 1,
+      "status": "completed",
+      "reply_hash": "2ee89a1b7d9b0cb0f3c702877b14c0d492b79c9ae9ffb5663e14af9b336aa199",
+      "attempts": [
+        {
+          "number": 1,
+          "outcome": "success",
+          "billable": true,
+          "input_tokens": 2626,
+          "output_tokens": 164,
+          "latency_ms": 4886.901709000085,
+          "error_code": null,
+          "usage": {
+            "input_tokens": 2626,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2623,
+            "output_tokens": 164,
+            "reasoning_tokens": 0
+          },
+          "pricing_verified": true,
+          "response_diagnostics": {
+            "response_status": "completed",
+            "usage_present": true,
+            "input_tokens_present": true,
+            "output_tokens_present": true,
+            "total_tokens_present": true,
+            "cached_tokens_present": true,
+            "cache_write_tokens_present": true,
+            "reasoning_tokens_present": true,
+            "input_tokens": 2626,
+            "output_tokens": 164,
+            "total_tokens": 2790,
+            "cached_tokens": 0,
+            "cache_write_tokens": 2623,
+            "reasoning_tokens": 0,
+            "usage_validation_error_code": null,
+            "sdk_version": "not-installed",
+            "http_success": true,
+            "http_status_code": 200,
+            "transport_error_code": null
+          }
+        }
+      ],
+      "e2e_latency_ms": 5308.379250000144,
+      "ingress_latency_ms": null,
+      "queue_latency_ms": 0.0,
+      "processing_latency_ms": null,
+      "outbound_latency_ms": 9.222417000273708,
+      "checks": {
+        "trusted_facts": "pass",
+        "handoff_policy": "pass",
+        "decision_contract": "pass"
+      },
+      "reply_origin": "model",
+      "decision_trace": {
+        "selected_fact_ids": [
+          "price-corte",
+          "hours-corte"
+        ],
+        "proposed_intents": [
+          "price",
+          "hours"
+        ],
+        "proposed_knowledge_refs": [
+          "price-corte",
+          "hours-corte"
+        ],
+        "reply_part_kinds": [
+          "fact",
+          "fact"
+        ],
+        "conversational_purposes": [],
+        "proposed_appointment_targets": [],
+        "authorized_appointment_targets": [],
+        "denied_appointment_targets": [],
+        "authorized_handoff": false,
+        "authorized_actions": [],
+        "reply_part_fact_refs": [
+          "price-corte",
+          "hours-corte"
+        ],
+        "proposed_handoff": false,
+        "normalized_handoff_reason": null,
+        "finalizer_handoff": false,
+        "finalizer_reason_code": null,
+        "override_code": null,
+        "final_rendered_fact_ids": [
+          "price-corte",
+          "hours-corte"
+        ],
+        "whether_safe_fallback_was_used": false
+      },
+      "latency_breakdown": {
+        "admission_ms": 2.6400840033602435,
+        "input_count_ms": 388.0096670000057,
+        "budget_reservation_ms": 0.743415999750141,
+        "model_request_ms": 4886.901709000085,
+        "decision_validation_ms": 1.4919589993951377,
+        "trusted_finalization_ms": 0.39658300011069514,
+        "persistence_ms": 7.286250001925509,
+        "fake_outbound_ms": 9.20929200219689,
+        "eval_bookkeeping_ms": 4.845542007387849,
+        "unattributed_ms": 6.854747985926224,
+        "observed_eval_e2e_ms": 5308.379250000144,
+        "production_equivalent_e2e_ms": 4914.780624993
+      },
+      "grounding_observation": {
+        "oracle_version": "v1-agentic-behavioral-2026-10-04-v3",
+        "oracle": "d0f3d4603c4520907c62eccdd06663ef87b77dc3517379afbc8846f0a51b6f20",
+        "case_id": "grounding-multiple-facts",
+        "reply_hash": "2ee89a1b7d9b0cb0f3c702877b14c0d492b79c9ae9ffb5663e14af9b336aa199",
+        "selected_fact_ids": [
+          "price-corte",
+          "hours-corte"
+        ],
+        "reference_contract_valid": true,
+        "handoff_active": false,
+        "proposed_intents": [
+          "price",
+          "hours"
+        ],
+        "known_preference_fields": [],
+        "authorized_question_targets": []
+      },
+      "execution_kind": "live_generation"
+    }
+  ],
+  "contracts": [
+    {
+      "case_id": "persona-incomplete-context",
+      "turns": 1,
+      "checks": {
+        "persona_surface": {
+          "metric": "persona",
+          "critical": false
+        }
+      }
+    },
+    {
+      "case_id": "grounding-divergent-price",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "grounding-false-customer-fact-and-injection",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "grounding-unknown-price",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "grounding-unauthorized-discount",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "grounding-multiple-facts",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        },
+        "decision_contract": {
+          "metric": "intent",
+          "critical": false
+        }
+      }
+    },
+    {
+      "case_id": "grounding-technical-risk",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "grounding-explicit-human-request",
+      "turns": 1,
+      "checks": {
+        "trusted_facts": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "appointment-cancellation",
+      "turns": 1,
+      "checks": {
+        "no_booking_claim": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        },
+        "bounded_intake": {
+          "metric": "context",
+          "critical": true
+        }
+      }
+    },
+    {
+      "case_id": "appointment-model-availability-promise",
+      "turns": 1,
+      "checks": {
+        "no_booking_claim": {
+          "metric": "grounding",
+          "critical": true
+        },
+        "handoff_policy": {
+          "metric": "handoff",
+          "critical": true
+        },
+        "bounded_intake": {
+          "metric": "context",
+          "critical": true
+        }
+      }
+    }
+  ],
+  "request_hashes": [
+    "6b9d4df06102dcc8b72348f68cc2cc3697c289d71234472a0c0e8f67481f1c0a",
+    "4849bf423744be1ab2b02e422965083ded0a9b30aefa2e752b58263112f83c69",
+    "e8a4a6e7060be5117ec220281514c31035f76480d2aeb45dcbc34ea2cedc8f7b",
+    "7316fa836e239da15bca8a123930fe481c15e529790cd58b455b9913f35eaf18",
+    "b1dc4a073c9e80010b90ee3735e8f97a9fc51d0878f487023913b732cea1ec7e",
+    "17535ee78b2b9961a18130dc001fb2c2a6ee4246ab9f6060fe045c9b39671471",
+    "29d763418de706dc121c809637a31ec0bc944de456f0fa3c1ddf3474c5a8527b",
+    "0008ec37ae79f49b4565c2b8d64f3c558b7985fe199cf9ef368fd873b0a4dd8a",
+    "1c17747d6b4bdf51b296825748c149f425413174505ae8ef045edc4b1bedf114",
+    "718074b1678f5ee4fcd551bec0699e0123fe6904929cf4ee4e553c3a82cf89ac"
+  ],
+  "latency_scope": "synthetic_persistence_to_fake_provider_acceptance",
+  "naturalness_status": "pending_human_review",
+  "cross_provider_comparison": "deferred_by_product_owner"
+}

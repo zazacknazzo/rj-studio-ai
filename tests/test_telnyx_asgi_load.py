@@ -3,6 +3,7 @@
 import asyncio
 import json
 import math
+import sqlite3
 from collections import Counter
 from time import monotonic
 
@@ -49,6 +50,7 @@ def test_controlled_load_reports_offline_percentiles(app, private_key, record_pr
         "requests": len(samples),
         "concurrency": 8,
         "duplicate": duplicate,
+        "p50_seconds": durations[math.ceil(len(samples) * 0.5) - 1],
         "p95_seconds": durations[math.ceil(len(samples) * 0.95) - 1],
         "p99_seconds": durations[math.ceil(len(samples) * 0.99) - 1],
         "max_seconds": max(durations),
@@ -70,3 +72,50 @@ def test_controlled_load_reports_offline_percentiles(app, private_key, record_pr
     assert count(app, "messages") == (1 if duplicate else 128)
     assert count(app, "inbound_event_receipts") == (1 if duplicate else 128)
     assert count(app, "outbound_deliveries") == 0
+
+
+def test_locked_sqlite_load_returns_503_then_exact_replay_commits(
+    app, private_key, record_property
+):
+    requests = [
+        signed(private_key, wire(event_id=f"fault-{i}", message_id=f"fault-message-{i}"))
+        for i in range(32)
+    ]
+
+    async def under_fault():
+        limiter = asyncio.Semaphore(8)
+
+        async def one(request):
+            async with limiter:
+                started = monotonic()
+                result = await raw_call(app, request)
+                return monotonic() - started, result
+
+        return await asyncio.gather(*(one(request) for request in requests))
+
+    with sqlite3.connect(app.store._database_path) as blocker:
+        blocker.execute("BEGIN IMMEDIATE")
+        samples = asyncio.run(under_fault())
+        assert {status for _, status in samples} == {503}
+        assert count(app, "messages") == 0
+    for request in requests:
+        assert asyncio.run(raw_call(app, request)) == 204
+    assert count(app, "messages") == count(app, "inbound_event_receipts") == 32
+    assert count(app, "outbound_deliveries") == 0
+    durations = sorted(duration for duration, _ in samples)
+    record_property(
+        "ticket13_failure_load",
+        json.dumps(
+            {
+                "mode": "synthetic_asgi_sqlite_lock",
+                "requests": 32,
+                "concurrency": 8,
+                "responses": {"503": 32},
+                "replay_204": 32,
+                "p50_seconds": durations[math.ceil(len(samples) * 0.50) - 1],
+                "p95_seconds": durations[math.ceil(len(samples) * 0.95) - 1],
+                "p99_seconds": durations[math.ceil(len(samples) * 0.99) - 1],
+            },
+            sort_keys=True,
+        ),
+    )
