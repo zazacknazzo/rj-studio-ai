@@ -215,7 +215,7 @@ class WahaAPI:
         self.session = session
         self.client = client
 
-    def _request(self, method, path, *, payload=None, timeout=5):
+    def _request(self, method, path, *, payload=None, content=None, timeout=5):
         with (
             httpx.Client(trust_env=False) if self.client is None else nullcontext(self.client) as c
         ):
@@ -223,14 +223,18 @@ class WahaAPI:
                 method,
                 self.base_url + path,
                 json=payload,
-                headers={"X-Api-Key": self.api_key},
+                content=content,
+                headers={
+                    "X-Api-Key": self.api_key,
+                    **({"Content-Type": "application/json"} if content is not None else {}),
+                },
                 timeout=timeout,
                 follow_redirects=False,
             )
 
-    def request(self, method, path, *, payload=None, timeout=5):
+    def request(self, method, path, *, payload=None, content=None, timeout=5):
         try:
-            return self._request(method, path, payload=payload, timeout=timeout)
+            return self._request(method, path, payload=payload, content=content, timeout=timeout)
         except httpx.HTTPError:
             raise OutboundOutcomeUnknown("waha_transport_unknown") from None
 

@@ -130,7 +130,9 @@ def _change_core_pause(store, action, participant=None):
         store.change_automation(opaque_id, action, uuid4().hex, state["revision"], "b1-local")
 
 
-def build_waha_pipeline(settings):
+def build_waha_pipeline(
+    settings, *, journal_factory=WahaSafetyJournal, store_factory=WahaConversationStore
+):
     if len(settings.waha_operator_token) < 32:
         raise ValueError("waha_operator_token_required")
     require_test_secondary(settings.waha_secondary_phone, settings.salon_knowledge_path)
@@ -139,7 +141,7 @@ def build_waha_pipeline(settings):
         secondary=settings.waha_secondary_phone,
         participants=settings.waha_authorized_phones,
     )
-    journal = WahaSafetyJournal(
+    journal = journal_factory(
         settings.waha_control_path,
         settings.waha_witness_path,
         key=settings.waha_journal_key,
@@ -157,7 +159,7 @@ def build_waha_pipeline(settings):
     )
     try:
         settings.waha_state_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        store = WahaConversationStore(settings.waha_state_path, journal=journal)
+        store = store_factory(settings.waha_state_path, journal=journal)
         store.initialize()
         knowledge = SalonKnowledgeRepository(settings.salon_knowledge_path)
         knowledge.load()
@@ -186,29 +188,36 @@ def build_waha_pipeline(settings):
         raise
 
 
-def create_waha_app(settings=None):
+def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outbound_factory=None):
     settings = settings or WahaSettings(_env_file=".env.b1")
-    adapter, journal, store, knowledge, generator, context, runner = build_waha_pipeline(settings)
+    adapter, journal, store, knowledge, generator, context, runner = pipeline_builder(settings)
     api = WahaAPI(base_url=settings.waha_api_url, api_key=settings.waha_api_key)
     processing = ProcessingExecutor(runner=runner, poll_interval_seconds=0.25, concurrency=1)
+    outbound = outbound_factory(adapter, journal, store, api) if outbound_factory else None
 
     @asynccontextmanager
     async def lifespan(app):
         if generator.is_configured():
             processing.start()
+        if outbound is not None:
+            outbound.start()
         try:
             yield
         finally:
             await anyio.to_thread.run_sync(processing.stop)
-            journal.change("pause")
-            journal.close()
+            try:
+                if outbound is not None:
+                    await anyio.to_thread.run_sync(outbound.stop)
+                journal.change("pause")
+            finally:
+                journal.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.journal = store, journal
     app.state.processing_executor = processing
     app.state.context_builder = context
     # Structural: no Outbound Executor or permissive store is composed.
-    app.state.outbound_executor = None
+    app.state.outbound_executor = outbound
 
     def require_operator(request):
         if not hmac.compare_digest(
@@ -250,6 +259,9 @@ def create_waha_app(settings=None):
                 "egress_blockers": ["AUD-01", "AR-02"],
                 "whatsapp_conversation_proven": False,
             }
+            if outbound is not None:
+                payload.update(store.egress_status())
+                payload["outbound"] = outbound.is_alive()
             return JSONResponse(payload, status_code=503)
         except WahaSafetyError:
             return JSONResponse(

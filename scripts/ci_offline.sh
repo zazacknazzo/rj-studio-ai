@@ -8,4 +8,5 @@ test_python="$1"
 "$test_python" -m pip check
 "$test_python" -m pip inspect > work/pip-inspect.json
 git diff --check
-"$test_python" scripts/check_telnyx_offline.py --python "$test_python" --output work/ci-tests
+# Miniflare needs local loopback; that file runs in the separate Worker fixture job.
+"$test_python" scripts/check_telnyx_offline.py --python "$test_python" --output work/ci-tests -- tests --ignore=tests/test_waha_cloudflare_integration.py

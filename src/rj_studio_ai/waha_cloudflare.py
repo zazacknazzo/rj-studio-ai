@@ -1,0 +1,323 @@
+"""Concrete independently witnessed WAHA egress; B1's closed store stays closed."""
+
+import hashlib
+import hmac
+import json
+import re
+from dataclasses import replace
+from datetime import UTC, datetime
+from pathlib import Path
+from time import time
+from uuid import uuid4
+
+from rj_studio_ai.delivery import OutboundDeliveryExecutor
+from rj_studio_ai.providers.base import (
+    OutboundMessageSender,
+    OutboundOutcomeUnknown,
+    ProviderAcceptance,
+)
+from rj_studio_ai.waha_authority import (
+    AuthorityClosed,
+    AuthorityConfig,
+    CloudflareAuthority,
+    encoded,
+)
+from rj_studio_ai.waha_safety import WahaConversationStore, WahaSafetyJournal
+
+
+def prepare_waha(message):
+    return json.dumps(
+        {
+            "session": "default",
+            "chatId": message.recipient_address,
+            "text": message.body,
+            "linkPreview": False,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode()
+
+
+class AnchoredWahaJournal(WahaSafetyJournal):
+    def __init__(self, *args, authority, **kwargs):
+        self.authority = None
+        super().__init__(*args, **kwargs)
+        try:
+            if self.scope != authority.config.scope:
+                raise AuthorityClosed("authority_scope_mismatch")
+            authority.boot(self.head, len(self.entries))
+            self.authority = authority
+        except BaseException:
+            self.close()
+            raise
+
+    def append(self, entry):
+        with self.lock:
+            if self.authority is not None:
+                self._read()
+                unsigned = {"sequence": len(self.entries) + 1, "prior": self.head, "entry": entry}
+                head = hmac.new(self.key, encoded(unsigned), hashlib.sha256).hexdigest()
+                self.authority.advance(self.head, head, unsigned["sequence"], entry)
+            # Cloud witness/authority commit precedes the local journal fsync.
+            # A partial write leaves roots inconsistent and requires reconciliation.
+            super().append(entry)
+
+
+class CloudflareWahaStore(WahaConversationStore):
+    """Canonical store with strict local gates AND external one-shot authorization."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not isinstance(self.journal, AnchoredWahaJournal):
+            raise ValueError("externally_anchored_journal_required")
+        self.authority = self.journal.authority
+        self._tickets = {}
+
+    def logical_identity(self, inbound_id, channel):
+        wire = encoded(["waha", channel, inbound_id, "service_response"])
+        return hmac.new(self.journal.key, wire, hashlib.sha256).hexdigest()
+
+    def participant_identity(self, address):
+        return hashlib.sha256(address.encode()).hexdigest()
+
+    def egress_status(self):
+        try:
+            self.journal.refresh()
+            state = self.authority.current()
+            permitted = (
+                not self.journal.paused
+                and not state["paused"]
+                and not state["killed"]
+                and bool(state["grant"])
+                and state["grant"]["expires_at"] > time() * 1000
+                and state["head"] == self.journal.head
+            )
+            return {
+                "egress": permitted,
+                "egress_blockers": [] if permitted else ["external_release_required"],
+                "authority_epoch": state["epoch"],
+            }
+        except AuthorityClosed:
+            return {"egress": False, "egress_blockers": ["external_authority_unverified"]}
+
+    def claim_next_delivery(self, **kwargs):
+        if kwargs.get("provider") != "waha":
+            return None
+        with self.journal.lock:
+            try:
+                state = self.authority.current()
+            except AuthorityClosed:
+                return None
+            if self.journal.paused or state["paused"] or state["killed"] or not state["grant"]:
+                return None
+            claim = super().claim_next_delivery(**kwargs)
+            if claim is None:
+                return None
+            with self._connect() as connection:
+                row = connection.execute(
+                    "SELECT i.provider_message_id FROM messages o "
+                    "JOIN messages i ON i.id=o.in_reply_to_message_id WHERE o.id=?",
+                    (claim.outbound_message_id,),
+                ).fetchone()
+                identity = self.logical_identity(row[0], claim.provider_channel_id)
+                key = identity[:32]
+                if claim.submission_key is not None and claim.submission_key != key:
+                    raise AuthorityClosed("submission_key_conflict")
+                connection.execute(
+                    "UPDATE outbound_deliveries SET submission_key=? "
+                    "WHERE id=? AND owner_token=? AND submission_key IS NULL",
+                    (key, claim.delivery_id, claim.owner_token),
+                )
+            return replace(claim, submission_key=key)
+
+    def _eligible(self, delivery_id, owner_token, message, *, marked):
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT i.provider_message_id, d.provider_channel_id, d.recipient_address, "
+                "d.submission_key, o.body, d.submission_started_at, d.lease_expires_at "
+                "FROM outbound_deliveries d JOIN messages o ON o.id=d.outbound_message_id "
+                "JOIN messages i ON i.id=o.in_reply_to_message_id "
+                "JOIN message_processing p ON p.inbound_message_id=i.id "
+                "WHERE d.id=? AND d.owner_token=? AND d.state='sending' AND d.provider='waha' "
+                "AND d.lease_expires_at>? AND p.state='completed' AND d.status_conflict=0 "
+                "AND NOT EXISTS (SELECT 1 FROM conversation_automation_controls c "
+                "WHERE c.conversation_id=o.conversation_id AND "
+                "(c.paused=1 OR c.revision!=p.automation_revision)) "
+                "AND NOT EXISTS (SELECT 1 FROM outbound_deliveries conflict "
+                "JOIN messages prior ON prior.id=conflict.outbound_message_id "
+                "WHERE prior.conversation_id=o.conversation_id AND conflict.status_conflict=1) "
+                "AND ((d.handoff_token IS NULL AND NOT EXISTS (SELECT 1 FROM "
+                "conversation_handoffs h WHERE h.conversation_id=o.conversation_id "
+                "AND h.active=1)) "
+                "OR EXISTS (SELECT 1 FROM conversation_handoffs h WHERE "
+                "h.conversation_id=o.conversation_id AND h.active=1 "
+                "AND h.owner_token=d.handoff_token))",
+                (delivery_id, owner_token, datetime.now(UTC).isoformat()),
+            ).fetchone()
+        if (
+            not row
+            or self.journal.paused
+            or self.participant_identity(message.recipient_address) in self.journal.revoked
+            or (row[5] is not None) != marked
+            or (row[1], row[2], row[3], row[4])
+            != (
+                message.sender_address,
+                message.recipient_address,
+                message.submission_key,
+                message.body,
+            )
+        ):
+            raise AuthorityClosed("local_submission_not_eligible")
+        return row
+
+    def authorize_delivery_submission(self, *, delivery_id, owner_token, message=None, **kwargs):
+        if message is None:
+            return False
+        with self.journal.lock:
+            row = self._eligible(delivery_id, owner_token, message, marked=False)
+            identity = self.logical_identity(row[0], row[1])
+            wire = prepare_waha(message)
+            request_digest = hashlib.sha256(wire).hexdigest()
+            participant = self.participant_identity(row[2])
+            args = {
+                "intent": identity,
+                "participant": participant,
+                "digest": request_digest,
+                "key": message.submission_key,
+                "head": self.journal.head,
+            }
+            self.authority.runtime_command("register", **args)
+            token = uuid4().hex
+            self.authority.runtime_command("consume", token=token, **args)
+            # A consumed external identity can never be registered again, even if
+            # the local marker transaction or HTTP below fails or is restored.
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                timestamp = datetime.now(UTC).isoformat()
+                updated = connection.execute(
+                    "UPDATE outbound_deliveries SET submission_started_at=?, "
+                    "first_submission_at=COALESCE(first_submission_at,?),payload_fingerprint=? "
+                    "WHERE id=? AND owner_token=? AND state='sending' "
+                    "AND submission_started_at IS NULL AND lease_expires_at>?",
+                    (timestamp, timestamp, request_digest, delivery_id, owner_token, timestamp),
+                ).rowcount
+                marked = connection.execute(
+                    "UPDATE delivery_attempts SET submission_started_at=? "
+                    "WHERE outbound_delivery_id=? AND owner_token=? AND outcome='started' "
+                    "AND submission_started_at IS NULL",
+                    (timestamp, delivery_id, owner_token),
+                ).rowcount
+                if updated != 1 or marked != 1:
+                    raise AuthorityClosed("local_submission_marker_lost")
+            self._tickets[message.submission_key] = {
+                "delivery_id": delivery_id,
+                "owner_token": owner_token,
+                "intent": identity,
+                "participant": participant,
+                "digest": request_digest,
+                "token": token,
+                "wire": wire,
+            }
+            return True
+
+    def exchange(self, message, *, api, aliases, timeout_seconds):
+        with self.journal.lock:
+            ticket = self._tickets.pop(message.submission_key, None)
+            if ticket is None or ticket["wire"] != prepare_waha(message):
+                raise OutboundOutcomeUnknown("one_shot_submission_ticket_missing")
+            try:
+                row = self._eligible(
+                    ticket["delivery_id"], ticket["owner_token"], message, marked=True
+                )
+                info = api.session_info()
+                if (
+                    info.get("status") != "WORKING"
+                    or aliases.get((info.get("me") or {}).get("id")) != message.sender_address
+                    or aliases.get(message.recipient_address) != message.recipient_address
+                    or (datetime.fromisoformat(row[6]) - datetime.now(UTC)).total_seconds() < 12
+                ):
+                    raise AuthorityClosed("current_secondary_or_lease_unverified")
+                self.authority.runtime_command(
+                    "check_submission",
+                    intent=ticket["intent"],
+                    participant=ticket["participant"],
+                    digest=ticket["digest"],
+                    token=ticket["token"],
+                    head=self.journal.head,
+                )
+                result = api.request(
+                    "POST", "/api/sendText", content=ticket["wire"], timeout=timeout_seconds
+                )
+                if result.status_code not in (200, 201):
+                    raise ValueError()
+                raw = result.json()
+                raw_recipient = raw.get("to")
+                provider_id = raw.get("id")
+                if (
+                    raw.get("fromMe") is not True
+                    or aliases.get(raw_recipient) != message.recipient_address
+                    or not isinstance(provider_id, str)
+                    or not re.fullmatch(
+                        "true_" + re.escape(raw_recipient) + r"_[A-Za-z0-9_-]{1,128}", provider_id
+                    )
+                ):
+                    raise ValueError()
+                self.authority.runtime_command(
+                    "outcome",
+                    intent=ticket["intent"],
+                    digest=ticket["digest"],
+                    token=ticket["token"],
+                    outcome="accepted",
+                    acceptance=hashlib.sha256(provider_id.encode()).hexdigest(),
+                )
+                return ProviderAcceptance(provider_id)
+            except Exception:
+                # Includes failures after real provider acceptance; never resend.
+                raise OutboundOutcomeUnknown("cloudflare_waha_outcome_unknown") from None
+
+
+class AuthorizedWahaSender(OutboundMessageSender):
+    def __init__(self, store, api, adapter):
+        if not isinstance(store, CloudflareWahaStore):
+            raise ValueError("concrete_cloudflare_store_required")
+        self.store, self.api, self.adapter = store, api, adapter
+
+    def send(self, message, *, timeout_seconds):
+        return self.store.exchange(
+            message,
+            api=self.api,
+            aliases=self.adapter.identity_aliases,
+            timeout_seconds=timeout_seconds,
+        )
+
+
+def create_waha_cloudflare_app():
+    from rj_studio_ai.waha_live import WahaSettings, build_waha_pipeline, create_waha_app
+
+    path = Path("/authority/runtime.json")
+    if not path.is_file() or path.stat().st_mode & 0o077:
+        raise AuthorityClosed("private_runtime_authority_configuration_required")
+    authority = CloudflareAuthority(AuthorityConfig(**json.loads(path.read_text())))
+
+    def pipeline(settings):
+        def journal(*args, **kwargs):
+            return AnchoredWahaJournal(*args, authority=authority, **kwargs)
+
+        return build_waha_pipeline(
+            settings, journal_factory=journal, store_factory=CloudflareWahaStore
+        )
+
+    def outbound(adapter, journal, store, api):
+        return OutboundDeliveryExecutor(
+            store=store,
+            sender=AuthorizedWahaSender(store, api, adapter),
+            request_timeout_seconds=5,
+            poll_interval_seconds=5,
+            concurrency=1,
+            provider="waha",
+            maximum_attempts=1,
+        )
+
+    return create_waha_app(
+        WahaSettings(_env_file=".env.b1"), pipeline_builder=pipeline, outbound_factory=outbound
+    )

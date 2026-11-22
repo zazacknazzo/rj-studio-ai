@@ -1,7 +1,7 @@
 name: Telnyx offline readiness
 on:
   push:
-    branches: [codex/telnyx-coexistence-13-readiness, codex/telnyx-g0-smoke-staging, codex/b1-livia-waha-live, codex/b2-livia-waha-live]
+    branches: [codex/telnyx-coexistence-13-readiness, codex/telnyx-g0-smoke-staging, codex/b1-livia-waha-live, codex/b2-livia-waha-live, codex/b3-livia-cloudflare-egress]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -57,4 +57,37 @@ jobs:
             work/pip-audit.json
             work/gitleaks.json
             work/resolved.txt
+          retention-days: 14
+  cloudflare-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "26.10.0"
+          cache: npm
+          cache-dependency-path: infra/waha-authority/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Install resolved test runtimes
+        run: |
+          python -m venv work/venv
+          work/venv/bin/python -m pip install --no-deps -r requirements/ci.lock
+          npm ci --prefix infra/waha-authority --no-fund --no-audit
+          npm audit --prefix infra/waha-authority --audit-level=low
+      - name: Real workerd storage and Python protocol fixtures (local loopback only)
+        run: |
+          npm test --prefix infra/waha-authority > work/cloudflare-worker-tests.txt
+          work/venv/bin/python scripts/check_telnyx_offline.py --python work/venv/bin/python --output work/cloudflare-tests tests/test_waha_cloudflare_integration.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: cloudflare-local-fixture-evidence
+          path: |
+            work/cloudflare-worker-tests.txt
+            work/cloudflare-tests/pytest.xml
           retention-days: 14

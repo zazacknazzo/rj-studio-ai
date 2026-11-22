@@ -1,0 +1,7 @@
+{
+  "name": "livia-waha-authority",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs", "check": "node --check src/worker.mjs" },
+  "devDependencies": { "miniflare": "5.20261119.0-beta", "wrangler": "4.166.0" }
+}

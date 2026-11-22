@@ -7,6 +7,7 @@ This is test-process isolation, not a kernel network sandbox or runtime composit
 
 import argparse
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -59,6 +60,9 @@ def main() -> int:
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
+    node = shutil.which("node")
+    if node:
+        env["LIVIA_TEST_NODE"] = node
     print(f"Private evidence directory: {work}", flush=True)
     return subprocess.run(
         [

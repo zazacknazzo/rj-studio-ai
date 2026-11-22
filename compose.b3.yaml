@@ -1,0 +1,7 @@
+# Explicit strict composition. Missing independent authority config prevents boot.
+# Use only after the operational audit; do not replace the running B2 yet.
+services:
+  backend:
+    volumes:
+      - ./.local/b3/runtime:/authority:ro
+    command: ["uvicorn", "rj_studio_ai.waha_cloudflare:create_waha_cloudflare_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--log-level", "error"]
