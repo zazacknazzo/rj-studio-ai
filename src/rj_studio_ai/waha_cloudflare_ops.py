@@ -45,7 +45,9 @@ def read_private(path):
 def wrangler(*args):
     executable = Path("infra/waha-authority/node_modules/wrangler/bin/wrangler.js").resolve()
     environment = os.environ.copy()
-    environment.update(WRANGLER_LOG="info", WRANGLER_SEND_METRICS="false")
+    environment.update(
+        WRANGLER_LOG="log", WRANGLER_WRITE_LOGS="false", WRANGLER_SEND_METRICS="false"
+    )
     return subprocess.run(
         [shutil.which("node"), str(executable), *args],
         capture_output=True,

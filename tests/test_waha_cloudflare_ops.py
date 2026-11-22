@@ -62,3 +62,15 @@ def test_private_operator_material_cannot_be_overwritten_or_world_readable(tmp_p
     target.chmod(0o644)
     with pytest.raises(ValueError, match="not_0600"):
         ops.read_private(target)
+
+
+def test_wrangler_preserves_machine_output_without_writing_debug_logs(monkeypatch):
+    def process(args, **kwargs):
+        assert kwargs["capture_output"]
+        assert kwargs["env"]["WRANGLER_LOG"] == "log"
+        assert kwargs["env"]["WRANGLER_WRITE_LOGS"] == "false"
+        assert kwargs["env"]["WRANGLER_SEND_METRICS"] == "false"
+        return SimpleNamespace(returncode=0, stdout='[{"versions":[]}]', stderr="")
+
+    monkeypatch.setattr(ops.subprocess, "run", process)
+    assert ops.wrangler("deployments", "list", "--json").stdout.startswith("[")
