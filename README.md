@@ -193,3 +193,13 @@ Os passos e o registro redigido do resultado ficam em
 - [Conversation Context](docs/conversation-context.md) · [Structured decision](docs/structured-decision.md)
 
 Agentes começam por `AGENTS.md` e carregam somente os documentos relevantes para a tarefa.
+
+## B1 — Lívia no WAHA privado
+
+[Operação local, configuração e QR](docs/operations/waha-b1.md).
+`compose.b1.yaml` e `scripts/b1` conectam ingresso autenticado ao pipeline existente
+com OpenAI e Knowledge reais. A inferência foi observada; conversa WhatsApp
+bidirecional ainda não foi comprovada. **Egress permanece NO-GO por AUD-01/AR-02**,
+sem flag de escape e sem Outbound Executor. Veja a
+[evidência de OpenAI](docs/architecture/b1-openai-evidence.json) e o
+[handoff B1](docs/handoffs/B1.md). Nunca versionar `.env.b1`, sessão, QR ou dados reais.

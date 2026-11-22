@@ -1,0 +1,11 @@
+FROM python:3.12.16-slim
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements/ci.lock /app/requirements/ci.lock
+RUN pip install --no-cache-dir --no-deps -r requirements/ci.lock
+COPY pyproject.toml README.md /app/
+COPY src /app/src
+COPY knowledge /app/knowledge
+RUN pip install --no-cache-dir --no-deps --no-build-isolation .
+# Private local volumes are created by the launcher. No .env enters the image.
+EXPOSE 8000

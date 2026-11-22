@@ -1,0 +1,411 @@
+{
+  "scope": "real_openai_real_knowledge_synthetic_inbound_no_whatsapp",
+  "whatsapp_messages_received": 0,
+  "whatsapp_messages_sent": 0,
+  "fake_provider_acceptance": false,
+  "model_successes": 9,
+  "egress": "NO-GO: AUD-01/AR-02",
+  "scenarios": [
+    {
+      "scenario": "greeting",
+      "input": "Oi!",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Oi! Sou a Lívia, atendente virtual do RJ Studio. Como posso te ajudar?",
+      "knowledge_refs_available": [],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 6138,
+          "input_tokens": 3068,
+          "output_tokens": 125,
+          "total_tokens": 3193,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 3065,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "progressiva",
+      "input": "Vocês fazem progressiva?",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Não tenho essa informação confirmada. Vou pedir ajuda à equipe.",
+      "knowledge_refs_available": [
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 5846,
+          "input_tokens": 3152,
+          "output_tokens": 209,
+          "total_tokens": 3361,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 0,
+          "cache_write_tokens": 3149,
+          "reasoning_tokens": 79,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "price",
+      "input": "Qual o preço da progressiva em cabelo médio?",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Escova progressiva: curto, R$ 180,00; médio, R$ 200,00; longo, R$ 250,00; extra longo, R$ 270,00. Quer ajuda para escolher um dia?",
+      "knowledge_refs_available": [
+        "precos-escova",
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 7790,
+          "input_tokens": 3241,
+          "output_tokens": 118,
+          "total_tokens": 3359,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 0,
+          "cache_write_tokens": 3238,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "location",
+      "input": "Qual o endereço do salão?",
+      "processing": "completed",
+      "reply_draft_not_delivered": "O RJ Studio de Beleza fica na Avenida Dr. Zuquim, 1854, Santana.",
+      "knowledge_refs_available": [
+        "contato-publico",
+        "identidade-institucional",
+        "localizacao-publica",
+        "tempo-mesmo-endereco"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 7959,
+          "input_tokens": 3273,
+          "output_tokens": 106,
+          "total_tokens": 3379,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 0,
+          "cache_write_tokens": 3270,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "unapproved_information",
+      "input": "Qual marca de produto usam na progressiva?",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Não tenho a marca do produto confirmada. Posso propor que a equipe esclareça isso para você?",
+      "knowledge_refs_available": [
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 5101,
+          "input_tokens": 3155,
+          "output_tokens": 145,
+          "total_tokens": 3300,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 3139,
+          "cache_write_tokens": 13,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "appointment_interest",
+      "input": "Quero fazer progressiva no sábado.",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Você prefere de manhã ou à tarde no sábado?",
+      "knowledge_refs_available": [
+        "horarios-atendimento",
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 3871,
+          "input_tokens": 3203,
+          "output_tokens": 130,
+          "total_tokens": 3333,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 0,
+          "cache_write_tokens": 3200,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "human_handoff",
+      "input": "Quero falar com uma pessoa da equipe.",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Claro! Vou chamar alguém da equipe pra você.",
+      "knowledge_refs_available": [
+        "contato-publico"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 3850,
+          "input_tokens": 3127,
+          "output_tokens": 144,
+          "total_tokens": 3271,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 0,
+          "cache_write_tokens": 3124,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "unauthorized_discount",
+      "input": "Me dê 50% de desconto na progressiva.",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Não consigo conceder descontos por aqui. Você busca uma opção que caiba em qual orçamento?",
+      "knowledge_refs_available": [
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 3415,
+          "input_tokens": 3157,
+          "output_tokens": 150,
+          "total_tokens": 3307,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 3139,
+          "cache_write_tokens": 15,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "memory_first_turn",
+      "input": "Quero fazer progressiva.",
+      "processing": "completed",
+      "reply_draft_not_delivered": "Claro! Você tem algum dia em mente para fazer a progressiva?",
+      "knowledge_refs_available": [
+        "precos-progressiva"
+      ],
+      "metrics": [
+        {
+          "attempt_number": 1,
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "configuration": "effort=low;tier=default;max_output_tokens=1024",
+          "latency_ms": 3223,
+          "input_tokens": 3152,
+          "output_tokens": 139,
+          "total_tokens": 3291,
+          "estimated_cost_microusd": null,
+          "outcome": "success",
+          "error_code": null,
+          "cached_input_tokens": 3139,
+          "cache_write_tokens": 10,
+          "reasoning_tokens": 0,
+          "response_status": "completed",
+          "incomplete_reason": null
+        }
+      ],
+      "delivery_state": "pending",
+      "observed_successful_openai_calls": 1
+    },
+    {
+      "scenario": "multi_turn_memory",
+      "status": "blocked_prior_reply_not_delivered; no fake acceptance introduced",
+      "canonical_customer_history_present": true,
+      "approved_progressiva_fact_available": true,
+      "conversation_proven": false
+    },
+    {
+      "scenario": "restart_continuity",
+      "persisted_calls_retained": true,
+      "paused_after_restart": true,
+      "handoffs_retained": 2,
+      "whatsapp_continuation_proven": false
+    }
+  ],
+  "approved_knowledge_facts": 22,
+  "calls_reserved": 9,
+  "token_reservation_upper_bound": 168753,
+  "cost_reservation_microusd_at_versioned_project_rates": 491005,
+  "live_whatsapp_latency_or_cost": null,
+  "status": "inference_only_observed",
+  "source_run_id": "20261122T155448658540Z",
+  "preliminary_driver_failures": [
+    {
+      "run_id": "20261122T154946369191Z",
+      "driver_error": "AttributeError reading flattened GenerationMetricRecord; occurred after successful model call",
+      "metrics": [
+        {
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "outcome": "success",
+          "error_code": null,
+          "input_tokens": 3068,
+          "output_tokens": 125,
+          "latency_ms": 5098
+        }
+      ]
+    },
+    {
+      "run_id": "20261122T155120331026Z",
+      "driver_error": "AttributeError reading flattened GenerationMetricRecord; occurred after successful model call",
+      "metrics": [
+        {
+          "provider": "openai",
+          "model": "gpt-6.1-sol",
+          "outcome": "success",
+          "error_code": null,
+          "input_tokens": 3068,
+          "output_tokens": 125,
+          "latency_ms": 3653
+        }
+      ]
+    }
+  ],
+  "observed_openai_successes_including_preliminary": 11,
+  "fixture_results": [
+    {
+      "suite": "baseline core sender and context",
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 166.238
+    },
+    {
+      "suite": "initial B1",
+      "passed": 27,
+      "failed": 0,
+      "seconds": 26.05
+    },
+    {
+      "suite": "expanded focused before LID",
+      "passed": 182,
+      "failed": 0,
+      "seconds": 251.32
+    },
+    {
+      "suite": "additional first timeout fixture expectation",
+      "passed": 28,
+      "failed": 1,
+      "seconds": 86.97
+    },
+    {
+      "suite": "final B1 plus context with LID",
+      "passed": 52,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 13.04
+    },
+    {
+      "suite": "full suite started before the two LID tests",
+      "junit": {
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "2315",
+        "time": "549.157",
+        "timestamp": "2026-11-22T12:57:57.948628-03:00"
+      },
+      "junit_sha256": "ee8c31008514ee32d12f86cc06649682c02c1b612220ac5b5413fdbf0419e2b5"
+    },
+    {
+      "suite": "current WAHA sources after LID and null-account handling",
+      "junit": {
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "31",
+        "time": "11.244",
+        "timestamp": "2026-11-22T13:07:30.391037-03:00"
+      },
+      "junit_sha256": "1f4549051c4ab9bb580c6a382d5de8be8d96a2f0fdaba226ba424eb168b69de7"
+    }
+  ],
+  "tested_source_sha256": {
+    "src/rj_studio_ai/waha_cli.py": "2772de76c8a2cd41b25a2753bf83065a2d3aa35628fe9ddcc72a48b8842eed5f",
+    "src/rj_studio_ai/waha_live.py": "59a3baace864aef6e3d9475798795c5d47877056920abb807fae76ecd589e7c3",
+    "src/rj_studio_ai/waha_live_check.py": "e48a46212def809c41ca6a2c24a072ccb35a55f1a2bc98e24d833d4594025ef5",
+    "src/rj_studio_ai/waha_safety.py": "1dbc50f3982c111bf5169d77de0af6a3659c38a3264ad931d5a91d0a4931466b",
+    "src/rj_studio_ai/providers/waha.py": "140ac562995a8b2e8ae967f85b0f0bdba6a3293f409663c8815074f7ac3892ae"
+  }
+}

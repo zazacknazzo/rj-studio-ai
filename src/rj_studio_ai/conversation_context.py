@@ -21,6 +21,7 @@ class ConversationContextLimits:
     history_token_budget: int = 2_000
     total_input_token_budget: int = 4_000
     prompt_overhead_token_budget: int = 400
+    use_history_for_knowledge: bool = False
 
     def __post_init__(self) -> None:
         if self.maximum_prior_messages < 1:
@@ -90,17 +91,24 @@ class ConversationContextBuilder:
                 "Current Message exceeds the Conversation context budget"
             )
 
-        knowledge = self._select_knowledge(current_body, content_budget - current_cost)
-        knowledge_cost = _knowledge_cost(knowledge)
-        history_budget = min(
-            self._limits.history_token_budget,
-            content_budget - current_cost - knowledge_cost,
-        )
         recent_history = self._store.load_recent_context_history(
             inbound_message_id=inbound_message_id,
             maximum_age=self._limits.maximum_age,
             maximum_messages=self._limits.maximum_prior_messages,
             lock_timeout=lock_timeout,
+        )
+        knowledge_query = current_body
+        if self._limits.use_history_for_knowledge:
+            # Follow-up questions such as "E quanto fica?" need the same approved
+            # service facts as preceding Customer turns. No extra memory store.
+            knowledge_query += "\n" + "\n".join(
+                record.body for record in recent_history.records if record.direction == "inbound"
+            )
+        knowledge = self._select_knowledge(knowledge_query, content_budget - current_cost)
+        knowledge_cost = _knowledge_cost(knowledge)
+        history_budget = min(
+            self._limits.history_token_budget,
+            content_budget - current_cost - knowledge_cost,
         )
         history, history_was_trimmed = _trim_history(recent_history, history_budget)
         return ConversationContext(

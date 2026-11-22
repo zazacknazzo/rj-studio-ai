@@ -1,0 +1,12 @@
+*
+!Dockerfile.b1
+!pyproject.toml
+!README.md
+!requirements/
+!requirements/ci.lock
+!src/
+!src/**
+!knowledge/
+!knowledge/rj_studio.yaml
+**/__pycache__/
+**/*.pyc

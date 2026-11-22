@@ -1,0 +1,66 @@
+name: rj-livia-b1
+services:
+  waha:
+    # WAHA 2026.10.1 / Chromium WEBJS / ARM64, verified from the vendor registry.
+    image: devlikeapro/waha:arm-2026.10.1@sha256:64ecee1e8cea097d8c4b675b4940b12e0b4836ca5923a34633272c263df090fd
+    platform: linux/arm64
+    restart: "no"
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      WAHA_API_KEY: "sha512:${WAHA_API_KEY_SHA512:?run scripts/b1 init}"
+      WAHA_DASHBOARD_ENABLED: "true"
+      WAHA_DASHBOARD_USERNAME: "admin"
+      WAHA_DASHBOARD_PASSWORD: "${WAHA_DASHBOARD_PASSWORD:?run scripts/b1 init}"
+      WHATSAPP_SWAGGER_ENABLED: "false"
+      WHATSAPP_DEFAULT_ENGINE: "WEBJS"
+      WAHA_PRINT_QR: "false"
+      WAHA_LOG_LEVEL: "error"
+      WAHA_HTTP_LOG_LEVEL: "error"
+      WAHA_WORKER_RESTART_SESSIONS: "false"
+      WHATSAPP_RESTART_ALL_SESSIONS: "false"
+      WHATSAPP_DOWNLOAD_MEDIA: "false"
+      WAHA_CLIENT_DEVICE_NAME: "Livia B1 privado"
+      TZ: "America/Sao_Paulo"
+    volumes:
+      - ./.local/b1/sessions:/app/.sessions
+    shm_size: 512mb
+    # The vendor prints configured dashboard credentials even at error log level.
+    # Do not retain WAHA stdout/stderr; use authenticated API status diagnostics.
+    logging:
+      driver: "none"
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.b1
+    restart: "no"
+    init: true
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      LLM_PROVIDER: "openai"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "gpt-6.1-sol"
+      OPENAI_REASONING_EFFORT: "low"
+      OPENAI_MAX_OUTPUT_TOKENS: "1024"
+      WAHA_API_URL: "http://waha:3000"
+      WAHA_API_KEY: "${WAHA_API_KEY:?run scripts/b1 init}"
+      WAHA_WEBHOOK_SECRET: "${WAHA_WEBHOOK_SECRET:?run scripts/b1 init}"
+      WAHA_OPERATOR_TOKEN: "${WAHA_OPERATOR_TOKEN:?run scripts/b1 init}"
+      WAHA_JOURNAL_KEY: "${WAHA_JOURNAL_KEY:?run scripts/b1 init}"
+      WAHA_SECONDARY_PHONE: "${WAHA_SECONDARY_PHONE:-}"
+      WAHA_AUTHORIZED_PHONES: "${WAHA_AUTHORIZED_PHONES:?configure authorized participants}"
+      WAHA_STATE_PATH: "/state/conversations.db"
+      WAHA_CONTROL_PATH: "/control"
+      WAHA_WITNESS_PATH: "/witness/head.json"
+      SALON_KNOWLEDGE_PATH: "/app/knowledge/rj_studio.yaml"
+    volumes:
+      - ./.local/b1/backend:/state
+      - ./.local/b1/control:/control
+      - ./.local/b1/witness:/witness
+    command: ["uvicorn", "rj_studio_ai.waha_live:create_waha_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--log-level", "error"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
