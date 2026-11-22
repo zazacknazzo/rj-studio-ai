@@ -109,6 +109,8 @@ test("reconciliation cannot prove non-submission or re-arm an old intent", async
   const token = nonce(); await f.runtime("consume", { token });
   const args = { intent, token, digest: "f".repeat(64), evidence: "5".repeat(64), acceptance: "3".repeat(64) };
   assert.equal((await f.mutate("reconcile", { ...args, outcome: "not_submitted" }, "operator")).ok, false);
+  assert.equal((await f.mutate("reconcile", { ...args, outcome: "accepted" }, "operator")).error, "causal_acceptance_receipt_required");
+  assert((await f.runtime("outcome", {token, outcome: "accepted", acceptance: args.acceptance})).ok);
   assert((await f.mutate("reconcile", { ...args, outcome: "accepted" }, "operator")).ok);
   assert.equal((await f.release()).error, "intent_already_consumed");
 });

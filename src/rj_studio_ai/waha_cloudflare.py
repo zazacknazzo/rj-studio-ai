@@ -40,7 +40,17 @@ def prepare_waha(message):
     ).encode()
 
 
-def observe_waha_acceptance(api, aliases, message, provider_id):
+def observe_waha_acceptance(api, aliases, message, provider_id, *, submission):
+    # A matching GET is not causal proof: an old/manual identical message can exist.
+    # Only a provider ID already witnessed from this attempt's actual HTTP response
+    # may finalize local state. A timeout without that receipt stays UNKNOWN.
+    if (
+        submission.get("outcome") != "accepted"
+        or submission.get("acceptance") != hashlib.sha256(provider_id.encode()).hexdigest()
+        or type(submission.get("consumed_at")) is not int
+        or type(submission.get("accepted_at")) is not int
+    ):
+        raise AuthorityClosed("causal_acceptance_receipt_required")
     match = re.fullmatch(r"true_([0-9]{1,20}@(c\.us|lid))_[A-Za-z0-9_-]{1,128}", provider_id)
     if not match or aliases.get(match[1]) != message.recipient_address:
         raise AuthorityClosed("provider_evidence_recipient_invalid")
@@ -66,6 +76,10 @@ def observe_waha_acceptance(api, aliases, message, provider_id):
         or raw.get("fromMe") is not True
         or raw.get("hasMedia") is not False
         or raw.get("body") != message.body
+        or type(raw.get("timestamp")) is not int
+        or not submission["consumed_at"] - 5000
+        <= raw["timestamp"] * 1000
+        <= submission["accepted_at"] + 5000
         or type(raw.get("ack")) is not int
         or raw["ack"] not in (1, 2, 3, 4)
         or (raw.get("to") is not None and aliases.get(raw["to"]) != message.recipient_address)
@@ -77,6 +91,9 @@ def observe_waha_acceptance(api, aliases, message, provider_id):
                 "provider_id": provider_id,
                 "request_digest": hashlib.sha256(prepare_waha(message)).hexdigest(),
                 "ack": raw["ack"],
+                "timestamp": raw["timestamp"],
+                "consumed_at": submission["consumed_at"],
+                "accepted_at": submission["accepted_at"],
             }
         )
     ).hexdigest()
@@ -432,7 +449,9 @@ class CloudflareWahaStore(WahaConversationStore):
             message = OutboundMessage(row[1], row[2], row[3], submission_key=intent["key"])
             if hashlib.sha256(prepare_waha(message)).hexdigest() != intent["digest"]:
                 raise AuthorityClosed("local_unknown_request_conflict")
-            evidence = observe_waha_acceptance(api, aliases, message, provider_id)
+            evidence = observe_waha_acceptance(
+                api, aliases, message, provider_id, submission=intent
+            )
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(

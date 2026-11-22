@@ -393,8 +393,8 @@ def operator(action, proof_file=None):
         proof = read_private(Path(proof_file))
         identity, provider_id = proof["intent"], proof["provider_message_id"]
         entry = state["intents"].get(identity)
-        if not entry or entry["outcome"] not in ("unknown", "accepted"):
-            raise ValueError("external_unknown_intent_required")
+        if not entry or entry["outcome"] != "accepted":
+            raise ValueError("external_causal_acceptance_receipt_required")
         with sqlite3.connect(
             Path(".local/b1/backend/conversations.db").resolve().as_uri() + "?mode=ro", uri=True
         ) as connection:
@@ -423,7 +423,9 @@ def operator(action, proof_file=None):
         message = OutboundMessage(row[1], row[2], row[3], submission_key=entry["key"])
         if hashlib.sha256(prepare_waha(message)).hexdigest() != entry["digest"]:
             raise ValueError("local_request_digest_mismatch")
-        evidence = observe_waha_acceptance(channel, verified, message, provider_id)
+        evidence = observe_waha_acceptance(
+            channel, verified, message, provider_id, submission=entry
+        )
         authority.read()
         authority.command(
             "reconcile",

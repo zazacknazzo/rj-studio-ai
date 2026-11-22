@@ -27,7 +27,10 @@ ao inventário. Consumo durável marca unknown antes de qualquer POST; ticket ef
 novamente antes do POST. Lease B3 de90s e drain dos executores preservam a
 exclusividade enquanto as verificações externas estão em curso. Só Provider Acceptance real valida accepted. Unknown,
 restart ou restore nunca recriam ticket nem habilitam retry. Reconciliação registra
-prova de acceptance observada via WAHA GET, repetida pelo backend. A migração0024
+prova de acceptance observada via WAHA GET, repetida pelo backend, somente para
+ID já recebido causalmente no HTTP desta tentativa e ancorado accepted no witness.
+Timeout sem esse receipt mantém UNKNOWN: mensagens antigas/manuais idênticas
+não provam causalidade. consumed_at/accepted_at externos limitam o timestamp WAHA. A migração0024
 conserva prova imutável e permite somente a transição WAHA comprovada a accepted;
 os demais providers e estados incertos sem prova mantêm os guards. Isso conserva impossibilidade de reenviar a intenção anterior.
 

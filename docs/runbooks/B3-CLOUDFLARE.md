@@ -104,9 +104,18 @@ registra falhas HMAC sticky e exige reparo posterior; não apagar esse registro.
 Um head local incorreto ainda exige backup correto; hashes não recriam Messages.
 Restaurar uma testemunha abaixo da autoridade permanece bloqueado.
 
-Para unknown realmente aceito, `reconcile-accepted --proof-file <0600>` recebe
-apenas intenção e ID WAHA. Operador observa a mensagem existente via GET, valida
-sessão/destinatário/texto/ACK e grava resultado na autoridade. O backend repete a
+Para falha local APÓS receipt causal já ancorado como accepted na autoridade, `reconcile-accepted --proof-file <0600>` recebe
+apenas intenção e ID WAHA. O ID deve coincidir com o hash do ID retornado ao runtime pela própria tentativa
+HTTP e já ancorado na testemunha. Operador observa a mensagem existente via GET,
+valida sessão/destinatário/texto/ACK/timestamp contra consumed_at/accepted_at
+(tolerância máxima5s para relógios) e anota prova na autoridade. O backend repete a
 observação e grava prova imutável antes de finalizar localmente. Nunca aceitar um
 hash arbitrário como prova de entrega. Sem observação válida, manter unknown e
-pedir atendimento humano. Não existe operação not_submitted que reabra envio.
+pedir atendimento humano. Não existe operação not_submitted que reabra envio. Se o POST expira sem recibo
+causal ancorado, mesmo um GET com texto/destinatário/horário iguais NÃO pode
+transformar UNKNOWN em accepted: pode ser uma mensagem manual idêntica. WEBJS
+2026.10.1 em uso não encaminha request.id pré-gerado em getMessageOptions e
+generateNewMessageId herda NotImplementedByEngineError; não presumir idempotência
+ou correlação que esse engine não fornece. Preservar UNKNOWN e atendimento humano.
+O código compilado do container foi inspecionado somente para leitura; nenhum envio
+foi feito para verificar essa limitação.

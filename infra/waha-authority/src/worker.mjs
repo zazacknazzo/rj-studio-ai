@@ -254,6 +254,7 @@ export class Authority extends SignedObject {
       next.intents[args.intent].boot = state.boot;
       next.intents[args.intent].epoch = state.epoch;
       next.intents[args.intent].expires_at = state.grant.expires_at;
+      next.intents[args.intent].consumed_at = Date.now();
       next.grant = null;
     } else if (action === "check_submission") {
       this.requireBoot(state, command);
@@ -268,14 +269,14 @@ export class Authority extends SignedObject {
       requireThat(!Object.entries(state.intents).some(([identity, value]) => identity !== args.intent && value.acceptance === args.acceptance), "acceptance_identity_collision");
       requireThat(intent.outcome === "unknown" || (intent.outcome === "accepted" && intent.acceptance === args.acceptance), "outcome_conflict");
       next.intents[args.intent].outcome = "accepted"; next.intents[args.intent].acceptance = args.acceptance;
+      next.intents[args.intent].accepted_at = intent.accepted_at || Date.now();
     } else if (action === "reconcile") {
       requireThat(role === "operator", "operator_required");
       const intent = state.intents[args.intent];
       requireThat(intent && intent.digest === args.digest && intent.token === args.token && validHash(args.evidence), "reconciliation_evidence_invalid");
       requireThat(args.outcome === "accepted" && validHash(args.acceptance), "reconciliation_cannot_prove_non_submission");
       requireThat(!Object.entries(state.intents).some(([identity, value]) => identity !== args.intent && value.acceptance === args.acceptance), "acceptance_identity_collision");
-      requireThat(intent.outcome === "unknown" || (intent.outcome === "accepted" && intent.acceptance === args.acceptance), "outcome_conflict");
-      next.intents[args.intent].outcome = "accepted"; next.intents[args.intent].acceptance = args.acceptance;
+      requireThat(intent.outcome === "accepted" && intent.acceptance === args.acceptance && Number.isSafeInteger(intent.accepted_at), "causal_acceptance_receipt_required");
       next.intents[args.intent].evidence = args.evidence;
       // Resolution never re-arms the old intent or releases another one.
       next.paused = true; next.grant = null;
