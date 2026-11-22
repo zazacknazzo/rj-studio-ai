@@ -6,7 +6,7 @@
 - Escopo: preparação, hardening, CI e testes OFFLINE; proibições na spec13.
 - Escritor exclusivo: confirmado pelo usuário neste chat em22/11/2026;
   esta execução é a única escritora de Git da branch. Revisores só leitura/probes fora do repo.
-- Última SHA remota verificada: CP2 116eb99948e2e592c08dd5f694884e0b932d65ed.
+- Última SHA remota verificada: CP3 fbfc0e0dc403f5fdb5f92647fd4777da79ace7e.
 - Main observado: af1c9eb862a4180ca6b9e537349e4f8abaa2bb29.
 - Clone separado preserva todos os worktrees/WIP anteriores, incluindo Baileys.
 
@@ -18,7 +18,8 @@
 | CP1 | Matriz completa CX01–37/AUD01–06/AR01–03; nenhum checkbox alterado | IDs conferidos contra snapshot da issue/auditoria; diff check | CP0 acima |
 | CP2 | Lab recovery com authority+witness externos simulados/SQLite, sempre sem egress | 63passed12.01s recovery+ASGI; probes contratos/arquitetura37passed8.26s; Ruff/diff; P2 TTL corrigido | CP1 acima |
 | CP3 | Segregação/segurança/consentimento especificados; corrida revoke→authorize realSQLite | 222passed9.40s (race2/policy/admin), Ruff/diff | CP2 acima |
-| CP4–8 | Pendentes | Não executados | Não publicados |
+| CP4 | Matriz24tabelas+authority/witness/backups/evidências; sem novo purge | 160passed16.94s retention/replay/migrations/adversarial; diff | CP3 acima |
+| CP5–8 | Pendentes | Não executados | Não publicados |
 
 ## Riscos e evidências
 
@@ -31,7 +32,7 @@ Não executar restore/worker/ativação/replay de envios nem trocar submission k
 
 ## Próxima ação exata
 
-CP4: matriz completa de retenção/backups e testes de retenção/replay; store continua quarantinado.
+CP5: CI/resolução/guard/métricas e fixture histórica recuperada; store continua quarantinado.
 Fetch/status/handoff antes de retomar; publicar somente checks realmente executados.
 Reproduzir com venv próprio:
 `python scripts/check_telnyx_offline.py --python /isolated/venv/bin/python tests/test_telnyx_sender_integration.py`.
