@@ -2,6 +2,8 @@
 
 Checkpoint de 22/11/2026: P0/P1 executados no ambiente real; P2 aguarda mensagem
 nova do participante; P3–P5 não concluídos. Egress NO-GO, AUD-01/AR-02 abertos.
+Código publicado em `0f77e05e5c3e121f6c05772724216c019e65f9f1`;
+[CI completo aprovado](https://github.com/zazacknazzo/rj-studio-ai/actions/runs/45047050391).
 
 ## Diagnóstico observado
 
@@ -67,15 +69,27 @@ outro SQLite local e declará-lo independente violaria o aceite da missão. Nenh
 bypass ou executor de saída foi acrescentado. Autorização específica só deve ser
 pedida depois de provisionar e auditar esses controles; ainda não há autorização.
 
-## Verificação em curso
+## Verificação executada
 
 Red da regressão: 1FAILED reproduzindo OutboundOutcomeUnknown antes da correção.
-Focal inicial: 53PASS. Focal adversarial corrigido: 82PASS. Lote anterior teve11
-falhas de driver corrigidas. Focal final e integral ainda em execução neste checkpoint.
-Ruff/format/compileall/pipcheck/diff passaram no checkpoint; repetir após revisão.
+Focal inicial:53PASS. Focal adversarial corrigido:82PASS. Lote anterior teve11
+falhas de driver corrigidas. Focal final:83PASS/0SKIP/27,49s. Integral do CI na SHA
+acima:2348PASS/0SKIP/289,23s, Linux/Python3.12, interfaces de rede isoladas pelo
+kernel. Ruff/format/compileall/pipcheck/diff, auditoria de dependências e Gitleaks
+passaram no CI. Varredura local de valores privados conhecidos: zero ocorrências.
+Integral local preliminar interrompida em973PASS para recolher o snapshot final;
+não é contada como suite completa nem atribuída ao snapshot final.
+
+[Revisões separadas](b2-review.md): Standards0 achados; Spec0 defeitos novos e3
+grupos de aceite pendentes na revisão. O grupo de regressão posteriormente foi
+satisfeito pelo CI; ingresso real e egress permanecem pendentes.
+
+Rebuild da imagem final com volumes existentes comprovou boot pausado e novo resume
+com paused:false. SHA256 dos quatro módulos embarcados confere com o checkout.
+Sessão tem um webhook para backend, evento message inscrito e HMAC esperado.
 Primeira mensagem real foi solicitada ao participante; zero ingressos/zero chamadas
 OpenAI foram observados no banco até este checkpoint. Não inferir uso real de
-Knowledge ou memória a partir desses testes sintéticos.
+Knowledge ou memória a partir de testes sintéticos ou22 fatos apenas carregados.
 
 Credenciais já compartilhadas são consideradas expostas. Não foram exibidas ou
 alteradas. Rotacionar OpenAI/API/dashboard/webhook/operador em manutenção coordenada;

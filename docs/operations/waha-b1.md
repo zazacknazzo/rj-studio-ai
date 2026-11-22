@@ -1,5 +1,18 @@
 # Lívia / WAHA B1 — operação privada local
 
+Atualização B2: operar pelo checkout `codex/b2-livia-waha-live`. O timeout de
+contatos é20s e o comando resume espera até75s. Falhas específicas aparecem como
+`waha_contact_timeout`, `waha_contact_transport_failed`,
+`waha_contact_http_unexpected` ou `waha_contact_identity_unverified`; não significam
+submissão de mensagem. Resume revalida sessão antes/depois, conflitos e controles;
+qualquer falha mantém pausa. Detalhes/evidências em
+[validação B2](../architecture/b2-validation.md).
+
+Se a sessão preservada estiver STOPPED após iniciar containers, `scripts/b1 pair`
+inicia essa sessão e abre o dashboard existente. Não faz logout nem exige novo QR
+para uma sessão ainda pareada. Confirmar WORKING antes de resume. Não trocar o
+pareamento sem evidência de que foi perdido. Egress continua fechado na B2.
+
 **Estado: inferência OpenAI real comprovada; conversa WhatsApp bidirecional NÃO
 comprovada. Egress NO-GO por AUD-01/AR-02.** O inicializador não contém opção de
 liberação de envio. `resume` habilita somente inferência após verificar o número
