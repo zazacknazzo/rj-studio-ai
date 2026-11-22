@@ -1,0 +1,7 @@
+# Temporary user-approved rollback-risk test, never the SaaS composition.
+services:
+  backend:
+    image: rj-livia-private-test-backend
+    volumes:
+      - ./.local/livia-test:/authority
+    command: ["uvicorn", "rj_studio_ai.waha_private_test:create_waha_private_test_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--log-level", "error"]

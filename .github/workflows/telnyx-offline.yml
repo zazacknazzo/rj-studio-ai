@@ -1,7 +1,7 @@
 name: Telnyx offline readiness
 on:
   push:
-    branches: [codex/telnyx-coexistence-13-readiness, codex/telnyx-g0-smoke-staging, codex/b1-livia-waha-live, codex/b2-livia-waha-live, codex/b3-livia-cloudflare-egress]
+    branches: [codex/telnyx-coexistence-13-readiness, codex/telnyx-g0-smoke-staging, codex/b1-livia-waha-live, codex/b2-livia-waha-live, codex/b3-livia-cloudflare-egress, codex/b5-livia-private-live-test]
   pull_request:
   workflow_dispatch:
 permissions:
