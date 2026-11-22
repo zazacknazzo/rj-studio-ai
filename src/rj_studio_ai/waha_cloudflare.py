@@ -400,13 +400,30 @@ class CloudflareWahaStore(WahaConversationStore):
                 raw = result.json()
                 raw_recipient = raw.get("to")
                 provider_id = raw.get("id")
+                # WEBJS Core returns whatsapp-web.js Message.id; normalized engines
+                # return a string. Bind every nested component before accepting it.
+                if isinstance(provider_id, dict):
+                    nested = provider_id
+                    if (
+                        nested.get("fromMe") is not True
+                        or not isinstance(nested.get("remote"), str)
+                        or aliases.get(nested["remote"]) != message.recipient_address
+                        or not isinstance(nested.get("id"), str)
+                        or nested.get("_serialized")
+                        != "true_" + nested["remote"] + "_" + nested["id"]
+                    ):
+                        raise ValueError()
+                    provider_id = nested["_serialized"]
                 if (
                     raw.get("fromMe") is not True
                     or aliases.get(raw_recipient) != message.recipient_address
                     or not isinstance(provider_id, str)
-                    or not re.fullmatch(
-                        "true_" + re.escape(raw_recipient) + r"_[A-Za-z0-9_-]{1,128}", provider_id
+                    or not (
+                        id_match := re.fullmatch(
+                            r"true_([0-9]{1,20}@(c\.us|lid))_[A-Za-z0-9_-]{1,128}", provider_id
+                        )
                     )
+                    or aliases.get(id_match[1]) != message.recipient_address
                 ):
                     raise ValueError()
                 self.authority.runtime_command(
