@@ -29,8 +29,10 @@ Os testes Python/workerd não são conversas reais. A transação Cloudflare nã
 submissão WAHA nem evidência de administração independente. Nenhuma inferência
 OpenAI paga foi repetida no B3. B2 já comprovou1 ingresso e1 inferência reais com
 Knowledge precos-progressiva; não comprovou entrega ou memória multirrodada real.
-CI do snapshot final será observado após push; consultar a execução do SHA remoto,
-sem atribuir CI de B2 ou do source anterior a esta versão.
+CI do source final d13b731: SUCCESS na execução45070001408, com2353 testes Python
+isolados em kernel Linux sem rede +20 bridge Python/workerd =2373 PASS,0 skips;
+15 testes Node/workerd PASS. Audits de dependências e Gitleaks/source/histórico PASS.
+[Execução verificada](https://github.com/zazacknazzo/rj-studio-ai/actions/runs/45070001408).
 
 ## Auditoria e correções
 
@@ -47,11 +49,13 @@ UNKNOWN. Timeout sem receipt conserva UNKNOWN, inclusive se houver mensagem manu
 idêntica na mesma janela. Positivo simula crash local após acceptance externa;
 negativos demonstram recusa de mensagem antiga/ID sem vínculo/ACK e conteúdo inválidos.
 
-Spec rechecando e852746 confirmou resolução e nenhum novo P1/P2 no delta. A execução
-final do revisor Standards foi interrompida pelo limite da ferramenta antes de emitir
-seu novo laudo; não contar isso como aprovação. O root verificou a alteração e seus
-testes. Revalidação independente final de Standards e aceite operacional seguem
-pendentes, juntamente com a infraestrutura independente.
+Spec rechecando e852746 confirmou resolução e nenhum novo P1/P2 no delta. Uma
+revalidação Standards foi interrompida por limite da ferramenta, sem ser contada
+como aprovação. Depois do restabelecimento, Standards rechecando d13b731 confirmou
+resolução, reproduziu as recusas de recibo ausente/mensagem antiga e reportou zero
+P1/P2 de código pendentes confirmados. Isso não é GO operacional: infraestrutura,
+IAM/custódia e exercício real de recuperação seguem pendentes. AWS não foi incluída
+nessa revisão de código.
 
 A migração0024 foi exercitada em bancos de fixture; o banco real não foi alterado.
 Prova imutável permite somente acceptance WAHA comprovada, sem reabrir pending/retry;
@@ -82,3 +86,16 @@ PITR, assinatura ou operador dessa testemunha pode estar neste Mac/backups.
 Configurar, auditar IAM/custódia e validar as duas raízes reais antes de promover a
 factory. Não executar release-first, migrar banco real ou substituir backend B2
 apenas porque os testes locais/canário passaram.
+
+## Alternativa solicitada após o checkpoint
+
+O usuário não dispõe de administrador independente e informou não ter conta AWS.
+Foi pesquisada candidata com S3 Object Lock COMPLIANCE, escritas condicionais,
+endpoint de witness e assinatura com chave fora da Cloudflare/Mac. Não adotada como
+substituta auditada: exige tratar versões novas/delete markers, prazo/expiração,
+identidade da conta/bucket, CAS, IAM e assinatura. Um modelo experimental fora do
+source operacional passou14 negativos/positivos offline; zero chamadas/recursos AWS.
+Não é adaptador AWS implementado nem prova do provedor. Ver entrega externa
+B3-ALTERNATIVA-AWS.md/zip. Cadastro AWS, custos e retenção irreversível ainda dependem
+do usuário e do pacote final revisado. Não modificar B3 para aceitar um ID AWS falso
+ou simplesmente ignorar o check da testemunha.
