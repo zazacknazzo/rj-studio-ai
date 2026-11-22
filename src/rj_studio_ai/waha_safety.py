@@ -121,6 +121,7 @@ class WahaSafetyJournal:
 
     def _state(self):
         self.paused = True
+        self.control_revision = 0
         self.revoked = set()
         self.reserved_tokens = 0
         self.reserved_microusd = 0
@@ -130,6 +131,8 @@ class WahaSafetyJournal:
         self.prepared = False
         for entry in self.entries:
             kind = entry["kind"]
+            if kind in {"pause", "resume", "boot", "revoke"}:
+                self.control_revision += 1
             if kind in {"pause", "boot"}:
                 self.paused = True
             elif kind == "resume":

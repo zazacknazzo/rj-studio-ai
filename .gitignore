@@ -3,10 +3,10 @@
 .env.*
 !.env.example
 !.env.b1.example
-/.local/
+/.local
 .pytest_cache/
 .ruff_cache/
-.venv/
+.venv
 __pycache__/
 *.py[cod]
 data/

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# A shared editable venv may point at another worktree. Run this checkout's code.
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 if [[ -x .venv/bin/python ]]; then
   exec .venv/bin/python -m rj_studio_ai.waha_cli "$@"
 elif [[ -x ../venv/bin/python ]]; then

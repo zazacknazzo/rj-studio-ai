@@ -189,6 +189,10 @@ class WahaAdapter(InboundWebhookAdapter):
             raise InvalidWebhookPayload("waha_invalid_envelope") from None
 
 
+class WahaIdentityError(ValueError):
+    """Sanitized read-only verification failure; never a submission outcome."""
+
+
 class WahaAPI:
     """Private HTTP API; never logs response bodies, session credentials or QR."""
 
@@ -211,21 +215,22 @@ class WahaAPI:
         self.session = session
         self.client = client
 
+    def _request(self, method, path, *, payload=None, timeout=5):
+        with (
+            httpx.Client(trust_env=False) if self.client is None else nullcontext(self.client) as c
+        ):
+            return c.request(
+                method,
+                self.base_url + path,
+                json=payload,
+                headers={"X-Api-Key": self.api_key},
+                timeout=timeout,
+                follow_redirects=False,
+            )
+
     def request(self, method, path, *, payload=None, timeout=5):
         try:
-            with (
-                httpx.Client(trust_env=False)
-                if self.client is None
-                else nullcontext(self.client) as c
-            ):
-                return c.request(
-                    method,
-                    self.base_url + path,
-                    json=payload,
-                    headers={"X-Api-Key": self.api_key},
-                    timeout=timeout,
-                    follow_redirects=False,
-                )
+            return self._request(method, path, payload=payload, timeout=timeout)
         except httpx.HTTPError:
             raise OutboundOutcomeUnknown("waha_transport_unknown") from None
 
@@ -243,14 +248,21 @@ class WahaAPI:
 
     def identities_for(self, phone):
         canonical = phone_chat(phone)
-        response = self.request(
-            "GET",
-            f"/api/contacts/check-exists?phone={phone[1:]}&session={self.session}",
-            timeout=2,
-        )
+        try:
+            response = self._request(
+                "GET",
+                f"/api/contacts/check-exists?phone={phone[1:]}&session={self.session}",
+                timeout=20,
+            )
+        except httpx.TimeoutException:
+            raise WahaIdentityError("waha_contact_timeout") from None
+        except httpx.HTTPError:
+            raise WahaIdentityError("waha_contact_transport_failed") from None
+        if response.status_code != 200:
+            raise WahaIdentityError("waha_contact_http_unexpected")
         try:
             data = response.json()
-            if response.status_code != 200 or data.get("numberExists") is not True:
+            if data.get("numberExists") is not True:
                 raise ValueError()
             aliases = {canonical, data["chatId"]}
             if data.get("pn"):
@@ -261,7 +273,7 @@ class WahaAPI:
                 raise ValueError()
             return aliases
         except (ValueError, TypeError, KeyError, AttributeError):
-            raise OutboundPermanentError("waha_contact_identity_unverified") from None
+            raise WahaIdentityError("waha_contact_identity_unverified") from None
 
 
 class WahaTextSender(OutboundMessageSender):

@@ -181,6 +181,19 @@ def test_only_explicit_contact_check_can_supply_brazil_phone_alias():
     assert len(paths) == 1 and "/api/contacts/check-exists?phone=" in paths[0]
 
 
+def test_contact_lookup_allows_verified_response_after_two_seconds():
+    def slow_contact(req):
+        # Reproduce the real call-site failure without a wall-clock sleep.
+        if req.extensions["timeout"]["read"] < 6.89:
+            raise httpx.ReadTimeout("fixture_slow_contact", request=req)
+        assert req.extensions["timeout"]["read"] == 20
+        return httpx.Response(200, json={"numberExists": True, "chatId": "123456@lid"})
+
+    with httpx.Client(transport=httpx.MockTransport(slow_contact)) as client:
+        api = WahaAPI(base_url="http://127.0.0.1:3000", api_key=KEY, client=client)
+        assert api.identities_for(PARTICIPANT) == {CHAT, "123456@lid"}
+
+
 def test_duplicate_persisted_once_runtime_never_authorizes(tmp_path):
     _, safety, store, _, generator, _, _ = build_waha_pipeline(settings(tmp_path))
     try:

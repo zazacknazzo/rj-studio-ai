@@ -23,11 +23,10 @@ from rj_studio_ai.processing import ProcessingExecutor, ProcessingRunner
 from rj_studio_ai.providers.base import (
     InvalidWebhookPayload,
     InvalidWebhookSignature,
-    OutboundPermanentError,
     ProviderWebhookRequest,
 )
 from rj_studio_ai.providers.openai_contract import response_request
-from rj_studio_ai.providers.waha import WahaAdapter, WahaAPI, phone_chat
+from rj_studio_ai.providers.waha import WahaAdapter, WahaAPI, WahaIdentityError, phone_chat
 from rj_studio_ai.runtime import generator_from_settings
 from rj_studio_ai.salon_knowledge import SalonKnowledgeRepository
 from rj_studio_ai.waha_safety import WahaConversationStore, WahaSafetyError, WahaSafetyJournal
@@ -263,35 +262,57 @@ def create_waha_app(settings=None):
         if action not in {"pause", "resume"}:
             raise HTTPException(404, "operation_not_found")
         if action == "resume":
+            # Revalidation is fail-closed, including when already resumed.
+            with journal.lock:
+                journal.change("pause")
+                _change_core_pause(store, "pause")
+                adapter.bind_verified_identities({})
+                control_revision = journal.control_revision
             if not generator.is_configured():
                 raise HTTPException(409, "configure_OPENAI_API_KEY_in_private_env")
             try:
                 info = api.session_info()
+                if info.get("status") != "WORKING":
+                    raise WahaIdentityError("waha_session_not_working")
                 verified = {}
                 for number in (settings.waha_secondary_phone, *settings.waha_authorized_phones):
                     for alias in api.identities_for(number):
                         canonical = phone_chat(number)
                         if alias in verified and verified[alias] != canonical:
-                            raise ValueError("waha_identity_collision")
+                            raise WahaIdentityError("waha_identity_collision")
                         verified[alias] = canonical
+                # Contact checks may take seconds; a disconnect/rebind meanwhile
+                # must not authorize the account seen only before those reads.
+                current = api.session_info()
                 if (
-                    info.get("status") != "WORKING"
-                    or verified.get(info.get("me", {}).get("id")) != adapter.secondary
+                    current.get("status") != "WORKING"
+                    or (current.get("me") or {}).get("id") != (info.get("me") or {}).get("id")
+                    or verified.get((current.get("me") or {}).get("id")) != adapter.secondary
                 ):
-                    raise OutboundPermanentError()
-                adapter.bind_verified_identities(verified)
-                journal.append(
-                    {
-                        "kind": "identities",
-                        "digest": hashlib.sha256(
-                            json.dumps(verified, sort_keys=True).encode()
-                        ).hexdigest(),
-                    }
-                )
+                    raise WahaIdentityError("waha_session_identity_unverified")
+                with journal.lock:
+                    journal.refresh()
+                    if journal.control_revision != control_revision:
+                        raise WahaIdentityError("waha_controls_changed_during_verification")
+                    journal.append(
+                        {
+                            "kind": "identities",
+                            "digest": hashlib.sha256(
+                                json.dumps(verified, sort_keys=True).encode()
+                            ).hexdigest(),
+                        }
+                    )
+                    adapter.bind_verified_identities(verified)
+                    journal.change(action)
+                    _change_core_pause(store, action)
+            except WahaIdentityError as error:
+                raise HTTPException(409, str(error)) from None
             except Exception:
+                journal.change("pause")
                 raise HTTPException(409, "secondary_session_not_connected") from None
-        journal.change(action)
-        _change_core_pause(store, action)
+        else:
+            journal.change(action)
+            _change_core_pause(store, action)
         processing.wake()
         return {"paused": journal.paused, "egress": False, "scope": "inference_only"}
 

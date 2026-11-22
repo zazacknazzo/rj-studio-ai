@@ -89,7 +89,8 @@ def operator_request(values, action):
             "GET" if action == "ready" else "POST",
             "http://127.0.0.1:8001/" + ("ready" if action == "ready" else "ops/" + action),
             headers={"Authorization": "Bearer " + values["WAHA_OPERATOR_TOKEN"]},
-            timeout=10,
+            # Three contact checks (20s each) plus two session reads (5s each).
+            timeout=75 if action == "resume" else 10,
         )
     return response.json()
 
