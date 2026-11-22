@@ -1,5 +1,11 @@
 # V1 operational API
 
+Estado correnteTelnyx22/11/2026: Tickets01–12 aprovados somenteoffline; T13 preparação
+offline autorizada. Runbooks/gates correntes: [Ticket13](operations/telnyx-runbooks.md),
+[recovery](operations/telnyx-recovery.md), [segurança/consentimento](operations/telnyx-security-consent.md).
+AUD01 aberto; piloto/produção/egress real NO-GO. Seções de tickets abaixo preservam
+histórico; nada aqui configura release ou provisiona credencial real.
+
 Private routes, intended for a future mobile client over HTTPS:
 
 - GET `/admin/conversations/{id}/automation`
@@ -83,8 +89,8 @@ Example response (synthetic Conversation identifier):
 This response still reports an active policy handoff. Its existing trusted local
 release operation remains separate; the API never exposes or accepts episode tokens.
 No general `automation_active` promise is made: future inbound admission, ordering,
-handoff, delivery and provider eligibility remain separate gates. The journal's
-channel lifecycle observations are not an implemented channel gate yet (Ticket 09).
+handoff, delivery and provider eligibility remain separate gates. Channel lifecycle is now gated offline by Ticket09; activation and current external
+verification remain separate prerequisites, never administrative resume.
 
 ## Telnyx offline ingress evidence (Ticket 07)
 
@@ -108,9 +114,10 @@ the local cutoff. Validate NTP and real timestamp provenance before pilot; futur
 unproven inbound is suppressed after resume, including once the clock catches up.
 
 Unsupported inbound media/location/files and unknown events currently receive no
-successful ACK. Status/lifecycle await Tickets 08/09. Before enabling Ticket 12's
-route, define durable handling and operational visibility for unsupported formats,
-verify profile subscriptions, raw duplicate-header rejection and streaming limits.
+successful ACK. Status/lifecycle are implemented offline by Tickets08/09. Ticket12 has bounded
+raw ASGI ingress and durable aggregate422 observations, but no production route.
+Before enabling any route, prove profile subscriptions, proxy/headers, retry/failover
+and operator handling of unsupported formats (CX29) in the target environment.
 No unsupported event may be silently discarded under a 2xx response. Ticket 07's
 local multi-envelope test interface does not assert Telnyx sends HTTP batches.
 

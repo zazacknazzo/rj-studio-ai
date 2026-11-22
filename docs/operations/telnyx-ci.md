@@ -6,7 +6,7 @@ ANTES do isolamento de rede; nenhum desses passos usa conta/API Telnyx.
 
 ## Resolução e fronteiras
 
-requirements/ci.lock fixa87distribuições observadas, incluindo pip26.3/pytest9.2.0,
+requirements/ci.lock fixa86distribuições observadas, incluindo pip26.3/pytest9.2.0,
 audit/build tools. Aplicação local é instalada separadamente com --no-deps e
 --no-build-isolation; hatchling/editables também estão fixados.
 O lock é de VERSÕES: não é lock universal por plataforma nem pin por hash de wheel.

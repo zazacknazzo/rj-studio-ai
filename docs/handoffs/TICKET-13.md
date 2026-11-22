@@ -6,7 +6,7 @@
 - Escopo: preparação, hardening, CI e testes OFFLINE; proibições na spec13.
 - Escritor exclusivo: confirmado pelo usuário neste chat em22/11/2026;
   esta execução é a única escritora de Git da branch. Revisores só leitura/probes fora do repo.
-- Última SHA remota verificada: CP4 536bfbc2a79829f21f69b3258abc8fbf8c86000b.
+- Última SHA remota verificada: CP5 988efabe39611821035663dbae24a266b71bfca5.
 - Main observado: af1c9eb862a4180ca6b9e537349e4f8abaa2bb29.
 - Clone separado preserva todos os worktrees/WIP anteriores, incluindo Baileys.
 
@@ -19,8 +19,9 @@
 | CP2 | Lab recovery com authority+witness externos simulados/SQLite, sempre sem egress | 63passed12.01s recovery+ASGI; probes contratos/arquitetura37passed8.26s; Ruff/diff; P2 TTL corrigido | CP1 acima |
 | CP3 | Segregação/segurança/consentimento especificados; corrida revoke→authorize realSQLite | 222passed9.40s (race2/policy/admin), Ruff/diff | CP2 acima |
 | CP4 | Matriz24tabelas+authority/witness/backups/evidências; sem novo purge | 160passed16.94s retention/replay/migrations/adversarial; diff | CP3 acima |
-| CP5 | CI/lock87, guardDNS/children, v8original, carga com falha; CIremota a observar | 13passed5.27s (cargas3/guard9/v8); 106passed10.65s recorte anterior; Ruff346/compile/pipcheck/audit87/0advisories; Gitleaks3baseline | CP4 acima |
-| CP6–8 | Pendentes | Não executados | Não publicados |
+| CP5 | CI/lock86, guardDNS/children, v8original, carga com falha; CIremota a observar | 13passed5.27s (cargas3/guard9/v8); 106passed10.65s recorte anterior; Ruff346/compile/pipcheck/audit87/0advisories; Gitleaks3baseline | CP4 acima |
+| CP6 | Runbooks16, CX29/fila, observabilidade e piloto sóplanejamento; índices/histórico alinhados | difflinks; suitesintegrais/CI988efab emexecução, NÃO chamarPASS ainda | CP5 acima |
+| CP7–8 | Pendentes | Não executados | Não publicados |
 
 ## Riscos e evidências
 
@@ -33,7 +34,7 @@ Não executar restore/worker/ativação/replay de envios nem trocar submission k
 
 ## Próxima ação exata
 
-CP6: runbooks/piloto/observabilidade; observarCI e corrigir falhas reais; store continua quarantinado.
+CP7: terminar integrais/CI/quatroreviews e cloneclean; corrigir achados; store continua quarantinado.
 Fetch/status/handoff antes de retomar; publicar somente checks realmente executados.
 Reproduzir com venv próprio:
 `python scripts/check_telnyx_offline.py --python /isolated/venv/bin/python tests/test_telnyx_sender_integration.py`.

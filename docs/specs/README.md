@@ -1,5 +1,10 @@
 # Version Specifications
 
+Estado atual da série Telnyx em22/11/2026: Tickets01–12 aprovados somente OFFLINE;
+Ticket13 autorizado somente para preparação/testes offline conforme issue11.
+Restrições a tickets posteriores nos itens antigos abaixo são HISTÓRICAS, não o
+estado atual. Piloto/produção/merge continuam NO-GO; inteligênciaV1 não é alterada.
+
 Each version has one durable specification. Do not implement a version until its spec is approved.
 
 | Version | Status | Specification |
@@ -47,3 +52,5 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [Telnyx Coexistence Ticket11 — offline sender](V1-telnyx-coexistence-ticket-11.md)
 
 - [Telnyx Ticket12 — offline ASGI composition](V1-telnyx-coexistence-ticket-12.md): authorized offline only; operational NO-GO.
+
+- [Telnyx Ticket13 — readiness offline](V1-telnyx-coexistence-ticket-13.md): spec/ADR/recoverylab, gates/CI/runbooks; sem release operacional.

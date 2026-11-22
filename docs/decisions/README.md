@@ -29,3 +29,7 @@ Add an ADR only for a hard-to-reverse choice that would be surprising without it
 - [0019 — Deterministic offline Telnyx sender](0019-deterministic-offline-telnyx-sender.md)
 
 - [0020 — offline Telnyx ASGI composition](0020-offline-telnyx-asgi-composition.md)
+
+- [0014 — Telnyx authentication](0014-telnyx-webhook-authentication.md).
+- [0015 — Durable Telnyx ingress](0015-durable-telnyx-message-ingress.md).
+- [0021 — Recovery offline e gates](0021-offline-recovery-authority-and-release-gates.md): authority/witness separados; simulation_ready jamais concede egress.
