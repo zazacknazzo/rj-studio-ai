@@ -13,7 +13,9 @@ evidência operacional para fechar AUD-01/AR-02. Uma segunda conta administrada
 separadamente, ou testemunha equivalente com raiz não revertida, é requisito externo.
 
 Cada mutação é CAS, verifica o estado atual da testemunha e a avança antes de
-persistir/reconhecer a autoridade. Respostas Ed25519 ligam nonce/tempo/escopo/conta;
+persistir/reconhecer a autoridade. Preparação durável e snapshot minimizado completo
+na testemunha permitem reparar um witness adiantado sem inventar ou apagar inventário.
+Reparo mantém maintenance, incrementa epoch e termina pausado/killed. Respostas Ed25519 ligam nonce/tempo/escopo/conta;
 runtime e operador têm segredos distintos. Boot troca epoch, pausa e remove grants.
 Âncora externa precede cada novo MAC do journal local; falha entre raízes exige
 reconciliação, sem apagar registros ou adivinhar que não houve submissão.
@@ -21,9 +23,13 @@ reconciliação, sem apagar registros ou adivinhar que não houve submissão.
 Identidade lógica é HMAC de provider/canal/ID canônico do inbound/tipo de resposta;
 não depende do ID numérico SQLite. Bytes exatos, destinatário e chave são ligados
 ao inventário. Consumo durável marca unknown antes de qualquer POST; ticket efêmero
-é consumido uma única vez. Só Provider Acceptance real valida accepted. Unknown,
+é consumido uma única vez. Expiração acompanha a intenção consumida e é verificada
+novamente antes do POST. Lease B3 de90s e drain dos executores preservam a
+exclusividade enquanto as verificações externas estão em curso. Só Provider Acceptance real valida accepted. Unknown,
 restart ou restore nunca recriam ticket nem habilitam retry. Reconciliação registra
-prova de acceptance e conserva impossibilidade de reenviar a intenção anterior.
+prova de acceptance observada via WAHA GET, repetida pelo backend. A migração0024
+conserva prova imutável e permite somente a transição WAHA comprovada a accepted;
+os demais providers e estados incertos sem prova mantêm os guards. Isso conserva impossibilidade de reenviar a intenção anterior.
 
 Store B1 permanece fechado. A factory B3 explícita compõe journal ancorado, store
 estrito, sender e executor canônicos; não delega autorização ao store permissivo.
@@ -40,3 +46,5 @@ Referências primárias: [Storage/PITR](https://developers.cloudflare.com/durabl
 [permissões](https://developers.cloudflare.com/workers/authorization/),
 [R2 locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/),
 [preços](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+Procedimento de custódia, implantação e recuperação: [runbook B3](../runbooks/B3-CLOUDFLARE.md).

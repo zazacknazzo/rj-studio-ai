@@ -18,9 +18,11 @@ from uuid import uuid4
 import httpx
 from nacl.signing import SigningKey, VerifyKey
 
+from rj_studio_ai.domain import OutboundMessage
 from rj_studio_ai.providers.waha import phone_chat
 from rj_studio_ai.waha_authority import AuthorityConfig, CloudflareAuthority, encoded
 from rj_studio_ai.waha_cli import api, config, operator_request
+from rj_studio_ai.waha_cloudflare import observe_waha_acceptance, prepare_waha
 
 PRIVATE = Path(".local/b3/cloudflare")
 
@@ -183,16 +185,30 @@ def prepare():
 def deploy(role):
     path = PRIVATE / f"{role}.wrangler.json"
     document = read_private(path)
+    if (PRIVATE / f"{role}.deploy-log.json").exists() or (
+        PRIVATE / f"{role}.endpoint.json"
+    ).exists():
+        raise ValueError("deployment_receipt_exists_reconcile_before_another_deploy")
+    probe = wrangler("deployments", "list", "--config", str(path), "--json")
+    if probe.returncode == 0:
+        raise ValueError("remote_worker_exists_without_owned_deployment_receipt")
+    if not re.search(r"code:\s*10007", probe.stderr):
+        raise ValueError("remote_worker_absence_unverified")
     result = wrangler(
         "deploy", "--config", str(path), "--secrets-file", str(PRIVATE / f"{role}.secrets.json")
     )
+    urls = re.findall(r"https://[a-zA-Z0-9.-]+\.workers\.dev", result.stdout + result.stderr)
     private_write(
         PRIVATE / f"{role}.deploy-log.json",
-        {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode},
+        {
+            "output_digest": hashlib.sha256((result.stdout + result.stderr).encode()).hexdigest(),
+            "exit_code": result.returncode,
+            "url": urls[-1] if urls else None,
+            "source_digest": hashlib.sha256(Path(document["main"]).read_bytes()).hexdigest(),
+        },
     )
     if result.returncode:
         raise ValueError("cloudflare_deployment_failed_private_log_available")
-    urls = re.findall(r"https://[a-zA-Z0-9.-]+\.workers\.dev", result.stdout + result.stderr)
     if not urls:
         # Query the account subdomain through the already authenticated CLI output
         # rather than guessing a personal or account identifier.
@@ -251,18 +267,24 @@ def canary():
     enrolled = raw_command(
         "canary",
         "enroll",
-        {"authority_account": primary["account"], "digest": primary["digest"]},
+        {
+            "authority_account": primary["account"],
+            "digest": primary["digest"],
+            "snapshot": primary["state"],
+        },
         expected=0,
     )
     if not enrolled["ok"]:
         raise ValueError("canary_already_enrolled_or_unavailable")
+    snapshot = {**primary["state"], "revision": 1}
     first = raw_command(
         "canary",
         "advance",
         {
             "authority_account": primary["account"],
             "prior_digest": primary["digest"],
-            "digest": hashlib.sha256(b"canary-write-before-restore").hexdigest(),
+            "digest": hashlib.sha256(encoded(snapshot)).hexdigest(),
+            "snapshot": snapshot,
         },
         credential="authority",
         expected=0,
@@ -278,8 +300,20 @@ def canary():
         credential="authority",
         expected=0,
     )
+    denied = raw_command("authority", "read", {})
+    after = raw_command("authority", "inspect", {})
+    if (
+        not first["ok"]
+        or replay["ok"]
+        or denied["ok"]
+        or denied.get("error") != "administration_not_independent"
+        or after["digest"] != primary["digest"]
+    ):
+        raise ValueError("canary_safety_assertion_failed")
     result = {
         "live_cloudflare_witness_transaction": first["ok"],
+        "same_account_authority_denied": not denied["ok"],
+        "authority_root_unchanged": after["digest"] == primary["digest"],
         "stale_cas_denied": not replay["ok"],
         "independent_administration": False,
         "operational_egress": False,
@@ -289,9 +323,29 @@ def canary():
     print(json.dumps(result))
 
 
-def operator(action):
+def operator(action, proof_file=None):
     configured = read_private(Path(".local/b3/operator.json"))
     authority = CloudflareAuthority(AuthorityConfig(**configured["runtime"]))
+    if action == "repair-roots":
+        values = config()
+        pending = []
+        fault_path = Path(".local/b1/control/authority-faults.jsonl")
+        if fault_path.exists():
+            for line in fault_path.read_bytes().splitlines():
+                record = json.loads(line)
+                mac = record.pop("mac")
+                if not hmac.compare_digest(
+                    mac,
+                    hmac.new(
+                        values["WAHA_JOURNAL_KEY"].encode(), encoded(record), hashlib.sha256
+                    ).hexdigest(),
+                ):
+                    raise ValueError("local_fault_record_unverified")
+                if record.get("participant"):
+                    pending.append(record["participant"])
+        authority.repair(configured["operator_key"], revocations=pending)
+        print('{"repaired":true,"paused":true,"new_submission":false}')
+        return
     state = authority.read()
     if action == "status":
         print(
@@ -313,7 +367,7 @@ def operator(action):
     values = config()
     ready = operator_request(values, "ready")
     if (
-        ready.get("paused") is not False
+        (action == "release-first" and ready.get("paused") is not False)
         or not ready.get("connected_secondary")
         or ready.get("authority_epoch") != state["epoch"]
     ):
@@ -335,6 +389,65 @@ def operator(action):
     ):
         raise ValueError("secondary_identity_unverified")
     _, head, _ = current_scope(values)
+    if action == "reconcile-accepted":
+        proof = read_private(Path(proof_file))
+        identity, provider_id = proof["intent"], proof["provider_message_id"]
+        entry = state["intents"].get(identity)
+        if not entry or entry["outcome"] not in ("unknown", "accepted"):
+            raise ValueError("external_unknown_intent_required")
+        with sqlite3.connect(
+            Path(".local/b1/backend/conversations.db").resolve().as_uri() + "?mode=ro", uri=True
+        ) as connection:
+            rows = connection.execute(
+                "SELECT i.provider_message_id,d.provider_channel_id,d.recipient_address,o.body "
+                "FROM outbound_deliveries d JOIN messages o ON o.id=d.outbound_message_id "
+                "JOIN messages i ON i.id=o.in_reply_to_message_id "
+                "WHERE d.provider='waha' AND d.state IN ('unknown','sending') "
+                "AND d.first_submission_at IS NOT NULL"
+            ).fetchall()
+        row = next(
+            (
+                r
+                for r in rows
+                if hmac.new(
+                    values["WAHA_JOURNAL_KEY"].encode(),
+                    encoded(["waha", r[1], r[0], "service_response"]),
+                    hashlib.sha256,
+                ).hexdigest()
+                == identity
+            ),
+            None,
+        )
+        if row is None:
+            raise ValueError("local_unknown_intent_required")
+        message = OutboundMessage(row[1], row[2], row[3], submission_key=entry["key"])
+        if hashlib.sha256(prepare_waha(message)).hexdigest() != entry["digest"]:
+            raise ValueError("local_request_digest_mismatch")
+        evidence = observe_waha_acceptance(channel, verified, message, provider_id)
+        authority.read()
+        authority.command(
+            "reconcile",
+            {
+                "intent": identity,
+                "digest": entry["digest"],
+                "token": entry["token"],
+                "evidence": evidence,
+                "acceptance": hashlib.sha256(provider_id.encode()).hexdigest(),
+                "outcome": "accepted",
+            },
+            operator_key=configured["operator_key"],
+        )
+        with httpx.Client(trust_env=False) as client:
+            result = client.post(
+                "http://127.0.0.1:8001/ops/waha/reconcile",
+                headers={"Authorization": "Bearer " + values["WAHA_OPERATOR_TOKEN"]},
+                json={"intent": identity, "provider_message_id": provider_id},
+                timeout=45,
+            )
+        if result.status_code != 200 or result.json().get("reconciled") is not True:
+            raise ValueError("external_fact_saved_local_reconciliation_pending")
+        print('{"reconciled":true,"new_submission":false}')
+        return
     with sqlite3.connect(
         Path(".local/b1/backend/conversations.db").resolve().as_uri() + "?mode=ro", uri=True
     ) as connection:
@@ -392,9 +505,13 @@ def main():
             "status",
             "release-first",
             "kill",
+            "repair-roots",
+            "reconcile-accepted",
         ),
     )
-    action = parser.parse_args().action
+    parser.add_argument("--proof-file")
+    parsed = parser.parse_args()
+    action = parsed.action
     try:
         if action == "prepare":
             prepare()
@@ -403,7 +520,7 @@ def main():
         elif action == "canary-check":
             canary()
         else:
-            operator(action)
+            operator(action, parsed.proof_file)
     except Exception as error:
         safe = (
             str(error)

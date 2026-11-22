@@ -7,7 +7,7 @@ import re
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from threading import RLock
-from time import time
+from time import monotonic, time
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -70,6 +70,8 @@ class CloudflareAuthority:
         self.state = None
         self.boot_id = uuid4().hex
         self.epoch = None
+        self.submission_valid_until = None
+        self.recovery_metadata = None
 
     def _exchange(self, action, args, *, expected=None, operator_key=None):
         nonce = uuid4().hex
@@ -85,6 +87,7 @@ class CloudflareAuthority:
             command["expected"] = expected
         wire = encoded(command)
         key = operator_key or self.config.runtime_key
+        started = monotonic()
         try:
             with (
                 (
@@ -161,6 +164,29 @@ class CloudflareAuthority:
         except (httpx.HTTPError, BadSignatureError, ValueError, KeyError, TypeError):
             raise AuthorityClosed("authority_response_unverified") from None
         self.state = state
+        if action == "recovery_status":
+            revision = payload.get("witness_revision")
+            external_digest = payload.get("witness_digest")
+            if (
+                type(revision) is not int
+                or revision < state["revision"]
+                or not isinstance(external_digest, str)
+                or not re.fullmatch(r"[a-f0-9]{64}", external_digest)
+            ):
+                raise AuthorityClosed("recovery_metadata_unverified")
+            self.recovery_metadata = {
+                "witness_revision": revision,
+                "witness_digest": external_digest,
+            }
+        if action == "check_submission":
+            validity = payload.get("valid_for_ms")
+            if type(validity) is not int or not 0 < validity <= 3600000:
+                raise AuthorityClosed("submission_validity_unverified")
+            # Subtract the entire roundtrip to conservatively cover response age;
+            # never extend a provider deadline using the Mac's wall clock.
+            self.submission_valid_until = (
+                monotonic() + validity / 1000 - (monotonic() - started) - 0.05
+            )
         return state
 
     def read(self):
@@ -212,3 +238,10 @@ class CloudflareAuthority:
             kind=entry["kind"],
             **({"participant": entry["participant_hash"]} if entry["kind"] == "revoke" else {}),
         )
+
+    def repair(self, operator_key, *, revocations=()):
+        with self.lock:
+            self._exchange("recovery_status", {}, operator_key=operator_key)
+            # Recovery metadata is authenticated by _exchange; retain no permit.
+            info = {**self.recovery_metadata, "revocations": list(revocations)}
+            return self._exchange("repair", info, operator_key=operator_key)

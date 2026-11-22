@@ -40,7 +40,7 @@ async function fixture(t, { sameAccount = false, witnessFailure = false } = {}) 
     return { status: response.status, ...raw.payload, error: raw.payload?.error || raw.error };
   }
   const inspected = await command("authority", "inspect", {}, { role: "operator" });
-  const enrolled = await command("witness", "enroll", { authority_account: account, digest: inspected.digest }, { role: "operator", expected: 0 });
+  const enrolled = await command("witness", "enroll", { authority_account: account, digest: inspected.digest, snapshot: inspected.state }, { role: "operator", expected: 0 });
   assert(enrolled.ok);
   async function mutate(action, args = {}, role = "runtime") {
     const current = await command("authority", "read");

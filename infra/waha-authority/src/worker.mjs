@@ -83,6 +83,8 @@ function response(value, status = 200) {
 class SignedObject extends DurableObject {
   load() {
     this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS root (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS prepared (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)");
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS maintenance (id INTEGER PRIMARY KEY CHECK(id=1))");
     const rows = [...this.ctx.storage.sql.exec("SELECT value FROM root WHERE id=1")];
     return rows.length ? JSON.parse(rows[0].value) : null;
   }
@@ -90,7 +92,12 @@ class SignedObject extends DurableObject {
   save(value) {
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec("INSERT INTO root(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value", JSON.stringify(value));
+      this.ctx.storage.sql.exec("DELETE FROM prepared WHERE id=1");
     });
+  }
+
+  prepare(value) {
+    this.ctx.storage.sql.exec("INSERT INTO prepared(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value", JSON.stringify(value));
   }
 
   async fetch(request) {
@@ -118,17 +125,24 @@ export class Witness extends SignedObject {
     const { action, args, role, expected } = command;
     if (action === "enroll") {
       requireThat(role === "operator" && !prior, "witness_already_enrolled_or_forbidden");
-      requireThat(expected === 0 && validHash(args.digest) && typeof args.authority_account === "string", "witness_enrollment_invalid");
-      const next = { revision: 0, digest: args.digest, authority_account: args.authority_account };
+      requireThat(expected === 0 && validHash(args.digest) && typeof args.authority_account === "string" && args.snapshot?.revision === 0 && args.snapshot.scope === this.env.SCOPE && await digest(args.snapshot) === args.digest, "witness_enrollment_invalid");
+      const next = { revision: 0, digest: args.digest, authority_account: args.authority_account, snapshot: args.snapshot };
       this.save(next);
       return { head: next };
     }
     requireThat(prior && role === "authority", "witness_not_enrolled_or_forbidden");
     requireThat(args.authority_account === prior.authority_account, "authority_account_mismatch");
+    if (action === "head") return { head: prior };
     requireThat(expected === prior.revision && args.prior_digest === prior.digest, "witness_rollback_or_conflict");
     if (action === "verify") return { head: prior };
     requireThat(action === "advance" && validHash(args.digest), "witness_command_invalid");
-    const next = { ...prior, revision: prior.revision + 1, digest: args.digest };
+    requireThat(args.snapshot?.revision === prior.revision + 1 && args.snapshot.scope === this.env.SCOPE && await digest(args.snapshot) === args.digest, "witness_snapshot_invalid");
+    requireThat(args.snapshot.epoch >= prior.snapshot.epoch && prior.snapshot.revoked.every((p) => args.snapshot.revoked.includes(p)), "witness_state_regression");
+    for (const [identity, intent] of Object.entries(prior.snapshot.intents)) {
+      const nextIntent = args.snapshot.intents[identity];
+      requireThat(nextIntent && nextIntent.key === intent.key && nextIntent.digest === intent.digest && nextIntent.participant === intent.participant && (!intent.token || nextIntent.token === intent.token) && (intent.outcome === "registered" || nextIntent.outcome !== "registered") && (intent.outcome !== "accepted" || (nextIntent.outcome === "accepted" && nextIntent.acceptance === intent.acceptance)), "witness_inventory_regression");
+    }
+    const next = { ...prior, revision: prior.revision + 1, digest: args.digest, snapshot: args.snapshot };
     this.save(next);
     return { head: next };
   }
@@ -140,12 +154,13 @@ function initialState(env) {
 
 export class Authority extends SignedObject {
   async witness(action, state, next = null) {
+    requireThat(/^[a-f0-9]{32}$/.test(this.env.WITNESS_ACCOUNT_ID || "") && this.env.WITNESS_ACCOUNT_ID !== this.env.ACCOUNT_ID, "administration_not_independent");
     const nonce = crypto.randomUUID().replaceAll("-", "");
     requireThat(this.env.WITNESS_URL && /^[a-f0-9]{64}$/.test(this.env.WITNESS_PUBLIC_KEY || ""), "independent_witness_missing");
     const url = new URL(this.env.WITNESS_URL);
     requireThat(url.protocol === "https:" && !url.username && !url.password && url.pathname === "/command" && !url.search && !url.hash, "witness_url_invalid");
     const wire = canonical({ v: 1, scope: this.env.SCOPE, nonce, time: Date.now(), action, expected: state.revision,
-      args: { authority_account: this.env.ACCOUNT_ID, prior_digest: await digest(state), ...(next ? { digest: await digest(next) } : {}) } });
+      args: { authority_account: this.env.ACCOUNT_ID, prior_digest: await digest(state), ...(next ? { digest: await digest(next), snapshot: next } : {}) } });
     const request = new Request(url, { method: "POST", body: wire, headers: { "content-type": "application/json", "x-livia-role": "authority", "x-livia-signature": await hmac(this.env.WITNESS_KEY, wire) }, redirect: "manual", signal: AbortSignal.timeout(4000) });
     const reply = this.env.WITNESS_TRANSPORT ? await this.env.WITNESS_TRANSPORT.fetch(request) : await fetch(request);
     requireThat(reply.status === 200 && Number(reply.headers.get("content-length") || 0) <= 16384, "witness_unavailable");
@@ -153,7 +168,9 @@ export class Authority extends SignedObject {
     const result = await verifySigned(JSON.parse(body), this.env.WITNESS_PUBLIC_KEY);
     requireThat(result.ok && result.scope === this.env.SCOPE && result.nonce === nonce && Math.abs(Date.now() - result.served_at) <= 15000, "witness_response_invalid");
     requireThat(result.account === this.env.WITNESS_ACCOUNT_ID && result.account !== this.env.ACCOUNT_ID, "administration_not_independent");
-    requireThat(result.head.revision === (next || state).revision && result.head.digest === await digest(next || state), "witness_rollback_or_conflict");
+    if (action !== "head") requireThat(result.head.revision === (next || state).revision && result.head.digest === await digest(next || state), "witness_rollback_or_conflict");
+    requireThat(result.head.snapshot && result.head.digest === await digest(result.head.snapshot), "witness_snapshot_invalid");
+    return result.head;
   }
 
   async execute(command) {
@@ -163,6 +180,29 @@ export class Authority extends SignedObject {
       requireThat(role === "operator", "operator_required");
       return { state, digest: await digest(state), operational_egress: false };
     }
+    if (action === "recovery_status" || action === "repair") {
+      requireThat(role === "operator", "operator_required");
+      const external = await this.witness("head", state);
+      requireThat(external.revision >= state.revision, "witness_rollback_or_conflict");
+      if (action === "recovery_status") return { state, digest: await digest(state), witness_revision: external.revision, witness_digest: external.digest };
+      requireThat(args.witness_revision === external.revision && args.witness_digest === external.digest, "recovery_witness_changed");
+      // The independently retained complete snapshot is authoritative. Never let
+      // operator-provided data invent inventory or erase consumed identities.
+      this.ctx.storage.sql.exec("INSERT OR IGNORE INTO maintenance(id) VALUES(1)");
+      this.save(external.snapshot);
+      const repaired = clone(external.snapshot);
+      repaired.revision++; repaired.epoch++; repaired.boot = null;
+      repaired.paused = true; repaired.killed = true; repaired.grant = null;
+      requireThat(Array.isArray(args.revocations || []) && (args.revocations || []).every((p) => validHash(p) && JSON.parse(this.env.PARTICIPANTS || "[]").includes(p)), "recovery_revocations_invalid");
+      repaired.revoked = [...new Set([...repaired.revoked, ...(args.revocations || [])])];
+      repaired.last_repair_revision = repaired.revision;
+      this.prepare(repaired);
+      await this.witness("advance", external.snapshot, repaired);
+      this.save(repaired);
+      this.ctx.storage.sql.exec("DELETE FROM maintenance WHERE id=1");
+      return { state: repaired, digest: await digest(repaired) };
+    }
+    requireThat(![...this.ctx.storage.sql.exec("SELECT id FROM prepared LIMIT 1")].length && ![...this.ctx.storage.sql.exec("SELECT id FROM maintenance LIMIT 1")].length, "prepared_commit_requires_repair");
     await this.witness("verify", state);
     if (action === "read") return { state, digest: await digest(state) };
     requireThat(expected === state.revision, "authority_revision_conflict");
@@ -213,17 +253,19 @@ export class Authority extends SignedObject {
       next.intents[args.intent].token = args.token;
       next.intents[args.intent].boot = state.boot;
       next.intents[args.intent].epoch = state.epoch;
+      next.intents[args.intent].expires_at = state.grant.expires_at;
       next.grant = null;
     } else if (action === "check_submission") {
       this.requireBoot(state, command);
       const intent = state.intents[args.intent];
-      requireThat(!state.paused && !state.killed && !state.revoked.includes(args.participant) && intent && intent.outcome === "unknown" && intent.boot === state.boot && intent.epoch === state.epoch && intent.token === args.token && intent.digest === args.digest && intent.participant === args.participant && args.head === state.head, "submission_not_current");
-      return { state, digest: await digest(state) };
+      requireThat(!state.paused && !state.killed && !state.revoked.includes(args.participant) && intent && intent.outcome === "unknown" && intent.boot === state.boot && intent.epoch === state.epoch && intent.expires_at > Date.now() && intent.token === args.token && intent.digest === args.digest && intent.participant === args.participant && args.head === state.head, "submission_not_current");
+      return { state, digest: await digest(state), valid_for_ms: intent.expires_at - Date.now() };
     } else if (action === "outcome") {
       this.requireBoot(state, command);
       const intent = state.intents[args.intent];
       requireThat(intent && intent.boot === state.boot && intent.epoch === state.epoch && intent.token === args.token && intent.digest === args.digest, "outcome_identity_invalid");
       requireThat(args.outcome === "accepted" && validHash(args.acceptance), "outcome_unproven");
+      requireThat(!Object.entries(state.intents).some(([identity, value]) => identity !== args.intent && value.acceptance === args.acceptance), "acceptance_identity_collision");
       requireThat(intent.outcome === "unknown" || (intent.outcome === "accepted" && intent.acceptance === args.acceptance), "outcome_conflict");
       next.intents[args.intent].outcome = "accepted"; next.intents[args.intent].acceptance = args.acceptance;
     } else if (action === "reconcile") {
@@ -231,6 +273,7 @@ export class Authority extends SignedObject {
       const intent = state.intents[args.intent];
       requireThat(intent && intent.digest === args.digest && intent.token === args.token && validHash(args.evidence), "reconciliation_evidence_invalid");
       requireThat(args.outcome === "accepted" && validHash(args.acceptance), "reconciliation_cannot_prove_non_submission");
+      requireThat(!Object.entries(state.intents).some(([identity, value]) => identity !== args.intent && value.acceptance === args.acceptance), "acceptance_identity_collision");
       requireThat(intent.outcome === "unknown" || (intent.outcome === "accepted" && intent.acceptance === args.acceptance), "outcome_conflict");
       next.intents[args.intent].outcome = "accepted"; next.intents[args.intent].acceptance = args.acceptance;
       next.intents[args.intent].evidence = args.evidence;
@@ -240,6 +283,7 @@ export class Authority extends SignedObject {
     next.revision++;
     // Independent write-ahead witness precedes the authoritative commit/response.
     // Any failure between roots permanently blocks until explicit reconciliation.
+    this.prepare(next);
     await this.witness("advance", state, next);
     this.save(next);
     return { state: next, digest: await digest(next) };
@@ -260,6 +304,10 @@ export default {
   async fetch(request, env) {
     if (request.method === "GET" && new URL(request.url).pathname === "/health") return response({ process: "ok", role: env.ROLE, operational_egress: false });
     if (!validHash(env.SCOPE) || !["authority", "witness"].includes(env.ROLE)) return response({ error: "deployment_not_configured" }, 503);
+    // Reject unauthenticated Internet traffic before dispatching to billed DOs.
+    // The Object authenticates again, including direct service-binding calls.
+    try { await authenticate(request.clone(), env); }
+    catch (error) { return response({ error: error instanceof Closed ? error.code : "authentication_failed" }, 403); }
     const namespace = env.ROLE === "authority" ? env.AUTHORITY : env.WITNESS;
     return namespace.get(namespace.idFromName(env.SCOPE)).fetch(request);
   },

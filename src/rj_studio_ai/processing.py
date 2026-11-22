@@ -110,6 +110,14 @@ class ProcessingExecutor:
     def wake(self) -> None:
         self._wake.set()
 
+    def drain(self) -> None:
+        """Stop acquiring and retain ownership until bounded in-flight I/O exits."""
+        self.runner.stop_acquiring()
+        self._stop.set()
+        self._wake.set()
+        for thread in self._threads:
+            thread.join()
+
     def is_alive(self) -> bool:
         return (
             bool(self._threads)

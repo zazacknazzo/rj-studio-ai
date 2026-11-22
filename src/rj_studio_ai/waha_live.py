@@ -204,10 +204,12 @@ def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outb
         try:
             yield
         finally:
-            await anyio.to_thread.run_sync(processing.stop)
+            await anyio.to_thread.run_sync(
+                processing.drain if outbound is not None else processing.stop
+            )
             try:
                 if outbound is not None:
-                    await anyio.to_thread.run_sync(outbound.stop)
+                    await anyio.to_thread.run_sync(outbound.drain)
                 journal.change("pause")
             finally:
                 journal.close()
@@ -263,7 +265,7 @@ def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outb
                 payload.update(store.egress_status())
                 payload["outbound"] = outbound.is_alive()
             return JSONResponse(payload, status_code=503)
-        except WahaSafetyError:
+        except (WahaSafetyError, PersistenceUnavailable):
             return JSONResponse(
                 {"egress": False, "error": "safety_integrity_failed"}, status_code=503
             )
@@ -327,6 +329,35 @@ def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outb
             _change_core_pause(store, action)
         processing.wake()
         return {"paused": journal.paused, "egress": False, "scope": "inference_only"}
+
+    @app.post("/ops/waha/reconcile")
+    async def reconcile_waha(request: Request):
+        require_operator(request)
+        if outbound is None or not hasattr(store, "reconcile_provider_message"):
+            raise HTTPException(404, "reconciliation_not_configured")
+        body = bytearray()
+        with anyio.fail_after(1):
+            async for chunk in request.stream():
+                if len(body) + len(chunk) > 2048:
+                    raise HTTPException(413, "reconciliation_request_too_large")
+                body.extend(chunk)
+        try:
+            data = json.loads(body)
+            if not re.fullmatch(r"[a-f0-9]{64}", data["intent"]) or not isinstance(
+                data["provider_message_id"], str
+            ):
+                raise ValueError()
+            changed = await anyio.to_thread.run_sync(
+                lambda: store.reconcile_provider_message(
+                    data["intent"],
+                    data["provider_message_id"],
+                    api=api,
+                    aliases=adapter.identity_aliases,
+                )
+            )
+            return {"reconciled": changed, "new_submission": False}
+        except Exception:
+            raise HTTPException(409, "reconciliation_evidence_unverified") from None
 
     @app.post("/webhooks/waha")
     async def webhook(request: Request):

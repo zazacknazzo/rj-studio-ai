@@ -333,3 +333,189 @@ def test_replayed_signed_response_does_not_match_a_new_challenge(live_protocol):
         assert other.read()
         with pytest.raises(AuthorityClosed, match="authority_response_unverified"):
             other.read()
+
+
+def test_grant_for_other_intent_does_not_claim_pending_reply(live_protocol):
+    adapter, safety, store, authority, bridge, _, _ = live_protocol
+    authority.current()
+    authority.command(
+        "release",
+        {
+            "boot": authority.boot_id,
+            "epoch": authority.epoch,
+            "head": safety.head,
+            "intent": "0" * 64,
+            "participant": store.participant_identity(CHAT),
+            "expires_at": int(time.time() * 1000) + 60000,
+        },
+        operator_key=bridge.operator,
+    )
+    assert store.claim_next_delivery(provider="waha") is None
+    delivery = store.get_delivery_for_provider_inbound(
+        provider="waha", provider_message_id=envelope()["payload"]["id"]
+    )
+    assert delivery.state is DeliveryState.PENDING and delivery.attempt_count == 0
+
+
+def test_expired_grant_does_not_claim_pending_reply(live_protocol):
+    _, safety, store, authority, bridge, _, _ = live_protocol
+    authority.command(
+        "release",
+        {
+            "boot": authority.boot_id,
+            "epoch": authority.epoch,
+            "head": safety.head,
+            "intent": store.logical_identity(envelope()["payload"]["id"], envelope()["me"]["id"]),
+            "participant": store.participant_identity(CHAT),
+            "expires_at": int(time.time() * 1000) + 200,
+        },
+        operator_key=bridge.operator,
+    )
+    time.sleep(0.25)
+    assert store.claim_next_delivery(provider="waha") is None
+
+
+def test_unknown_reconciliation_rechecks_provider_fact_and_restores_ordering(live_protocol):
+    from rj_studio_ai.domain import OutboundMessage
+    from rj_studio_ai.waha_cloudflare import observe_waha_acceptance
+
+    adapter, _, store, authority, bridge, release, _ = live_protocol
+    release()
+    runner, client, posts = sender(adapter, store, "timeout")
+    with client:
+        result = runner.run_once()
+    assert result.state is DeliveryState.UNKNOWN
+    # Migration 0024 must preserve both terminal guards without an immutable proof.
+    with store._connect() as connection:
+        for statement in (
+            "UPDATE outbound_deliveries SET state='accepted',provider_message_id='unproven' "
+            "WHERE id=?",
+            "UPDATE delivery_attempts SET outcome='accepted',provider_message_id='unproven' "
+            "WHERE outbound_delivery_id=?",
+        ):
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(statement, (result.delivery_id,))
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO waha_reconciliation_evidence VALUES(?,?,?,?,?,?,?)",
+                (result.delivery_id, "a" * 64, "unproven", "b" * 64, 1, "c" * 64, "fixture"),
+            )
+    identity, entry = next(iter(authority.current()["intents"].items()))
+    provider_id = "true_" + CHAT + "_OBSERVED"
+    wire = json.loads(posts[0])
+    message = OutboundMessage(adapter.secondary, CHAT, wire["text"], submission_key=entry["key"])
+
+    def provider(req):
+        if req.url.path.endswith("/api/sessions/default"):
+            return httpx.Response(200, json={"status": "WORKING", "me": {"id": adapter.secondary}})
+        return httpx.Response(
+            200,
+            json={
+                "id": provider_id,
+                "fromMe": True,
+                "hasMedia": False,
+                "body": wire["text"],
+                "to": CHAT,
+                "ack": 2,
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(provider)) as proof_client:
+        proof_api = WahaAPI(base_url="http://waha:3000", api_key=KEY, client=proof_client)
+        evidence = observe_waha_acceptance(
+            proof_api, adapter.identity_aliases, message, provider_id
+        )
+        authority.command(
+            "reconcile",
+            {
+                "intent": identity,
+                "token": entry["token"],
+                "digest": entry["digest"],
+                "outcome": "accepted",
+                "acceptance": hashlib.sha256(provider_id.encode()).hexdigest(),
+                "evidence": evidence,
+            },
+            operator_key=bridge.operator,
+        )
+        assert store.reconcile_provider_message(
+            identity, provider_id, api=proof_api, aliases=adapter.identity_aliases
+        )
+    assert store.get_delivery(result.delivery_id).state is DeliveryState.ACCEPTED
+    assert len(posts) == 1
+    with store._connect() as connection:
+        for statement in (
+            "UPDATE waha_reconciliation_evidence SET authority_revision=999",
+            "DELETE FROM waha_reconciliation_evidence",
+            "UPDATE outbound_deliveries SET state='pending' WHERE id=?",
+        ):
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(statement, (result.delivery_id,) if "?" in statement else ())
+    assert authority.current()["paused"]
+
+
+def test_failed_control_anchor_is_sticky_until_independent_recovery(live_protocol, monkeypatch):
+    _, safety, store, authority, _, release, _ = live_protocol
+    release()
+
+    def failed(*args, **kwargs):
+        raise AuthorityClosed("fixture_external_outage")
+
+    monkeypatch.setattr(authority, "advance", failed)
+    with pytest.raises(AuthorityClosed):
+        safety.change("revoke", CHAT)
+    assert safety.fault_path.exists()
+    with pytest.raises(AuthorityClosed, match="anchoring_fault_requires_operator_recovery"):
+        safety.refresh()
+    with pytest.raises(AuthorityClosed):
+        store.claim_next_delivery(provider="waha")
+
+
+def test_provider_reconciliation_rejects_unverified_facts_without_new_submission(live_protocol):
+    from rj_studio_ai.domain import OutboundMessage
+    from rj_studio_ai.waha_cloudflare import observe_waha_acceptance
+
+    adapter, _, store, authority, _, release, _ = live_protocol
+    release()
+    runner, client, posts = sender(adapter, store, "timeout")
+    with client:
+        result = runner.run_once()
+    identity, entry = next(iter(authority.current()["intents"].items()))
+    provider_id = "true_" + CHAT + "_OBSERVED"
+    message = OutboundMessage(
+        adapter.secondary, CHAT, json.loads(posts[0])["text"], submission_key=entry["key"]
+    )
+    good = {
+        "id": provider_id,
+        "fromMe": True,
+        "hasMedia": False,
+        "body": message.body,
+        "to": CHAT,
+        "ack": 2,
+    }
+    for alteration in (
+        {"body": "another response"},
+        {"fromMe": False},
+        {"id": "another"},
+        {"to": "999@c.us"},
+        {"hasMedia": True},
+        {"ack": 0},
+        {"ack": True},
+    ):
+        calls = []
+
+        def provider(req, calls=calls, alteration=alteration):
+            calls.append(req.method)
+            if req.url.path.endswith("/api/sessions/default"):
+                return httpx.Response(
+                    200, json={"status": "WORKING", "me": {"id": adapter.secondary}}
+                )
+            return httpx.Response(200, json={**good, **alteration})
+
+        with httpx.Client(transport=httpx.MockTransport(provider)) as proof_client:
+            proof_api = WahaAPI(base_url="http://waha:3000", api_key=KEY, client=proof_client)
+            with pytest.raises(AuthorityClosed, match="provider_evidence_unverified"):
+                observe_waha_acceptance(proof_api, adapter.identity_aliases, message, provider_id)
+        assert calls == ["GET", "GET"]
+    assert authority.current()["intents"][identity]["outcome"] == "unknown"
+    assert store.get_delivery(result.delivery_id).state is DeliveryState.UNKNOWN
+    assert len(posts) == 1

@@ -78,6 +78,31 @@ class MigrationManager:
 
     @staticmethod
     def _schema_matches(connection: Connection, inspector: Inspector) -> bool:
+        if "waha_reconciliation_evidence" not in inspector.get_table_names():
+            return False
+        if {column["name"] for column in inspector.get_columns("waha_reconciliation_evidence")} != {
+            "delivery_id",
+            "intent_id",
+            "provider_message_id",
+            "request_digest",
+            "authority_revision",
+            "evidence_digest",
+            "observed_at",
+        }:
+            return False
+        if not {
+            "waha_reconciliation_requires_submission",
+            "waha_reconciliation_evidence_immutable",
+            "waha_reconciliation_evidence_no_delete",
+        }.issubset(
+            {
+                row[0]
+                for row in connection.exec_driver_sql(
+                    "SELECT name FROM sqlite_master WHERE type='trigger'"
+                )
+            }
+        ):
+            return False
         if not {
             "alembic_version",
             "conversations",

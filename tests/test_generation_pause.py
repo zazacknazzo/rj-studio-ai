@@ -482,7 +482,7 @@ def test_migration_preserves_leaf_rows_and_triggers_or_rolls_back(tmp_path, monk
         current = dict(
             connection.execute("SELECT name, sql FROM sqlite_master WHERE type='trigger'")
         )
-        # Tickets 04/08 extend the attempt and delivery-state guards, respectively.
+        # Tickets04/08 and proven WAHA reconciliation extend these guards.
         assert all(
             current[name] == sql
             for name, sql in triggers.items()
@@ -490,6 +490,7 @@ def test_migration_preserves_leaf_rows_and_triggers_or_rolls_back(tmp_path, monk
             not in {
                 "delivery_attempt_finalization_requires_current_claim",
                 "outbound_delivery_state_transition",
+                "terminal_delivery_attempt_is_immutable",
             }
         )
         if interrupt:

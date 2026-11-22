@@ -3,11 +3,13 @@
 import hashlib
 import hmac
 import json
+import os
 import re
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from time import time
+from time import monotonic, time
+from urllib.parse import quote
 from uuid import uuid4
 
 from rj_studio_ai.delivery import OutboundDeliveryExecutor
@@ -38,13 +40,73 @@ def prepare_waha(message):
     ).encode()
 
 
+def observe_waha_acceptance(api, aliases, message, provider_id):
+    match = re.fullmatch(r"true_([0-9]{1,20}@(c\.us|lid))_[A-Za-z0-9_-]{1,128}", provider_id)
+    if not match or aliases.get(match[1]) != message.recipient_address:
+        raise AuthorityClosed("provider_evidence_recipient_invalid")
+    info = api.session_info()
+    if (
+        info.get("status") != "WORKING"
+        or aliases.get((info.get("me") or {}).get("id")) != message.sender_address
+    ):
+        raise AuthorityClosed("provider_evidence_session_invalid")
+    response = api.request(
+        "GET",
+        "/api/default/chats/"
+        + quote(match[1], safe="")
+        + "/messages/"
+        + quote(provider_id, safe="")
+        + "?downloadMedia=false",
+    )
+    if response.status_code != 200:
+        raise AuthorityClosed("provider_evidence_unavailable")
+    raw = response.json()
+    if (
+        raw.get("id") != provider_id
+        or raw.get("fromMe") is not True
+        or raw.get("hasMedia") is not False
+        or raw.get("body") != message.body
+        or type(raw.get("ack")) is not int
+        or raw["ack"] not in (1, 2, 3, 4)
+        or (raw.get("to") is not None and aliases.get(raw["to"]) != message.recipient_address)
+    ):
+        raise AuthorityClosed("provider_evidence_unverified")
+    return hashlib.sha256(
+        encoded(
+            {
+                "provider_id": provider_id,
+                "request_digest": hashlib.sha256(prepare_waha(message)).hexdigest(),
+                "ack": raw["ack"],
+            }
+        )
+    ).hexdigest()
+
+
 class AnchoredWahaJournal(WahaSafetyJournal):
     def __init__(self, *args, authority, **kwargs):
         self.authority = None
+        self.failed = False
         super().__init__(*args, **kwargs)
         try:
             if self.scope != authority.config.scope:
                 raise AuthorityClosed("authority_scope_mismatch")
+            self.fault_path = self.directory / "authority-faults.jsonl"
+            if self.fault_path.exists():
+                state = authority.read()
+                for line in self.fault_path.read_bytes().splitlines():
+                    record = json.loads(line)
+                    mac = record.pop("mac")
+                    if (
+                        not hmac.compare_digest(
+                            mac, hmac.new(self.key, encoded(record), hashlib.sha256).hexdigest()
+                        )
+                        or state.get("last_repair_revision", 0) <= record["revision"]
+                        or (
+                            record.get("participant")
+                            and record["participant"] not in state["revoked"]
+                        )
+                    ):
+                        raise AuthorityClosed("anchoring_fault_requires_operator_recovery")
             authority.boot(self.head, len(self.entries))
             self.authority = authority
         except BaseException:
@@ -53,14 +115,42 @@ class AnchoredWahaJournal(WahaSafetyJournal):
 
     def append(self, entry):
         with self.lock:
+            if self.failed:
+                raise AuthorityClosed("anchoring_fault_requires_operator_recovery")
             if self.authority is not None:
                 self._read()
                 unsigned = {"sequence": len(self.entries) + 1, "prior": self.head, "entry": entry}
                 head = hmac.new(self.key, encoded(unsigned), hashlib.sha256).hexdigest()
-                self.authority.advance(self.head, head, unsigned["sequence"], entry)
+                try:
+                    self.authority.advance(self.head, head, unsigned["sequence"], entry)
+                    super().append(entry)
+                except BaseException:
+                    self.failed = True
+                    record = {
+                        "revision": self.authority.state["revision"],
+                        "kind": entry["kind"],
+                        **(
+                            {"participant": entry["participant_hash"]}
+                            if entry["kind"] == "revoke"
+                            else {}
+                        ),
+                    }
+                    record["mac"] = hmac.new(self.key, encoded(record), hashlib.sha256).hexdigest()
+                    fd = os.open(self.fault_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+                    with os.fdopen(fd, "ab") as file:
+                        file.write(encoded(record) + b"\n")
+                        file.flush()
+                        os.fsync(file.fileno())
+                    raise
+                return
             # Cloud witness/authority commit precedes the local journal fsync.
             # A partial write leaves roots inconsistent and requires reconciliation.
             super().append(entry)
+
+    def refresh(self):
+        if self.failed:
+            raise AuthorityClosed("anchoring_fault_requires_operator_recovery")
+        super().refresh()
 
 
 class CloudflareWahaStore(WahaConversationStore):
@@ -72,6 +162,9 @@ class CloudflareWahaStore(WahaConversationStore):
             raise ValueError("externally_anchored_journal_required")
         self.authority = self.journal.authority
         self._tickets = {}
+        # Cover verification, provider deadline, external outcome and sealed local
+        # finalization without refreshing a claim that may already have submitted.
+        self._delivery_lease = timedelta(seconds=90)
 
     def logical_identity(self, inbound_id, channel):
         wire = encoded(["waha", channel, inbound_id, "service_response"])
@@ -108,8 +201,34 @@ class CloudflareWahaStore(WahaConversationStore):
                 state = self.authority.current()
             except AuthorityClosed:
                 return None
-            if self.journal.paused or state["paused"] or state["killed"] or not state["grant"]:
+            grant = state["grant"]
+            if (
+                self.journal.paused
+                or state["paused"]
+                or state["killed"]
+                or not grant
+                or grant["expires_at"] <= time() * 1000
+            ):
                 return None
+            with self._connect() as connection:
+                candidates = connection.execute(
+                    "SELECT d.id,i.provider_message_id,d.provider_channel_id,d.recipient_address "
+                    "FROM outbound_deliveries d JOIN messages o ON o.id=d.outbound_message_id "
+                    "JOIN messages i ON i.id=o.in_reply_to_message_id "
+                    "WHERE d.provider='waha' AND d.state IN ('pending','retryable')"
+                ).fetchall()
+            selected = next(
+                (
+                    row[0]
+                    for row in candidates
+                    if self.logical_identity(row[1], row[2]) == grant["intent"]
+                    and self.participant_identity(row[3]) == grant["participant"]
+                ),
+                None,
+            )
+            if selected is None:
+                return None
+            kwargs["only_delivery_id"] = selected
             claim = super().claim_next_delivery(**kwargs)
             if claim is None:
                 return None
@@ -234,7 +353,7 @@ class CloudflareWahaStore(WahaConversationStore):
                     info.get("status") != "WORKING"
                     or aliases.get((info.get("me") or {}).get("id")) != message.sender_address
                     or aliases.get(message.recipient_address) != message.recipient_address
-                    or (datetime.fromisoformat(row[6]) - datetime.now(UTC)).total_seconds() < 12
+                    or (datetime.fromisoformat(row[6]) - datetime.now(UTC)).total_seconds() < 40
                 ):
                     raise AuthorityClosed("current_secondary_or_lease_unverified")
                 self.authority.runtime_command(
@@ -245,8 +364,19 @@ class CloudflareWahaStore(WahaConversationStore):
                     token=ticket["token"],
                     head=self.journal.head,
                 )
+                remaining = self.authority.submission_valid_until - monotonic()
+                if remaining < timeout_seconds:
+                    raise AuthorityClosed("submission_deadline_too_short")
+                remaining_lease = (
+                    datetime.fromisoformat(row[6]) - datetime.now(UTC)
+                ).total_seconds()
+                if remaining_lease < timeout_seconds + 20:
+                    raise AuthorityClosed("submission_lease_too_short")
                 result = api.request(
-                    "POST", "/api/sendText", content=ticket["wire"], timeout=timeout_seconds
+                    "POST",
+                    "/api/sendText",
+                    content=ticket["wire"],
+                    timeout=min(timeout_seconds, remaining),
                 )
                 if result.status_code not in (200, 201):
                     raise ValueError()
@@ -274,6 +404,73 @@ class CloudflareWahaStore(WahaConversationStore):
             except Exception:
                 # Includes failures after real provider acceptance; never resend.
                 raise OutboundOutcomeUnknown("cloudflare_waha_outcome_unknown") from None
+
+    def reconcile_provider_message(self, identity, provider_id, *, api, aliases):
+        from rj_studio_ai.domain import OutboundMessage
+
+        with self.journal.lock:
+            state = self.authority.current()
+            intent = state["intents"].get(identity)
+            if (
+                not intent
+                or intent["outcome"] != "accepted"
+                or intent["acceptance"] != hashlib.sha256(provider_id.encode()).hexdigest()
+            ):
+                raise AuthorityClosed("external_acceptance_unverified")
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT d.id,d.provider_channel_id,d.recipient_address,o.body,"
+                    "i.provider_message_id,d.attempt_count FROM outbound_deliveries d "
+                    "JOIN messages o ON o.id=d.outbound_message_id "
+                    "JOIN messages i ON i.id=o.in_reply_to_message_id "
+                    "WHERE d.provider='waha' AND d.state IN ('unknown','sending') "
+                    "AND d.first_submission_at IS NOT NULL"
+                ).fetchall()
+            row = next((r for r in rows if self.logical_identity(r[4], r[1]) == identity), None)
+            if row is None:
+                raise AuthorityClosed("local_unknown_submission_not_found")
+            message = OutboundMessage(row[1], row[2], row[3], submission_key=intent["key"])
+            if hashlib.sha256(prepare_waha(message)).hexdigest() != intent["digest"]:
+                raise AuthorityClosed("local_unknown_request_conflict")
+            evidence = observe_waha_acceptance(api, aliases, message, provider_id)
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "INSERT INTO waha_reconciliation_evidence(delivery_id,intent_id,"
+                    "provider_message_id,request_digest,authority_revision,evidence_digest,"
+                    "observed_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(delivery_id) DO NOTHING",
+                    (
+                        row[0],
+                        identity,
+                        provider_id,
+                        intent["digest"],
+                        state["revision"],
+                        evidence,
+                        datetime.now(UTC).isoformat(),
+                    ),
+                )
+                changed = connection.execute(
+                    "UPDATE outbound_deliveries SET state='accepted',provider_message_id=?,"
+                    "accepted_at=?,updated_at=?,safe_error_code=NULL,owner_token=NULL,"
+                    "lease_expires_at=NULL WHERE id=? AND state IN ('unknown','sending')",
+                    (
+                        provider_id,
+                        datetime.now(UTC).isoformat(),
+                        datetime.now(UTC).isoformat(),
+                        row[0],
+                    ),
+                ).rowcount
+                if changed != 1:
+                    raise AuthorityClosed("reconciliation_ownership_changed")
+                changed = connection.execute(
+                    "UPDATE delivery_attempts SET outcome='accepted',provider_message_id=?,"
+                    "safe_error_code=NULL,completed_at=? WHERE outbound_delivery_id=? "
+                    "AND attempt_number=? AND outcome IN ('unknown','started')",
+                    (provider_id, datetime.now(UTC).isoformat(), row[0], row[5]),
+                ).rowcount
+                if changed != 1:
+                    raise AuthorityClosed("reconciliation_attempt_missing")
+            return True
 
 
 class AuthorizedWahaSender(OutboundMessageSender):

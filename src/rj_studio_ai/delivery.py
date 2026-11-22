@@ -250,6 +250,13 @@ class OutboundDeliveryExecutor:
     def wake(self) -> None:
         self._wake.set()
 
+    def drain(self) -> None:
+        """Keep the writer alive until authorization/HTTP/finalization have exited."""
+        self._stop.set()
+        self._wake.set()
+        for thread in self._threads:
+            thread.join()
+
     def is_alive(self) -> bool:
         return bool(self._threads) and all(thread.is_alive() for thread in self._threads)
 

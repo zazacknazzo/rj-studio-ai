@@ -112,3 +112,39 @@ test("reconciliation cannot prove non-submission or re-arm an old intent", async
   assert((await f.mutate("reconcile", { ...args, outcome: "accepted" }, "operator")).ok);
   assert.equal((await f.release()).error, "intent_already_consumed");
 });
+
+test("consumed grant expiry is enforced again before transport", async (t) => {
+  const f = await fixture(t); await f.initialize();
+  const current=(await f.command("authority","read")).state;
+  const expires=Date.now()+400;
+  assert((await f.mutate("release",{boot:current.boot,epoch:current.epoch,head:current.head,intent,participant,expires_at:expires},"operator")).ok);
+  await f.runtime("register"); const token=nonce();
+  await f.runtime("consume",{token});
+  assert.equal((await f.command("authority","read")).state.intents[intent].expires_at,expires);
+  await new Promise((resolve)=>setTimeout(resolve,450));
+  assert.equal((await f.runtime("check_submission",{token})).error,"submission_not_current");
+});
+
+test("explicit repair recovers witness-ahead state without erasing unknown or regranting", async(t)=>{
+  const f=await fixture(t);await f.initialize();await f.release();await f.runtime("register");
+  const old=await f.snapshot();const token=nonce();await f.runtime("consume",{token});
+  const complete=await f.snapshot();
+  await old.storage.exec("UPDATE root SET value=? WHERE id=1",old.rows[0].value);
+  await old.storage.exec("INSERT INTO prepared(id,value) VALUES(1,?)",complete.rows[0].value);
+  assert.equal((await f.command("authority","read")).error,"prepared_commit_requires_repair");
+  const recovery=await f.command("authority","recovery_status",{},{role:"operator"});
+  const repaired=await f.command("authority","repair",{witness_revision:recovery.witness_revision,witness_digest:recovery.witness_digest,revocations:[]},{role:"operator"});
+  assert(repaired.ok);assert(repaired.state.paused&&repaired.state.killed);
+  assert.equal(repaired.state.boot,null);
+  assert.equal(repaired.state.intents[intent].outcome,"unknown");
+  await f.mutate("boot",{boot:nonce(),head:repaired.state.head,sequence:repaired.state.sequence});
+  assert.equal((await f.release()).error,"unresolved_submission");
+});
+
+test("witness rejects a higher revision that erases an existing intent",async(t)=>{
+  const f=await fixture(t);await f.initialize();await f.release();await f.runtime("register");
+  const current=(await f.command("authority","read")).state;
+  const altered={...current,revision:current.revision+1,intents:{}};
+  const result=await f.command("witness","advance",{authority_account:account,prior_digest:hash(current),digest:hash(altered),snapshot:altered},{role:"authority",expected:current.revision});
+  assert.equal(result.error,"witness_inventory_regression");
+});

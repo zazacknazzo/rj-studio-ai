@@ -950,6 +950,7 @@ class SqliteConversationStore:
         self,
         *,
         provider: str | None = None,
+        only_delivery_id: int | None = None,
         now: datetime | None = None,
         lock_timeout: float | None = None,
     ) -> OutboundDeliveryRecord | None:
@@ -969,6 +970,7 @@ class SqliteConversationStore:
                       ON processing.inbound_message_id = inbound.id
                     WHERE delivery.state IN ('pending', 'retryable')
                       AND (? IS NULL OR delivery.provider = ?)
+                      AND (? IS NULL OR delivery.id = ?)
                       AND delivery.next_attempt_at <= ?
                       AND processing.state = 'completed'
                       AND (delivery.provider!='telnyx' OR EXISTS (
@@ -1020,7 +1022,7 @@ class SqliteConversationStore:
                     ORDER BY delivery.next_attempt_at, delivery.id
                     LIMIT 1
                     """,
-                    (provider, provider, timestamp),
+                    (provider, provider, only_delivery_id, only_delivery_id, timestamp),
                 ).fetchone()
                 if candidate is None:
                     return None
