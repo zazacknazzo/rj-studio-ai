@@ -1,0 +1,153 @@
+{
+  "date": "2026-11-22",
+  "scope": "CP7 offline only; CP8 pending; AUD-01 and all open gates preserved",
+  "recovered_checkpoint": "995af20ff7d9e9f592a23c544f09a2407bd1b7f0",
+  "baseline": "f1496be42732b7e57d317444d7ed0020997f0327",
+  "branch": "codex/telnyx-coexistence-13-readiness",
+  "recovery_git": {
+    "baseline_ahead": 7,
+    "baseline_behind": 0,
+    "remote_ahead": 0,
+    "remote_behind": 0,
+    "clean": true,
+    "main": "af1c9eb862a4180ca6b9e537349e4f8abaa2bb29"
+  },
+  "historical_spec_manifest": {
+    "files": 194,
+    "before_after_equal": true,
+    "all_match_cp5_and_cp6": true,
+    "receipt_sha256": "f2887be099a714826f3f93bbdef2d7628f530218f141e5d82fc3bd7dd9fb9f35"
+  },
+  "test_evidence": {
+    "inherited_primary_full": {
+      "sha256": "3ca5d9b41880b5287659913ff4f62cdb1f6386249f0c1de615063b7538a2f875",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "2262",
+          "time": "417.894"
+        }
+      ]
+    },
+    "inherited_spec_full": {
+      "sha256": "4348f0d05abc58d206e83c3b78d607a1328ef22ad4df30758d7e69fc37b2cc05",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "2262",
+          "time": "522.192"
+        }
+      ]
+    },
+    "inherited_clean_clone": {
+      "sha256": "fb9c29c045de8cab65463b61e90c9673f9cb741ed31375f9ff2fcc21a01a1bb8",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "72",
+          "time": "56.000"
+        }
+      ]
+    },
+    "current_primary_focused_before_edit": {
+      "sha256": "ca31d48646c97e36fe6d13f4d7b1742d8aaa2c12824d668a9b865986ff9f2862",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "73",
+          "time": "42.727"
+        }
+      ]
+    },
+    "current_spec_focused": {
+      "sha256": "e16c9038cbd57551a717e6ce3d2381475c3388e34f3f7aea63d31093fab687d6",
+      "suites": [
+        {
+          "name": "pytest",
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "13",
+          "time": "18.656"
+        }
+      ]
+    }
+  },
+  "current_environment": {
+    "python": "3.14.7",
+    "sqlite": "3.50.4",
+    "pip": "26.3",
+    "pytest": "9.2.0",
+    "pinned_distributions": 86,
+    "pin_mismatches": 0,
+    "kernel_isolation_local": false
+  },
+  "ci_observed": [
+    {
+      "id": 44981309346,
+      "head_sha": "988efabe39611821035663dbae24a266b71bfca5",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 44981650933,
+      "head_sha": "995af20ff7d9e9f592a23c544f09a2407bd1b7f0",
+      "status": "completed",
+      "conclusion": "success",
+      "python": "3.12.16",
+      "tests": 2262,
+      "skipped": 0,
+      "elapsed_pytest_seconds": 224.28,
+      "kernel_network_isolation_verified": true,
+      "log_sha256": "6cea1f4022aa41f83669fa2c2e2d762dffdb99a5dde7e8f9d1e81db35c35937f"
+    }
+  ],
+  "current_checks": {
+    "ruff_check": "PASS",
+    "ruff_format_files": 350,
+    "compileall": "PASS",
+    "pip_check": "PASS",
+    "diff_check": "PASS",
+    "pip_audit": {
+      "total_entries": 87,
+      "vulnerable_packages": 0,
+      "skipped": [
+        "rj-studio-ai"
+      ],
+      "sha256": "17645c452d6f63aeb7beecb2e30653d1050c09cfd378dba1a837221ce305fe7a"
+    },
+    "gitleaks_tree": {
+      "raw_findings": 3,
+      "triage": "PASS: unchanged baseline files/lines/rules/whole-file hashes",
+      "ignores_added": false,
+      "report_sha256": "72fcdf48bf7e6a8060b12fc611d5c82af68769f77da860e0cb77ee5216e38933"
+    }
+  },
+  "original_reviews_sha256": {
+    "ticket13-architecture-review.md": "21caffc8cce6e82024d3315bfc3b3b86c2a2e9cb33e36d25b918cc058f831ae3",
+    "ticket13-spec-review.md": "54ee166d4f28fdf3f9e00809a20a71f1e2ecbd0a8ab919374dd24389eb85bcd5",
+    "ticket13-spec-closure-review.md": "aca8424a3fefc51bf4ff52a504200bb4532b0d9a32455a0e00c0102cdaeb8f23",
+    "ticket13-security-reliability-review.md": "3b45daf89887dd09987951fb87dc965e88fb54150c599f2e0c73b3839a519f49",
+    "ticket13-operations-review.md": "3d81706f7debbf8ae80d7bfbbd3a9d81128e34863e8e774a9592005cac18942e"
+  },
+  "published_reviews_sha256": {
+    "ticket13-architecture-review.md": "ed521d9bb7abb465e43590cef0b655f8eb2f84c992286d0190ae8dd2218881ec",
+    "ticket13-spec-review.md": "54ee166d4f28fdf3f9e00809a20a71f1e2ecbd0a8ab919374dd24389eb85bcd5",
+    "ticket13-spec-closure-review.md": "aca8424a3fefc51bf4ff52a504200bb4532b0d9a32455a0e00c0102cdaeb8f23",
+    "ticket13-security-reliability-review.md": "3b45daf89887dd09987951fb87dc965e88fb54150c599f2e0c73b3839a519f49",
+    "ticket13-operations-review.md": "3d81706f7debbf8ae80d7bfbbd3a9d81128e34863e8e774a9592005cac18942e"
+  },
+  "review_format_normalization": "One extra blank line at EOF removed from architecture report after staged diff check; content preserved."
+}

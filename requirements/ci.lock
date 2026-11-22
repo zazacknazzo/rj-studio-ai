@@ -1,4 +1,4 @@
-# Resolved 2026-11-22: CPython3.14.7/macOSarm64; Linux3.12/3.14 CI verified separately.
+# Resolved 2026-11-22: CPython3.14.7/macOSarm64; Linux3.12 CI evidence in docs/architecture/ticket13-cp7-validation.md.
 # Test/audit/build tools included; application installed separately --no-deps --no-build-isolation.
 # Exact versions, not artifact hashes or a universal platform lock.
 aiohappyeyeballs==2.7.1
