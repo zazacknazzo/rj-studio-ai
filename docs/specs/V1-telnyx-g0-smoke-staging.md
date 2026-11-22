@@ -1,6 +1,8 @@
 # Sprint G0 — smoke da Lívia em staging sintético
 
-Status: escopo autorizado pelo usuário em 22/11/2026; implementação restrita a
+Status: approved
+
+Escopo autorizado pelo usuário em 22/11/2026; implementação restrita a
 testes sintéticos e documentação. Não é autorização de conexão real.
 
 Baseline exata: `392637c95e8b4143054ae539e71f6f903559c742`, branch T13.

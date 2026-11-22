@@ -54,3 +54,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 - [Telnyx Ticket12 — offline ASGI composition](V1-telnyx-coexistence-ticket-12.md): authorized offline only; operational NO-GO.
 
 - [Telnyx Ticket13 — readiness offline](V1-telnyx-coexistence-ticket-13.md): spec/ADR/recoverylab, gates/CI/runbooks; sem release operacional.
+
+- [Sprint G0 — Lívia staging](V1-telnyx-g0-smoke-staging.md): approved;
+  smoke sintético e preparação documental, sem conexão real.
