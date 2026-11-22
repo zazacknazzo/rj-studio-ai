@@ -1,5 +1,10 @@
 # RJ Studio AI
 
+Sprint G0: [smoke sintético da Lívia](docs/architecture/g0-staging-validation.md),
+[readiness Telnyx e pareceres separados](docs/operations/telnyx-g0-readiness.md)
+e [procedimento futuro sem execução](docs/operations/telnyx-g0-first-real-test.md).
+Ingresso e envio reais permanecem NO-GO, sujeitos a auditoria e autorização próprias.
+
 Atendimento de WhatsApp do RJ Studio com ingress e entrega proativa duráveis:
 
 ```text

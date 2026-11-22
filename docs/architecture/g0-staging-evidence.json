@@ -1,0 +1,121 @@
+{
+  "scope": "Executed synthetic G0 only. No live LLM, commercial account, credentials or WhatsApp.",
+  "baseline": "392637c95e8b4143054ae539e71f6f903559c742",
+  "implementation_commit": "4f59e2570d4de5278139a4d5e924a009f07c1c8c",
+  "branch": "codex/telnyx-g0-smoke-staging",
+  "environment": {
+    "python": "3.14.7",
+    "sqlite": "3.50.4",
+    "os": "Darwin",
+    "network_isolation": "sanitized child and Python IPv4/IPv6/DNS guards, not kernel isolation locally",
+    "pinned_distributions": 86,
+    "pin_divergences": 0
+  },
+  "runs": {
+    "g0-baseline": {
+      "tests": "20",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "8.953",
+      "junit_sha256": "651c5c5f73dcab843d1d5877422e25c2972443fb53b27ce4fd88ee87f8f7e5f0",
+      "command": "../venv/bin/python scripts/check_telnyx_offline.py --python ../venv/bin/python --output ../g0-baseline tests/test_telnyx_sender_integration.py"
+    },
+    "g0-demo-first": {
+      "tests": "22",
+      "failures": "7",
+      "errors": "0",
+      "skipped": "0",
+      "time": "5.412",
+      "junit_sha256": "50cc28c48f8ae83c97c34f5bc37e605c31ae88b641fb4d8e4219f306e7d41cef",
+      "command": "../venv/bin/python scripts/run_g0_staging_smoke.py --python ../venv/bin/python --output ../g0-demo-first"
+    },
+    "g0-demo-second": {
+      "tests": "22",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "4.293",
+      "junit_sha256": "4a3dbec9b5c36d4ec321f4049cdc4f4485d3412cc0631d201f172207ff378095",
+      "command": "../venv/bin/python scripts/run_g0_staging_smoke.py --python ../venv/bin/python --output ../g0-demo-second"
+    },
+    "g0-focused": {
+      "tests": "118",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "13.667",
+      "junit_sha256": "41f949b2bd088f0d365da05e2bf13614176d6e593c13befae84448777c830393",
+      "command": "../venv/bin/python scripts/check_telnyx_offline.py --python ../venv/bin/python --output ../g0-focused tests/test_g0_staging_smoke.py tests/test_g0_staging_guard.py tests/test_telnyx_sender_integration.py tests/test_telnyx_asgi_egress.py tests/test_offline_recovery.py tests/test_telnyx_operational_readiness.py tests/test_offline_network_guard.py"
+    },
+    "g0-full": {
+      "tests": "2286",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "165.197",
+      "junit_sha256": "03152db378411b2459e2e4bdafb2dfd6deb1e7c94eeb3f333f1ab9ffd6cfe028",
+      "command": "../venv/bin/python scripts/check_telnyx_offline.py --python ../venv/bin/python --output ../g0-full"
+    }
+  },
+  "demo_report_sha256": "a8b1af3a22ecd67bec2039a9b642138628a89d2d4089b9eba341921aef54fd07",
+  "source_sha256": {
+    "tests/g0_staging_fixture.py": "e88485e8471f02d48ef20685c2db593706d11601c79816915b8128b61d296523",
+    "tests/test_g0_staging_smoke.py": "5aaca9bd6e03f85a8ba029505d9af9e95271218e51ae9dc100b768aadbd58287",
+    "tests/test_g0_staging_guard.py": "314be72a46574d9059f2ad539e19b60ce29210b370777c5219a204cf70c804fe",
+    "scripts/run_g0_staging_smoke.py": "4f868a0c293bc6c273eeb072339642189cd87d12f0a31e65e8680367a76b5643",
+    "scripts/check_telnyx_offline.py": "bc6844c979db12571818e69322219af1aeb4e54983f9b0d8cdbf97f754d90ed6",
+    ".github/workflows/telnyx-offline.yml": "2e659dc788714e73f8fc6146dc5a08815eab5a543195c3f233f18d3e0e9820c7",
+    "src/rj_studio_ai/telnyx_asgi.py": "368ff72c8744d30a783694f0ddfe43f97dba75845660b76ed9e125bc7fa85846",
+    "src/rj_studio_ai/application.py": "ffc0b7acd88fe0a1af8c4948be9014e2de173df04743f865991a652946dc8287",
+    "src/rj_studio_ai/processing.py": "f1f670b43a7ff2dd8715899bdd155f2490640cab61869b00361655b6ab608490",
+    "src/rj_studio_ai/persistence.py": "a57121e4379b87b9e4d954f61316eb2919a38f0a818e40f32551f28081f0b2ce",
+    "src/rj_studio_ai/delivery.py": "306dbbeb74f4ad2d9e0d0c30721b1a31ed4549fadeef69e26a449b630efdacc4",
+    "src/rj_studio_ai/grounding.py": "53823aa2bf4b46f4b1445fee58c1b3a2128e95d50ebc9a7be0a333f1671cdbd6",
+    "src/rj_studio_ai/telnyx_request.py": "4697d82edb594a57e70dffed862f81470e893750e3d51727b25aafc253b0ddb4",
+    "src/rj_studio_ai/providers/telnyx_sender.py": "632460d157efb954a1897bea49562a38ee71e688eec73ffe653d48dd25aeb849",
+    "requirements/ci.lock": "2a006e00069f66526367abe8fe0c4d4268285fd4d55ac6029ffca6e02ca0f407"
+  },
+  "checks": {
+    "ruff": "PASS",
+    "format_files": 366,
+    "compileall": "PASS",
+    "pip_check": "PASS",
+    "git_diff_check": "PASS",
+    "local_links": "PASS",
+    "gitleaks_tree": {
+      "raw_exit": 1,
+      "raw_findings": 3,
+      "new_findings": 0,
+      "triage": "PASS, unchanged historical findings only"
+    },
+    "gitleaks_g0_range_cp1": {
+      "commits": 2,
+      "findings": 0
+    },
+    "local_pip_audit": "not rerun; see exact-SHA CI public advisory step"
+  },
+  "decisions": {
+    "real_ingress": "NO-GO pending audit, authorization and deployment proofs",
+    "real_egress": "NO-GO, AUD-01/AR-02 OPEN"
+  },
+  "ci": "Final exact-SHA CI result is recorded after publication in issue11 and delivery; not predicted here.",
+  "independent_audit": "Requested, not performed by this implementation run. Two gates assessed separately by implementer.",
+  "ci_cp1": {
+    "run_id": 45030731388,
+    "job_id": 137233520092,
+    "head_sha": "4f59e2570d4de5278139a4d5e924a009f07c1c8c",
+    "status": "completed",
+    "conclusion": "success",
+    "tests": 2286,
+    "failures": 0,
+    "skipped": 0,
+    "pytest_seconds": 269.17,
+    "python": "3.12.16",
+    "kernel_isolation": "only loopback, no IPv4/IPv6 default routes; log inspected",
+    "public_dependency_audit": "No known vulnerabilities found; point-in-time advisory lookup",
+    "gitleaks_tree_raw_findings": 3,
+    "gitleaks_triage": "unchanged historical findings only",
+    "url": "https://github.com/zazacknazzo/rj-studio-ai/actions/runs/45030731388"
+  }
+}
