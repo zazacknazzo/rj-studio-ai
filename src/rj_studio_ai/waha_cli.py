@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 from dotenv import dotenv_values
 
-from rj_studio_ai.providers.waha import WahaAPI, phone_chat
+from rj_studio_ai.providers.waha import WAHA_CONTACT_TIMEOUT_SECONDS, WahaAPI, phone_chat
 
 ENV_PATH = Path(".env.b1")
 
@@ -89,8 +89,8 @@ def operator_request(values, action):
             "GET" if action == "ready" else "POST",
             "http://127.0.0.1:8001/" + ("ready" if action == "ready" else "ops/" + action),
             headers={"Authorization": "Bearer " + values["WAHA_OPERATOR_TOKEN"]},
-            # Three contact checks (20s each) plus two session reads (5s each).
-            timeout=75 if action == "resume" else 10,
+            # Up to three contacts, two session reads, and five seconds of margin.
+            timeout=3 * WAHA_CONTACT_TIMEOUT_SECONDS + 15 if action == "resume" else 10,
         )
     return response.json()
 
