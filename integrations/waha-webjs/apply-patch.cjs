@@ -12,3 +12,9 @@ for (const {before, after} of patch.hunks) {
 }
 if (digest(source) !== patch.result_sha256) throw new Error('Unexpected WEBJS patch result');
 fs.writeFileSync(target, source);
+const core = '/app/dist/core/engines/webjs/WebjsClientCore.js';
+const coreSource = fs.readFileSync(core, 'utf8');
+const marker = '        super(options);';
+if (coreSource.split(marker).length !== 2) throw new Error('Unexpected WEBJS constructor');
+fs.writeFileSync(core, coreSource.replace(marker,
+  marker + "\n        require('/opt/waha-safe-events.cjs')(this);"));
