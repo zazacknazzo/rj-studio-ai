@@ -2,18 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+export DOCKER_HOST="${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}"
+compose=(docker-compose --env-file .env.b1 -f compose.b1.yaml -f compose.private-test.yaml)
 case "${1:-status}" in
-  pause|stop) exec scripts/b1 pause ;;
-  resume|start)
-    if [[ "${1}" == start ]]; then
-      export DOCKER_HOST="${DOCKER_HOST:-unix://$HOME/.colima/default/docker.sock}"
-      docker-compose --env-file .env.b1 -f compose.b1.yaml -f compose.private-test.yaml up -d --no-build --no-deps backend
-    fi
-    scripts/b1 resume
-    exec .venv/bin/python -c 'from rj_studio_ai.waha_cli import config,operator_request; import json; print(json.dumps(operator_request(config(), "waha/private-test/start")))'
-    ;;
-  status)
-    exec .venv/bin/python -c 'from rj_studio_ai.waha_cli import config,operator_request; import json; print(json.dumps(operator_request(config(),"ready"),indent=2))'
-    ;;
-  *) echo "Uso: scripts/livia-test status|pause|resume|start"; exit 2 ;;
+  stop) exec scripts/b1 stop ;;
+  start)
+    "${compose[@]}" up -d --no-build waha backend
+    exec .venv/bin/python -m rj_studio_ai.waha_private_cli start ;;
+  pause|resume|status) exec .venv/bin/python -m rj_studio_ai.waha_private_cli "${1:-status}" ;;
+  *) echo "Uso: scripts/livia-test status|pause|resume|start|stop"; exit 2 ;;
 esac
