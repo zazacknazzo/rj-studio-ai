@@ -201,7 +201,20 @@ def test_operator_or_consent_change_during_contacts_cannot_be_overwritten(
         assert not app.state.journal.permits_generation(CHAT)
 
 
-@pytest.mark.parametrize(("action", "expected"), [("resume", 75), ("pause", 10), ("ready", 10)])
+def test_contact_read_budget_preserves_explicit_identity_query():
+    def handler(req):
+        assert req.method == "GET"
+        assert req.url.params["phone"] == PARTICIPANT[1:]
+        assert req.url.params["session"] == "default"
+        assert req.extensions["timeout"]["read"] == 40
+        return httpx.Response(200, json={"numberExists": True, "chatId": "111@lid"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        api = WahaAPI(base_url="http://127.0.0.1:3000", api_key=KEY, client=client)
+        assert api.identities_for(PARTICIPANT) == {CHAT, "111@lid"}
+
+
+@pytest.mark.parametrize(("action", "expected"), [("resume", 135), ("pause", 10), ("ready", 10)])
 def test_operator_client_budget_covers_contact_validation(monkeypatch, action, expected):
     def handler(req):
         assert req.extensions["timeout"]["read"] == expected

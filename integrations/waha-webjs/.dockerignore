@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!apply-patch.cjs
+!verify-patch.cjs
+!socket-patch.json
+!safe-events.cjs
+!verify-logout.cjs

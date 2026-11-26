@@ -1,5 +1,12 @@
 # Lívia / WAHA B1 — operação privada local
 
+Atualização de 26/11/2026: após novo pareamento, consultas reais levaram 11–12s
+e a ativação também encontrou waha_contact_timeout no limite anterior de 20s.
+O prazo de leitura de contatos agora é 40s; o cliente resume espera até 135s
+para cobrir os três contatos suportados e a revalidação da sessão.
+Todos os aliases continuam dependendo de respostas válidas da consulta explícita.
+Não há retry automático nem alteração do timeout ou das regras do POST de envio.
+
 Atualização B2: operar pelo checkout `codex/b2-livia-waha-live`. O timeout de
 contatos é20s e o comando resume espera até75s. Falhas específicas aparecem como
 `waha_contact_timeout`, `waha_contact_transport_failed`,

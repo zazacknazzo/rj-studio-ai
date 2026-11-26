@@ -1,0 +1,44 @@
+{
+  "upstream": "38eb45b2759450cc6fccb6a7a3f2cbc3bdb87db2",
+  "hunks": [
+    {
+      "before": "\n            const needAuthHandle = await this.pupPage.waitForFunction(\n                () => {\n                    const state =\n                        window.require?.('WAWebSocketModel')?.Socket?.state;\n                    if (\n                        !state ||\n                        state === 'OPENING' ||\n",
+      "after": "\n            const needAuthHandle = await this.pupPage.waitForFunction(\n                () => {\n                    const state = window.require('WAWebBackendEventBus')\n                        .BackendEventBus.socketState;\n                    if (\n                        !state ||\n                        state === 'OPENING' ||\n"
+    },
+    {
+      "before": "\n                        // Remove QR listener once authentication succeeds\n                        window\n                            .require('WAWebSocketModel')\n                            .Socket.on('change:hasSynced', () => {\n                                window\n                                    .require('WAWebConnModel')\n                                    .Conn.off('change:ref', onRefChange);\n",
+      "after": "\n                        // Remove QR listener once authentication succeeds\n                        window\n                            .require('WAWebBackendEventBus')\n                            .BackendEventBus.on('open_socket_stream', () => {\n                                window\n                                    .require('WAWebConnModel')\n                                    .Conn.off('change:ref', onRefChange);\n"
+    },
+    {
+      "before": "                },\n            );\n            await this.pupPage.evaluate(() => {\n                const Socket = window.require('WAWebSocketModel').Socket;\n                const Cmd = window.require('WAWebCmd').Cmd;\n\n                const listeners = [\n                    [\n                        Socket,\n                        'change:state',\n                        (_AppState, state) => {\n                            window.onAuthAppStateChangedEvent(state);\n                        },\n                    ],\n                    [\n                        Socket,\n                        'change:hasSynced',\n                        (_Socket, hasSynced) => {\n                            // Logout teardown unsets hasSynced (true -> undefined); only a\n                            // transition to true means the app actually synced.\n                            if (hasSynced !== true) return;\n                            window.onAppStateHasSyncedEvent();\n                        },\n                    ],\n                    [\n                        Cmd,\n                        'offline_progress_update_from_bridge',\n",
+      "after": "                },\n            );\n            await this.pupPage.evaluate(() => {\n                const Cmd = window.require('WAWebCmd').Cmd;\n\n                let listeners = [\n                    [\n                        Cmd,\n                        'offline_progress_update_from_bridge',\n"
+    },
+    {
+      "before": "                        },\n                    ],\n                ];\n\n                // Clean up old listeners to prevent accumulation on re-inject\n                if (window._wwjsListeners) {\n",
+      "after": "                        },\n                    ],\n                ];\n                const loginRoute =\n                    window.location.pathname.startsWith('/login');\n                let Socket = null;\n                if (loginRoute) {\n                    Socket = window.require(\n                        'WAWebBackendEventBus',\n                    ).BackendEventBus;\n                    Socket.hasSynced = Socket.isMainStreamReadyMd;\n                    listeners.push([\n                        Socket,\n                        'set_socket_state',\n                        (state) => {\n                            window.onAuthAppStateChangedEvent(state);\n                        },\n                    ]);\n                    listeners.push([\n                        Socket,\n                        'open_socket_stream',\n                        () => {\n                            window.onAppStateHasSyncedEvent();\n                        },\n                    ]);\n                } else {\n                    Socket = window.require('WAWebSocketModel').Socket;\n                    listeners.push([\n                        Socket,\n                        'change:state',\n                        (_AppState, state) => {\n                            window.onAuthAppStateChangedEvent(state);\n                        },\n                    ]);\n                    listeners.push([\n                        Socket,\n                        'change:hasSynced',\n                        (_Socket, hasSynced) => {\n                            // Preserve the vendor's logout teardown guard.\n                            if (hasSynced !== true) return;\n                            window.onAppStateHasSyncedEvent();\n                        },\n                    ]);\n                }\n\n                // Clean up old listeners to prevent accumulation on re-inject\n                if (window._wwjsListeners) {\n"
+    },
+    {
+      "before": "                    clearInterval(window.codeInterval); // remove existing interval\n                }\n                window.codeInterval = setInterval(async () => {\n                    const state =\n                        window.require('WAWebSocketModel').Socket.state;\n                    if (state != 'UNPAIRED' && state != 'UNPAIRED_IDLE') {\n                        clearInterval(window.codeInterval);\n                        return;\n",
+      "after": "                    clearInterval(window.codeInterval); // remove existing interval\n                }\n                window.codeInterval = setInterval(async () => {\n                    const state = window.require('WAWebBackendEventBus')\n                        .BackendEventBus.socketState;\n                    if (state != 'UNPAIRED' && state != 'UNPAIRED_IDLE') {\n                        clearInterval(window.codeInterval);\n                        return;\n"
+    },
+    {
+      "before": "     */\n    async logout() {\n        await this.pupPage.evaluate(() => {\n            return window.require('WAWebSocketModel').Socket.logout();\n        });\n        await this.pupBrowser.close();\n\n",
+      "after": "     */\n    async logout() {\n        await this.pupPage.evaluate(() => {\n            return window\n                .require('WAWebBackendEventBus')\n                .BackendEventBus.triggerLogout();\n        });\n        await this.pupBrowser.close();\n\n"
+    },
+    {
+      "before": "     */\n    async getState() {\n        return await this.pupPage.evaluate(() => {\n            return window.require('WAWebSocketModel').Socket.state ?? null;\n        });\n    }\n\n",
+      "after": "     */\n    async getState() {\n        return await this.pupPage.evaluate(() => {\n            return (\n                window.require('WAWebBackendEventBus').BackendEventBus\n                    .socketState ?? null\n            );\n        });\n    }\n\n"
+    },
+    {
+      "before": "     */\n    async resetState() {\n        await this.pupPage.evaluate(() => {\n            window.require('WAWebSocketModel').Socket.reconnect();\n        });\n    }\n\n",
+      "after": "     */\n    async resetState() {\n        await this.pupPage.evaluate(() => {\n            window\n                .require('WAWebBackendEventBus')\n                .BackendEventBus.triggerReconnectSocket();\n        });\n    }\n\n"
+    },
+    {
+      "before": "            if (isLogout) {\n                this.emit(Events.DISCONNECTED, 'LOGOUT');\n                await this.authStrategy.logout();\n                await this.authStrategy.beforeBrowserInitialized();\n                await this.authStrategy.afterBrowserInitialized();\n                this.lastLoggedOut = false;\n            }\n",
+      "after": "            if (isLogout) {\n                this.lastLoggedOut = false;\n                // Honor the disconnect and stop the channel. Navigation signals\n                // alone must not delete a possibly valid LocalAuth profile.\n                // Recovery still requires explicit restart and identity checks.\n                this.emit(Events.DISCONNECTED, 'LOGOUT');\n                return;\n            }\n"
+    }
+  ],
+  "source_sha256": "2b047b691a7aca07581302daae041f8199802925447cd2bb9264fdb7de59dd5e",
+  "result_sha256": "4f386109f4cc223389f6c7639173f46f9ff981ac77f92f4e3ebd1d60b1c70315",
+  "local_logout_policy": "LOGOUT still stops the channel; navigation does not delete LocalAuth. Explicit restart and identity revalidation required."
+}

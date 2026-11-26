@@ -32,6 +32,8 @@ from rj_studio_ai.providers.base import (
     ProviderWebhookResponse,
 )
 
+WAHA_CONTACT_TIMEOUT_SECONDS = 40
+
 
 def phone_chat(value: str) -> str:
     if not re.fullmatch(r"\+[1-9][0-9]{7,14}", value):
@@ -256,7 +258,7 @@ class WahaAPI:
             response = self._request(
                 "GET",
                 f"/api/contacts/check-exists?phone={phone[1:]}&session={self.session}",
-                timeout=20,
+                timeout=WAHA_CONTACT_TIMEOUT_SECONDS,
             )
         except httpx.TimeoutException:
             raise WahaIdentityError("waha_contact_timeout") from None

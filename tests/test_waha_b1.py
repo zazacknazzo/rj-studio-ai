@@ -181,12 +181,12 @@ def test_only_explicit_contact_check_can_supply_brazil_phone_alias():
     assert len(paths) == 1 and "/api/contacts/check-exists?phone=" in paths[0]
 
 
-def test_contact_lookup_allows_verified_response_after_two_seconds():
+def test_contact_lookup_allows_verified_response_after_twenty_seconds():
     def slow_contact(req):
-        # Reproduce the real call-site failure without a wall-clock sleep.
-        if req.extensions["timeout"]["read"] < 6.89:
+        # A declared slow-read fixture beyond the prior 20s budget, without sleeping.
+        if req.extensions["timeout"]["read"] < 25:
             raise httpx.ReadTimeout("fixture_slow_contact", request=req)
-        assert req.extensions["timeout"]["read"] == 20
+        assert req.extensions["timeout"]["read"] == 40
         return httpx.Response(200, json={"numberExists": True, "chatId": "123456@lid"})
 
     with httpx.Client(transport=httpx.MockTransport(slow_contact)) as client:
