@@ -1,5 +1,40 @@
 # Retomada da Lívia no WhatsApp
 
+## Continuação posterior — identidade, janela e logout de navegação
+
+O novo número foi pareado e a API confirmou a identidade esperada. Os dois
+contatos autorizados (IA e participante) resolveram dois aliases cada, sem
+colisões e com sessão estável antes/depois. O webhook interno/HMAC também confere.
+O usuário autorizou expressamente uma nova hora mantendo consumo acumulado,
+cap de 20 e risco B5. Com backend parado, quick_check, selo SQLite, cadeia HMAC,
+testemunha, scope, participante, revogações e inventário foram verificados.
+Backup consistente privado foi feito; somente o deadline do ledger foi avançado
+por append autenticado e o espelho runtime.json atualizado. Prazo: 26/11/2026
+17h41min15s de Brasília. Uma chamada histórica, 18.664 tokens e 54.340 microusd
+reservados foram preservados; nenhuma intenção ou tentativa foi apagada.
+
+O resume encontrou waha_contact_timeout em 20s; consultas reais também mediram
+11–12s. O GET de identidade passou a 40s e o cliente resume a 135s, sem retry ou
+mudança do POST de envio. A ativação B5 retornou active=true. Antes de chegar
+qualquer mensagem, o cliente emitiu LOGOUT após cerca de seis minutos. O backend
+pausou. O usuário confirmou que o companion continuava listado no telefone.
+Não houve geração OpenAI, envio ou conversa comprovada nesta continuação.
+
+A biblioteca apagava LocalAuth ao observar logout na navegação, conforme risco
+também descrito no issue upstream 201987. A imagem agora conserva esses arquivos
+nessa observação, MAS continua emitindo DISCONNECTED/LOGOUT e parando o canal.
+Não há retomada automática: restart explícito e revalidação completa ainda são
+obrigatórios. O logout explícito do operador continua apagando credenciais.
+O build executa os callbacks reais em fixtures para verificar ambas as fronteiras.
+Novo pareamento pode ser necessário porque a versão anterior já apagou o perfil.
+
+Validação posterior: 77 testes WAHA focados passaram; 20 testes Python da bridge
+e 15 testes Worker também passaram após instalar o lock npm que faltava localmente.
+A suíte integral registrou 2.387 PASS e uma asserção histórica ainda esperando
+timeout 20s. Essa fixture foi atualizada e passou no lote de 77. Não chamar esse
+run de integral verde; a reexecução final é registrada separadamente.
+Root segue como único escritor; main não foi alterada.
+
 ## Continuação em 26/11 — correção do login WEBJS
 
 O usuário transferiu a continuação para este agente. Fetch confirmou HEAD e origin

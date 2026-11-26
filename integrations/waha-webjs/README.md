@@ -11,6 +11,16 @@ the existing Socket listeners on the authenticated route. The vendor's additiona
 hasSynced logout guard is retained. All other vendor modifications remain intact.
 No dependency download is performed during the build.
 
+A separate local change handles the destructive navigation-logout path described
+in [upstream issue 201987](https://github.com/wwebjs/whatsapp-web.js/issues/201987).
+The live client emitted LOGOUT six minutes after pairing while the user confirmed
+the companion remained listed on the phone. The navigation callback now still
+emits DISCONNECTED/LOGOUT and stops the channel, but leaves LocalAuth files intact.
+There is no automatic reactivation or dismissal of genuine device unlinking:
+explicit restart and the backend's full identity validation are still required.
+The explicit operator logout method still removes credentials. Build tests execute
+the real callbacks to verify these boundaries.
+
 Both the original Client.js and the patched result are checked against SHA-256
 values in socket-patch.json. A source change or non-unique hunk fails the build.
 The build checks JavaScript syntax and exercises actual event-registration code

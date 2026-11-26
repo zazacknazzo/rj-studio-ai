@@ -32,8 +32,13 @@
     {
       "before": "     */\n    async resetState() {\n        await this.pupPage.evaluate(() => {\n            window.require('WAWebSocketModel').Socket.reconnect();\n        });\n    }\n\n",
       "after": "     */\n    async resetState() {\n        await this.pupPage.evaluate(() => {\n            window\n                .require('WAWebBackendEventBus')\n                .BackendEventBus.triggerReconnectSocket();\n        });\n    }\n\n"
+    },
+    {
+      "before": "            if (isLogout) {\n                this.emit(Events.DISCONNECTED, 'LOGOUT');\n                await this.authStrategy.logout();\n                await this.authStrategy.beforeBrowserInitialized();\n                await this.authStrategy.afterBrowserInitialized();\n                this.lastLoggedOut = false;\n            }\n",
+      "after": "            if (isLogout) {\n                this.lastLoggedOut = false;\n                // Honor the disconnect and stop the channel. Navigation signals\n                // alone must not delete a possibly valid LocalAuth profile.\n                // Recovery still requires explicit restart and identity checks.\n                this.emit(Events.DISCONNECTED, 'LOGOUT');\n                return;\n            }\n"
     }
   ],
   "source_sha256": "2b047b691a7aca07581302daae041f8199802925447cd2bb9264fdb7de59dd5e",
-  "result_sha256": "840dc60def88a4d043bc452bfb5fb067c8f723731b4b9073e4a86339804e5a3b"
+  "result_sha256": "4f386109f4cc223389f6c7639173f46f9ff981ac77f92f4e3ebd1d60b1c70315",
+  "local_logout_policy": "LOGOUT still stops the channel; navigation does not delete LocalAuth. Explicit restart and identity revalidation required."
 }
