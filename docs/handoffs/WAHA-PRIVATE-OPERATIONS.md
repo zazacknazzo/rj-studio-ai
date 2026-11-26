@@ -44,3 +44,9 @@ participante com a geração OpenAI, a resposta persistida, a tentativa de envio
 e o recibo do WhatsApp. Consulte o ACK do dispositivo ou obtenha confirmação
 do participante. Testes de integração com dados de fixture e chamadas isoladas
 ao modelo são evidência separada.
+
+## Transferência posterior
+
+O usuário autorizou a troca da conta da IA e do único participante.
+Consulte [o handoff de continuação](WAHA-CONTINUE-HERE.md) para o estado posterior,
+o pareamento pendente, os ambientes privados e a próxima ação.
