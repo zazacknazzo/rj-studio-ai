@@ -1,0 +1,5 @@
+*
+!Dockerfile
+!apply-patch.cjs
+!verify-patch.cjs
+!socket-patch.json

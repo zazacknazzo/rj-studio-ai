@@ -1,5 +1,9 @@
 # Temporary user-approved rollback-risk test, never the SaaS composition.
 services:
+  waha:
+    image: rj-livia-waha-webjs:20261126
+    build:
+      context: ./integrations/waha-webjs
   backend:
     image: rj-livia-private-test-backend
     volumes:

@@ -1,5 +1,31 @@
 # Retomada da Lívia no WhatsApp
 
+## Continuação em 26/11 — correção do login WEBJS
+
+O usuário transferiu a continuação para este agente. Fetch confirmou HEAD e origin
+em 02be87a, sem divergência ou WIP. Colima estava desligado e foi recuperado.
+O runner isolado passou 44 testes de waha_private_cli, waha_private_test e waha_b2.
+
+Na configuração nova, o browser carregava /login/ e a versão web
+2.3000.1056359382, porém WAWebSocketModel não estava disponível e a API ficava
+STARTING sem QR. O fornecedor publicou a correção 38eb45b2759450cc6fccb6a7a3f2cbc3bdb87db2
+em 24/11. A imagem derivada de integrations/waha-webjs aplica os oito hunks
+com hashes de origem/resultado e preserva o guard de logout adicional do vendor.
+O build passou sintaxe e testes dos listeners reais em ambas as rotas, incluindo
+re-injeção e ausência de readiness falsa no teardown.
+
+A imagem derivada chegou a SCAN_QR_CODE pela API autenticada. Nenhum envio foi
+ativado. A janela anterior expirou; prazo e budgets não foram renovados nesta etapa.
+O banco novo passou quick_check e continua sem mensagens, deliveries ou tentativas.
+O ledger HMAC foi verificado e continua pausado/killed, sem intenções ou revogações.
+Backup privado da sessão anterior à troca da imagem está no ambiente operacional,
+em .local/continuacao-20261126. Preserve-o e os contadores existentes.
+
+Próximo passo: parear o novo número da IA, verificar a identidade e então tratar
+a janela limitada vigente antes de habilitar respostas. A página de pareamento
+temporária local não contém chaves; ela consulta o QR em memória e não o persiste.
+Conversa real e os critérios finais da missão continuam pendentes.
+
 ## Fonte e escopo
 
 - Repositório https://github.com/zazacknazzo/rj-studio-ai.
