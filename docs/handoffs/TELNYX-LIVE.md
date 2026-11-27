@@ -109,7 +109,24 @@ não conexão pronta nem autorização de envio.
 - Ruff check e format (408 arquivos), pip check e diff check passaram antes dos
   documentos finais. O diagnóstico real local classificou credential_missing
   e não fez HTTP à API Telnyx. A inspeção da conta foi pelo portal autenticado.
-- Suíte integral e scan finais: registrar resultado após conclusão.
+- Integral própria: **2406 PASS, 0 failures/errors/skips, 328,87s** pelo runner
+  saneado. Excluído o arquivo `test_waha_cloudflare_integration.py`, que depende
+  do workerd/loopback e roda no job separado do CI. Não são 25+30+2406 testes:
+  os lotes focais se sobrepõem à integral.
+- Checks finais: Ruff check/format (409 arquivos), compileall, pip check e
+  diff check PASS. Gitleaks 8.30.1 Darwin arm64 teve checksum oficial verificado;
+  árvore com três falsos positivos históricos triados, nenhum novo; range
+  baseline..`6408fed` com zero findings. A primeira triagem recebeu caminhos
+  absolutos incompatíveis com o validador; scan repetido na raiz exportada com
+  caminhos relativos e a triagem existente passou, sem alterar allowlist.
+- Código publicado em `6408fed57aa84c7686d241ce5ae996d1653491c5`, SHA no
+  origin conferida; main permanece na SHA acima. [PR #16](https://github.com/zazacknazzo/rj-studio-ai/pull/16)
+  em rascunho, base `codex/waha-open-inbound`, sem merge.
+- [CI do código](https://github.com/zazacknazzo/rj-studio-ai/actions/runs/46074046586)
+  disparada para a SHA exata acima: job cloudflare-fixtures success observado;
+  job offline ainda em andamento no momento deste registro. O resultado da
+  própria SHA documental posterior deve ser consultado no PR; não inferir CI
+  completa deste registro parcial.
 - A primeira tentativa de lançar a integral falhou no argparse antes de pytest:
   faltava `--` antes das opções pytest. Corrigida a invocação; log preservado.
 
