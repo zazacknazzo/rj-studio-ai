@@ -7,7 +7,8 @@ from time import time
 
 import httpx
 import pytest
-from test_waha_b1 import CHAT, KEY, FixtureGenerator, envelope, request, settings
+from test_waha_b1 import CHAT, KEY, FixtureGenerator, envelope, settings
+from test_waha_b1 import request as webhook_request
 
 from rj_studio_ai.delivery import OutboundDeliveryRunner
 from rj_studio_ai.persistence import DeliveryState
@@ -19,12 +20,13 @@ from rj_studio_ai.waha_private_test import LocalTestAuthority, PrivateTestStore
 
 
 @pytest.fixture
-def live(tmp_path, monkeypatch):
+def live(tmp_path, monkeypatch, request):
     released = Event()
     released.set()
     generator = FixtureGenerator(Event(), released)
     monkeypatch.setattr("rj_studio_ai.waha_live.generator_from_settings", lambda _: generator)
-    configured = settings(tmp_path)
+    audience = getattr(request, "param", "allowlist")
+    configured = settings(tmp_path).model_copy(update={"waha_audience": audience})
     _, old, _, _, _, _, _ = build_waha_pipeline(configured)
     authority = LocalTestAuthority.prepare(
         tmp_path / "ledger.jsonl",
@@ -34,6 +36,7 @@ def live(tmp_path, monkeypatch):
         sequence=len(old.entries),
         participant=hashlib.sha256(CHAT.encode()).hexdigest(),
         deadline=int(time() * 1000) + 3600000,
+        audience=audience,
     )
     old.close()
 
@@ -52,17 +55,18 @@ def live(tmp_path, monkeypatch):
         if req.method == "GET":
             return httpx.Response(200, json={"status": "WORKING", "me": {"id": adapter.secondary}})
         posts.append(json.loads(req.content))
-        assert posts[-1]["chatId"] == CHAT
+        assert adapter.accepts_sender(posts[-1]["chatId"])
         if outcome["value"] == "timeout":
             raise httpx.ReadTimeout("fixture", request=req)
         if outcome["value"] == "http500":
             return httpx.Response(500)
-        identifier = "true_" + CHAT + "_" + str(len(posts))
+        recipient = posts[-1]["chatId"]
+        identifier = "true_" + recipient + "_" + str(len(posts))
         response_id = identifier
         if outcome["value"] in ("webjs", "webjs_conflict"):
             response_id = {
                 "fromMe": True,
-                "remote": CHAT,
+                "remote": recipient,
                 "id": str(len(posts)),
                 "_serialized": identifier,
             }
@@ -70,7 +74,7 @@ def live(tmp_path, monkeypatch):
                 response_id["remote"] = "999@c.us"
         elif outcome["value"] != "accepted":
             response_id = "invalid"
-        return httpx.Response(201, json={"fromMe": True, "to": CHAT, "id": response_id})
+        return httpx.Response(201, json={"fromMe": True, "to": recipient, "id": response_id})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     api = WahaAPI(base_url="http://waha:3000", api_key=KEY, client=client)
@@ -82,8 +86,11 @@ def live(tmp_path, monkeypatch):
         maximum_attempts=1,
     )
 
-    def inbound(identifier="ONE", body="Oi"):
-        event = adapter.receive(request(envelope(body, identifier))).events[0]
+    def inbound(identifier="ONE", body="Oi", sender=CHAT):
+        raw = envelope(body, identifier)
+        raw["payload"]["from"] = sender
+        raw["payload"]["id"] = "false_" + sender + "_" + identifier
+        event = adapter.receive(webhook_request(raw)).events[0]
         store.record_webhook_events((event,), require_message_provenance=True)
         processing.run_once()
         return event

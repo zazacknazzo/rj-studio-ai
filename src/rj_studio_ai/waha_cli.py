@@ -104,7 +104,8 @@ def pair(values):
 
     require_test_secondary(secondary, Path("knowledge/rj_studio.yaml"))
     participants = json.loads(values["WAHA_AUTHORIZED_PHONES"])
-    if not 1 <= len(participants) <= 2 or secondary in participants:
+    minimum = 0 if values.get("WAHA_AUDIENCE") == "all_direct" else 1
+    if not minimum <= len(participants) <= 2 or secondary in participants:
         raise ValueError("configure_distinct_authorized_participants")
     client = api(values)
     existing = client.request("GET", "/api/sessions/default")

@@ -44,7 +44,10 @@ class LocalTestAuthority:
         self.submission_valid_until = None
 
     @classmethod
-    def prepare(cls, path, *, key, scope, head, sequence, participant, deadline):
+    def prepare(
+        cls, path, *, key, scope, head, sequence, participant, deadline, audience="allowlist"
+    ):
+        require(audience in {"allowlist", "all_direct"}, "invalid_audience")
         authority = cls(path, key=key, scope=scope)
         authority.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         state = dict(
@@ -61,6 +64,7 @@ class LocalTestAuthority:
             intents={},
             grant=None,
             participant=participant,
+            audience=audience,
             deadline=deadline,
         )
         authority._append(state, exclusive=True)
@@ -164,7 +168,10 @@ class LocalTestAuthority:
                 and s["epoch"] == self.epoch
                 and s["deadline"] > time() * 1000
                 and len(s["intents"]) < 20
-                and s["participant"] not in s["revoked"]
+                and (
+                    s.get("audience", "allowlist") == "all_direct"
+                    or s["participant"] not in s["revoked"]
+                )
                 and not any(v["outcome"] == "unknown" for v in s["intents"].values()),
                 "private_test_activation_denied",
             )
@@ -172,14 +179,25 @@ class LocalTestAuthority:
 
         return self._change(mutate)
 
+    @staticmethod
+    def permits_participant(state, participant):
+        return (
+            isinstance(participant, str)
+            and len(participant) == 64
+            and participant not in state["revoked"]
+            and (
+                state.get("audience", "allowlist") == "all_direct"
+                or participant == state["participant"]
+            )
+        )
+
     def permit(self, intent, participant, head):
         def mutate(s):
             require(
                 self.active(s)
                 and s["head"] == head
                 and s["boot"] == self.boot_id
-                and participant == s["participant"]
-                and participant not in s["revoked"],
+                and self.permits_participant(s, participant),
                 "private_test_permit_denied",
             )
             require(
@@ -232,8 +250,7 @@ class LocalTestAuthority:
                     and grant
                     and grant["intent"] == identity
                     and grant["participant"] == args["participant"]
-                    and args["participant"] == s["participant"]
-                    and args["participant"] not in s["revoked"]
+                    and self.permits_participant(s, args["participant"])
                     and grant["expires_at"] > time() * 1000,
                     "private_test_permission_expired",
                 )
@@ -349,13 +366,21 @@ class PrivateTestStore(CloudflareWahaStore):
                         "WHERE d.provider='waha' AND d.state='pending' ORDER BY d.id"
                     ).fetchall()
                 row = next(
-                    (r for r in rows if self.participant_identity(r[2]) == state["participant"]),
+                    (
+                        r
+                        for r in rows
+                        if self.authority.permits_participant(
+                            state, self.participant_identity(r[2])
+                        )
+                    ),
                     None,
                 )
                 if row is None:
                     return None
                 self.authority.permit(
-                    self.logical_identity(row[0], row[1]), state["participant"], self.journal.head
+                    self.logical_identity(row[0], row[1]),
+                    self.participant_identity(row[2]),
+                    self.journal.head,
                 )
                 return super().claim_next_delivery(**kwargs)
             except AuthorityClosed:
@@ -369,6 +394,7 @@ class PrivateTestStore(CloudflareWahaStore):
             egress_blockers=[] if enabled else ["private_test_paused_or_exhausted"],
             authority_epoch=state["epoch"],
             mode="temporary_private_test",
+            audience=state.get("audience", "allowlist"),
             saas_egress_blockers=["AUD-01", "AR-02"],
             test_expires_at=state["deadline"],
             test_intents=len(state["intents"]),
@@ -387,6 +413,10 @@ def create_waha_private_test_app():
     cfg = json.loads(cfg_path.read_text())
     authority = LocalTestAuthority(
         Path("/authority/ledger.jsonl"), key=settings.waha_journal_key, scope=cfg["scope"]
+    )
+    require(
+        authority.read().get("audience", "allowlist") == settings.waha_audience,
+        "authority_audience_mismatch",
     )
     parts = {}
 
@@ -418,7 +448,8 @@ def create_waha_private_test_app():
             raise HTTPException(403, "operator_authentication")
         with parts["journal"].lock:
             require(
-                not parts["journal"].paused and len(parts["adapter"].participants) == 1,
+                not parts["journal"].paused
+                and (parts["adapter"].all_direct or len(parts["adapter"].participants) == 1),
                 "private_test_resume_required",
             )
             info = parts["api"].session_info()
@@ -433,6 +464,7 @@ def create_waha_private_test_app():
         return {
             "active": True,
             "scope": "temporary_private_test",
+            "audience": settings.waha_audience,
             "max_replies": 20,
             "joint_rollback_protected": False,
             "saas_gates_closed": False,
