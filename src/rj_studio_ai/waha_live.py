@@ -7,6 +7,7 @@ import re
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import anyio
@@ -33,6 +34,7 @@ from rj_studio_ai.waha_safety import WahaConversationStore, WahaSafetyError, Wah
 
 
 class WahaSettings(Settings):
+    waha_audience: Literal["allowlist", "all_direct"] = "allowlist"
     llm_provider: str = "openai"
     waha_secondary_phone: str = Field(default="", repr=False, exclude=True)
     waha_authorized_phones: tuple[str, ...] = Field(default=(), repr=False, exclude=True)
@@ -140,6 +142,7 @@ def build_waha_pipeline(
         secret=settings.waha_webhook_secret,
         secondary=settings.waha_secondary_phone,
         participants=settings.waha_authorized_phones,
+        all_direct=settings.waha_audience == "all_direct",
     )
     journal = journal_factory(
         settings.waha_control_path,
@@ -148,6 +151,7 @@ def build_waha_pipeline(
         scope={
             "secondary": adapter.secondary,
             "participants": sorted(adapter.participants),
+            **({"audience": "all_direct"} if adapter.all_direct else {}),
             "model": settings.openai_model,
             "reasoning": settings.openai_reasoning_effort,
             "max_output": settings.openai_max_output_tokens,
@@ -248,6 +252,7 @@ def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outb
                 pass
             payload = {
                 "ingress": True,
+                "audience": settings.waha_audience,
                 "knowledge_facts": len(knowledge.load()),
                 "openai_configured": generator.is_configured(),
                 "processing": processing.is_alive(),
@@ -289,7 +294,10 @@ def create_waha_app(settings=None, *, pipeline_builder=build_waha_pipeline, outb
                 if info.get("status") != "WORKING":
                     raise WahaIdentityError("waha_session_not_working")
                 verified = {}
-                for number in (settings.waha_secondary_phone, *settings.waha_authorized_phones):
+                identity_numbers = (settings.waha_secondary_phone,)
+                if not adapter.all_direct:
+                    identity_numbers += settings.waha_authorized_phones
+                for number in identity_numbers:
                     for alias in api.identities_for(number):
                         canonical = phone_chat(number)
                         if alias in verified and verified[alias] != canonical:

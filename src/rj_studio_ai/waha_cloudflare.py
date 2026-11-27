@@ -519,7 +519,7 @@ class AuthorizedWahaSender(OutboundMessageSender):
         return self.store.exchange(
             message,
             api=self.api,
-            aliases=self.adapter.identity_aliases,
+            aliases=self.adapter.reply_aliases(message.recipient_address),
             timeout_seconds=timeout_seconds,
         )
 

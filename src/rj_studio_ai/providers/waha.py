@@ -59,7 +59,10 @@ class WahaObservation:
 
 
 class WahaAdapter(InboundWebhookAdapter):
-    def __init__(self, *, secret, secondary, participants, session="default", clock=time):
+    def __init__(
+        self, *, secret, secondary, participants, session="default", clock=time, all_direct=False
+    ):
+        self.all_direct = all_direct
         self._secret = secret
         self.secondary = phone_chat(secondary)
         self.participants = frozenset(phone_chat(p) for p in participants)
@@ -68,11 +71,26 @@ class WahaAdapter(InboundWebhookAdapter):
         self.identity_aliases = {value: value for value in (*self.participants, self.secondary)}
         if (
             len(secret) < 32
-            or not 1 <= len(self.participants) <= 2
+            or len(self.participants) > 2
+            or (not self.all_direct and not self.participants)
             or self.secondary in self.participants
             or session != "default"
         ):
             raise ValueError("invalid_private_waha_scope")
+
+    def accepts_sender(self, address):
+        return (
+            isinstance(address, str)
+            and re.fullmatch(r"[0-9]{1,20}@(c\.us|lid)", address) is not None
+            and self.identity_aliases.get(address, address) != self.secondary
+            and (self.all_direct or address in self.participants)
+        )
+
+    def reply_aliases(self, recipient):
+        aliases = dict(self.identity_aliases)
+        if self.all_direct and self.accepts_sender(recipient):
+            aliases[recipient] = recipient
+        return aliases
 
     def bind_verified_identities(self, aliases):
         allowed = self.participants | {self.secondary}
@@ -127,10 +145,10 @@ class WahaAdapter(InboundWebhookAdapter):
             if self.identity_aliases.get(raw.get("me", {}).get("id")) != self.secondary:
                 raise ValueError()
             raw_sender = payload.get("from")
-            sender = self.identity_aliases.get(raw_sender)
+            sender = self.identity_aliases.get(raw_sender, raw_sender if self.all_direct else None)
             if (
                 payload.get("fromMe") is not False
-                or sender not in self.participants
+                or not self.accepts_sender(sender)
                 or self.identity_aliases.get(payload.get("to")) != self.secondary
                 or payload.get("participant")
                 or payload.get("hasMedia") is not False
