@@ -57,3 +57,6 @@ Use exactly one lifecycle value in each spec: `Status: draft`, `Status: approved
 
 - [Sprint G0 — Lívia staging](V1-telnyx-g0-smoke-staging.md): approved;
   smoke sintético e preparação documental, sem conexão real.
+
+- [Missão Telnyx live](TELNYX-LIVE.md): fase 1 autorizada em 27/11;
+  diagnóstico somente leitura, conta aguardando avaliação externa.
